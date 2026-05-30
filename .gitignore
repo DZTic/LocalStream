@@ -24,3 +24,5 @@ android/local.properties
 android/app/build/
 android/app/src/main/assets/public/
 android/.kotlin/
+android/app/release.keystore
+android/gradle.properties
