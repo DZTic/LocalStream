@@ -382,6 +382,43 @@ export default function App() {
   const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   
+  const [newHistoryItemName, setNewHistoryItemName] = useState('');
+  const [forceAvailableVideos, setForceAvailableVideos] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('forceAvailableVideos');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const toggleForceAvailable = (videoName: string) => {
+    setForceAvailableVideos(prev => {
+      const newState = { ...prev, [videoName]: !prev[videoName] };
+      localStorage.setItem('forceAvailableVideos', JSON.stringify(newState));
+      return newState;
+    });
+  };
+
+  const addManualHistoryItem = () => {
+    if (!newHistoryItemName.trim()) return;
+    const name = newHistoryItemName.trim();
+    
+    setWatchedVideos(prev => {
+      const newState = { ...prev, [name]: true };
+      localStorage.setItem('watchedVideos', JSON.stringify(newState));
+      return newState;
+    });
+    
+    setForceAvailableVideos(prev => {
+      const newState = { ...prev, [name]: true };
+      localStorage.setItem('forceAvailableVideos', JSON.stringify(newState));
+      return newState;
+    });
+
+    setNewHistoryItemName('');
+  };
+  
   const [isScanning, setIsScanning] = useState(false);
   const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   const [diagLogs, setDiagLogs] = useState<string[]>([]);
@@ -490,6 +527,9 @@ export default function App() {
       VideoLauncher.getList()
         .then(res => setExternalPlayers(res.players))
         .catch(err => console.error("Error fetching external players", err));
+      
+      // Lancement du scan silencieux au démarrage de l'application
+      startNativeScan(true);
     }
     // Listen for window focus to re-check permissions (when coming back from settings)
     window.addEventListener('focus', checkGlobalPermissions);
@@ -1043,12 +1083,19 @@ export default function App() {
     return result;
   };
 
-  const startNativeScan = async () => {
+  const startNativeScan = async (quiet = false) => {
     if (!Capacitor.isNativePlatform()) return;
-    setIsScanning(true);
+    if (!quiet) setIsScanning(true);
     const debugLogs: string[] = [];
     try {
-      await Filesystem.requestPermissions();
+      const stats = await Filesystem.checkPermissions();
+      if (stats.publicStorage !== 'granted') {
+        if (!quiet) {
+          await Filesystem.requestPermissions();
+        } else {
+          return;
+        }
+      }
       const foldersToScan = [
         { dir: Directory.ExternalStorage, path: 'Movies' },
         { dir: Directory.ExternalStorage, path: 'Download' },
@@ -1074,14 +1121,14 @@ export default function App() {
         return [...kept, ...extra];
       });
 
-      if (allVideos.length === 0 && debugLogs.length > 0) {
+      if (!quiet && allVideos.length === 0 && debugLogs.length > 0) {
         alert("Aucune vidéo trouvée.\nErreurs rencontrées :\n" + debugLogs.slice(0, 5).join("\n"));
       }
     } catch (e: any) {
       console.error(e);
-      alert("Erreur générale : " + e.message);
+      if (!quiet) alert("Erreur générale : " + e.message);
     } finally {
-      setIsScanning(false);
+      if (!quiet) setIsScanning(false);
     }
   };
 
@@ -1470,12 +1517,29 @@ export default function App() {
         id: key,
         name: key,
         isLocal: !!videoMatch,
+        isForcedAvailable: !!forceAvailableVideos[key],
         video: videoMatch
       };
     });
-  }, [watchedVideos, groupedVideos]);
+  }, [watchedVideos, groupedVideos, forceAvailableVideos]);
 
-  const isLibraryViewActive = sortBy !== 'alpha' || filterGenre !== 'all' || filterResolution !== 'all';
+  const isLibraryViewActive = activeTab === 'home' && (sortBy !== 'alpha' || filterGenre !== 'all' || filterResolution !== 'all');
+
+  useEffect(() => {
+    if (isLibraryViewActive) {
+      startNativeScan(true);
+    }
+  }, [isLibraryViewActive]);
+
+  useEffect(() => {
+    const handleFocusScan = () => {
+      if (Capacitor.isNativePlatform()) {
+        startNativeScan(true);
+      }
+    };
+    window.addEventListener('focus', handleFocusScan);
+    return () => window.removeEventListener('focus', handleFocusScan);
+  }, []);
 
   const heroVideo = recentAdditions.find(v => {
     if (v.isSeriesGroup) return v.episodes?.some(ep => !watchedVideos[ep.name]);
@@ -1765,44 +1829,7 @@ export default function App() {
             >
               LOCALSTREAM
             </h1>
-            {videos.length > 0 && (
-              <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-300">
-                <button 
-                  onClick={() => { 
-                    setActiveTab('home'); 
-                    setSearchQuery('');
-                    setSortBy('alpha');
-                    setFilterGenre('all');
-                    setFilterResolution('all');
-                    setSelectedPlaylist(null); 
-                  }} 
-                  className={`transition ${activeTab === 'home' && !isLibraryViewActive ? 'text-white font-bold' : 'hover:text-zinc-400'}`}
-                >
-                  Accueil
-                </button>
-                <button 
-                  onClick={() => {
-                    setActiveTab('home');
-                    setSortBy('date'); // Force un filtre pour activer la vue bibliothèque
-                  }}
-                  className={`transition ${isLibraryViewActive ? 'text-white font-bold' : 'hover:text-zinc-400'}`}
-                >
-                  Bibliothèque
-                </button>
-                <button 
-                  onClick={() => setActiveTab('playlists')} 
-                  className={`transition ${activeTab === 'playlists' ? 'text-white font-bold' : 'hover:text-zinc-400'}`}
-                >
-                  Listes de lecture
-                </button>
-                <button
-                  onClick={() => setActiveTab('history')}
-                  className={`transition ${activeTab === 'history' ? 'text-white font-bold' : 'hover:text-zinc-400'}`}
-                >
-                  Déjà vu
-                </button>
-              </nav>
-            )}
+
           </div>
           <div className="flex items-center gap-2 md:gap-4">
             {videos.length > 0 && (
@@ -2156,60 +2183,108 @@ export default function App() {
                   </div>
                 ) : activeTab === 'history' ? (
                   <div className="px-4 md:px-12 min-h-screen pt-20">
-                    <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">Contenus vus</h2>
-                    {historyItems.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                        {historyItems.map((item) => (
-                          <div
-                            key={item.id}
-                            className="group flex flex-col"
-                            onClick={() => item.isLocal && item.video && handleOpenInfoModal(item.video)}
-                          >
-                            <div className={`relative aspect-[2/3] bg-zinc-800 rounded-md overflow-hidden transition-transform duration-300 shadow-lg ${item.isLocal ? 'cursor-pointer group-hover:scale-105 group-hover:z-30' : 'opacity-60'}`}>
-                              {posters[item.id] ? (
-                                <img src={posters[item.id]} alt={getCleanTitle(item.name)} className={`w-full h-full object-cover ${!item.isLocal ? 'grayscale opacity-50' : ''}`} />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center p-4 text-center">
-                                  <span className="text-zinc-500 font-medium text-sm">{getCleanTitle(item.name)}</span>
-                                </div>
-                              )}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                      <h2 className="text-2xl md:text-3xl font-bold text-white">Contenus vus</h2>
+                      
+                      <div className="flex gap-2 w-full sm:w-auto max-w-md">
+                        <input
+                          type="text"
+                          placeholder="Ajouter un film ou une série..."
+                          value={newHistoryItemName}
+                          onChange={(e) => setNewHistoryItemName(e.target.value)}
+                          className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:border-red-600 focus:outline-none transition-all placeholder:text-zinc-500"
+                          onKeyDown={(e) => e.key === 'Enter' && addManualHistoryItem()}
+                        />
+                        <button
+                          onClick={addManualHistoryItem}
+                          disabled={!newHistoryItemName.trim()}
+                          className="bg-red-600 hover:bg-red-700 disabled:opacity-30 text-white px-4 py-2 rounded-xl text-xs font-black transition-all active:scale-95 shadow-lg shadow-red-900/20 whitespace-nowrap"
+                        >
+                          AJOUTER
+                        </button>
+                      </div>
+                    </div>
+                    {(() => {
+                      const displayedHistoryItems = searchQuery.trim()
+                        ? historyItems.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                        : historyItems;
 
-                              {!item.isLocal && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-20">
-                                  <CloudOff className="w-8 h-8 text-zinc-400 mb-2" />
-                                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest text-center px-2">Non disponible</span>
-                                </div>
-                              )}
+                      if (historyItems.length === 0) {
+                        return (
+                          <div className="text-center text-zinc-500 mt-12 flex flex-col items-center gap-4">
+                            <History className="w-16 h-16 text-zinc-700" />
+                            <p>Votre historique est vide.</p>
+                          </div>
+                        );
+                      }
 
-                              <div className={`absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center p-4 ${!item.isLocal ? 'z-30' : ''}`}>
-                                {item.isLocal && (
-                                  <button onClick={(e) => { e.stopPropagation(); if (item.video) playVideo(item.video); }} className="bg-white text-black p-3 rounded-full hover:bg-white/80">
-                                    <Play className="w-6 h-6 fill-black" />
+                      if (displayedHistoryItems.length === 0) {
+                        return (
+                          <div className="text-center text-zinc-500 mt-12">
+                            Aucun contenu correspondant dans votre historique.
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                          {displayedHistoryItems.map((item) => (
+                            <div
+                              key={item.id}
+                              className="group flex flex-col"
+                              onClick={() => item.isLocal && item.video && handleOpenInfoModal(item.video)}
+                            >
+                              <div className={`relative aspect-[2/3] bg-zinc-800 rounded-md overflow-hidden transition-transform duration-300 shadow-lg ${(item.isLocal || item.isForcedAvailable) ? 'cursor-pointer group-hover:scale-105 group-hover:z-30' : 'opacity-60'}`}>
+                                {posters[item.id] ? (
+                                  <img src={posters[item.id]} alt={getCleanTitle(item.name)} className={`w-full h-full object-cover ${(!item.isLocal && !item.isForcedAvailable) ? 'grayscale opacity-50' : ''}`} />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center p-4 text-center">
+                                    <span className="text-zinc-500 font-medium text-sm">{getCleanTitle(item.name)}</span>
+                                  </div>
+                                )}
+
+                                {!item.isLocal && !item.isForcedAvailable && (
+                                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-20">
+                                    <CloudOff className="w-8 h-8 text-zinc-400 mb-2" />
+                                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest text-center px-2">Non disponible</span>
+                                  </div>
+                                )}
+
+                                {!item.isLocal && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); toggleForceAvailable(item.id); }}
+                                    className={`absolute top-2 left-2 z-40 p-1.5 rounded-full transition ${item.isForcedAvailable ? 'bg-green-600/90 text-white' : 'bg-zinc-800/90 text-zinc-400'}`}
+                                    title={item.isForcedAvailable ? "Rendre indisponible" : "Rendre disponible"}
+                                  >
+                                    {item.isForcedAvailable ? <Cloud className="w-3.5 h-3.5" /> : <CloudOff className="w-3.5 h-3.5" />}
                                   </button>
                                 )}
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); toggleWatched(item.id); }}
-                                  className={`absolute top-2 right-2 p-1.5 bg-red-600/80 rounded-full hover:bg-red-600 transition`}
-                                  title="Retirer de l'historique"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5 text-white" />
-                                </button>
+
+                                <div className={`absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center p-4 ${!item.isLocal ? 'z-30' : ''}`}>
+                                  {item.isLocal && (
+                                    <button onClick={(e) => { e.stopPropagation(); if (item.video) playVideo(item.video); }} className="bg-white text-black p-3 rounded-full hover:bg-white/80">
+                                      <Play className="w-6 h-6 fill-black" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); toggleWatched(item.id); }}
+                                    className={`absolute top-2 right-2 p-1.5 bg-red-600/80 rounded-full hover:bg-red-600 transition`}
+                                    title="Retirer de l'historique"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-white" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="mt-2 px-1">
+                                <p className="text-[10px] md:text-xs font-medium text-zinc-400 break-words line-clamp-none">
+                                  {getCleanTitle(item.name)}
+                                </p>
                               </div>
                             </div>
-                            <div className="mt-2 px-1">
-                              <p className="text-[10px] md:text-xs font-medium text-zinc-400 break-words line-clamp-none">
-                                {getCleanTitle(item.name)}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center text-zinc-500 mt-12 flex flex-col items-center gap-4">
-                        <History className="w-16 h-16 text-zinc-700" />
-                        <p>Votre historique est vide.</p>
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ) : searchQuery.trim() ? (
                   <div className="px-4 md:px-12 min-h-screen pt-4">
@@ -2299,7 +2374,7 @@ export default function App() {
                           return (
                             <div 
                               key={index}
-                              className={`group relative aspect-[2/3] bg-zinc-800 rounded-md overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-30 shadow-lg ${isWatched ? 'opacity-40 grayscale hover:opacity-100 hover:grayscale-0' : 'opacity-100'}`}
+                              className="group relative aspect-[2/3] bg-zinc-800 rounded-md overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-30 shadow-lg"
                               onClick={() => handleOpenInfoModal(video)}
                             >
                             {(video.isSeriesGroup 
