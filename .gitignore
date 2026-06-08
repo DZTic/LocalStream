@@ -9,6 +9,7 @@ coverage/
 
 # Fichiers internes des outils IA
 metadata.json
+graphify-out/
 
 # IDEs
 .idea/

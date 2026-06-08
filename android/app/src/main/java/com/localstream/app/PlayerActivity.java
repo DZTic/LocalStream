@@ -465,24 +465,6 @@ public class PlayerActivity extends Activity {
     }
 
     @Override
-    protected void onStop() {
-        super.onStop();
-        if (player != null) {
-            // Save position before stopping
-            savePosition();
-        }
-    }
-
-    private void savePosition() {
-        if (player != null) {
-            Intent result = new Intent();
-            result.putExtra("WATCH_POSITION", player.getCurrentPosition());
-            result.putExtra("WATCH_DURATION", player.getDuration());
-            setResult(RESULT_OK, result);
-        }
-    }
-
-    @Override
     protected void onDestroy() {
         super.onDestroy();
         if (player != null) {
