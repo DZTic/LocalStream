@@ -2,6 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Settings, FolderOpen, Play, Search, X, Download, ChevronLeft, Subtitles, LogIn, Image as ImageIcon, Info, ListPlus, Check, Trash2, ListVideo, RefreshCw, Cloud, CloudOff, RotateCcw, RotateCw, Pause, Clock, Plus, History, Home, Film } from 'lucide-react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import type { VideoFile, Subtitle, Playlist } from './lib/types';
+import { TMDB_GENRES } from './lib/types';
+import { srt2vtt, getCleanTitle, formatSize, formatDuration, getResolution } from './lib/utils';
+import { groupVideos } from './lib/grouping';
+import { sortAlphabetical, sortRecommendations, filterAndSortVideos } from './lib/sorting';
 
 interface VideoLauncherPlugin {
   openVideo(options: { 
@@ -20,117 +25,6 @@ interface VideoLauncherPlugin {
 }
 
 const VideoLauncher = registerPlugin<VideoLauncherPlugin>('VideoLauncher');
-
-// Types
-interface VideoFile {
-  file?: File;
-  size?: number;
-  lastModified?: number;
-  url: string;
-  name: string;
-  type: string;
-  path: string;
-  nativeUri?: string;
-  subtitleNativePath?: string; // sous-titre auto-détecté (Android)
-  subtitleUrl?: string;        // sous-titre auto-détecté (web, blob URL)
-  seriesName?: string;
-  season?: number;
-  episode?: number;
-  isSeriesGroup?: boolean;
-  isTvSeries?: boolean;
-  episodes?: VideoFile[];
-  cleanTitle?: string;
-}
-
-interface Subtitle {
-  id: string;
-  language: string;
-  filename: string;
-  url?: string;
-}
-
-interface Playlist {
-  id: string;
-  name: string;
-  videoNames: string[];
-}
-
-const TMDB_GENRES: Record<number, string> = {
-  28: "Action", 12: "Aventure", 16: "Animation", 35: "Comédie", 80: "Crime", 99: "Documentaire", 18: "Drame", 10751: "Familial", 14: "Fantastique", 36: "Histoire", 27: "Horreur", 10402: "Musique", 9648: "Mystère", 10749: "Romance", 878: "Science-Fiction", 10770: "Téléfilm", 53: "Thriller", 10752: "Guerre", 37: "Western",
-  10759: "Action & Adventure", 10762: "Kids", 10763: "News", 10764: "Reality", 10765: "Sci-Fi & Fantasy", 10766: "Soap", 10767: "Talk", 10768: "War & Politics"
-};
-
-// Convertit un fichier SRT en VTT
-const srt2vtt = (srt: string): string => {
-  let vtt = 'WEBVTT\n\n';
-  vtt += srt
-    .replace(/\{\\([ibu])\}/g, '<$1>')
-    .replace(/\{\\\/([ibu])\}/g, '</$1>')
-    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
-    .replace(/\r\n/g, '\n');
-  return vtt;
-};
-
-/**
- * Détecte si un fichier vidéo est une vidéo personnelle (souvenir, caméra téléphone, etc.)
- * basé uniquement sur le nom du fichier et son chemin.
- */
-const isPersonalVideo = (name: string, path: string): boolean => {
-  const n = name.toLowerCase();
-  const p = (path || '').toLowerCase().replace(/\\/g, '/');
-
-  // --- Patterns de chemins suspects ---
-  const suspectPaths = [
-    '/dcim/',
-    '/camera/',
-    '/whatsapp/',
-    '/snapchat/',
-    '/instagram/',
-    '/telegram/',
-    '/signal/',
-    '/viber/',
-    '/messenger/',
-    '/tiktok/',
-    '/recordings/',
-    '/screenrecord',
-    '/screen_record',
-    '/voicememos/',
-  ];
-  if (suspectPaths.some(sp => p.includes(sp))) return true;
-
-  // --- Patterns de noms de fichiers phones/caméscopes ---
-  const personalPatterns = [
-    // Android caméra standard : VID_20240315_143022
-    /^vid_\d{8}_\d{6}/,
-    // Android : 20240315_143022
-    /^\d{8}_\d{6}/,
-    // Android : 2024-03-15-14-30-22
-    /^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}/,
-    // iPhone photo/vidéo : IMG_1234 ou MOV_1234 (sans titre, juste numéro)
-    /^(img|mov|dsc|dscn|dscf|mvc|mvc|sdc|vlc)_?\d{4,}/i,
-    // Caméscope Sony/Panasonic : C0001, M2U00001
-    /^(c|m2u|avchd|mts|m2ts)\d{4,}/i,
-    // GoPro
-    /^(gh|gx|gopr|gp)\d{4,}/i,
-    // DJI drone
-    /^dji_\d{4}/i,
-    // WhatsApp
-    /^whatsapp.*(video|vidéo|audio)/i,
-    // Snapchat
-    /^snapchat-\d+/i,
-    // Fichier purement numérique (aucune lettre hors extension)
-    /^\d+\.(mp4|mkv|avi|mov|webm)$/i,
-    // Format date ISO ou slash sans titre : 2024-03-15 14.30.22
-    /^\d{4}[-_.\s]\d{2}[-_.\s]\d{2}[\s_-]\d{2}[.:_]\d{2}/,
-    // Screen recording Android/Samsung
-    /^screen.?record/i,
-    // Format caméra sécurité / timelapse
-    /^\d{14}\.(mp4|avi|mkv)$/i,
-  ];
-
-  return personalPatterns.some(pattern => pattern.test(n));
-};
-
 
 export default function App() {
   const [videos, setVideos] = useState<VideoFile[]>([]);
@@ -559,123 +453,10 @@ export default function App() {
     localStorage.setItem('episodePosters', JSON.stringify(episodePosters));
   }, [posters, backdrops, overviews, releaseDates, videoGenres, episodeNames, episodeOverviews, episodePosters]);
 
-  const getCleanTitle = (filename: string) => {
-    let title = filename.replace(/\.[^/.]+$/, "");
-    title = title.replace(/[sS]\d+(\s*)?([eE]\d+)?|(\d+)(\s*)?x(\d+).*/i, "");
-    title = title.replace(/(19|20)\d{2}.*/, "");
-    title = title.replace(/[\.\-_]/g, " ");
-    title = title.replace(/1080p|720p|2160p|4k|bluray|webrip|hdtv|x264|x265|hevc|vostfr|french|truefrench/ig, "");
-    // Supprimer les parenthèses ou crochets orphelins à la fin après nettoyage de l'année
-    return title.trim().replace(/[\(\[\{]\s*$/, "").replace(/[\s\-\.\(\)\[\]\{\}]+$/, "").trim();
-  };
-
-  const groupedVideos = React.useMemo(() => {
-    const groups: Record<string, VideoFile> = {};
-    const standaloneVideos: VideoFile[] = [];
-
-    // Filtrer les vidéos personnelles (sauf celles whitelistées)
-    const filteredVideos = videos.filter(video =>
-      whitelistedVideos.has(video.name) || !isPersonalVideo(video.name, video.path || '')
-    );
-
-    filteredVideos.forEach(video => {
-      const match = video.name.match(/[sS](\d+)(\s*)[eE](\d+)|(\d+)(\s*)x(\d+)/i);
-      const isSeriesPattern = !!match;
-      
-      if (isSeriesPattern || video.seriesName) {
-        if (match) {
-          if (match[1]) {
-            video.season = parseInt(match[1]);
-            video.episode = parseInt(match[3]);
-          } else {
-            video.season = parseInt(match[4]);
-            video.episode = parseInt(match[6]);
-          }
-        }
-        
-        const sName = video.seriesName || (match ? video.name.substring(0, match.index).replace(/[\.\-_/\\\[\]\(\)]/g, " ").trim().replace(/[\s\-]+$/, "") : getCleanTitle(video.name));
-        const finalSeriesName = sName || "Série Inconnue";
-
-        if (!groups[finalSeriesName]) {
-          groups[finalSeriesName] = {
-            file: video.file,
-            url: video.url,
-            name: finalSeriesName,
-            type: 'series',
-            path: video.path,
-            isSeriesGroup: true,
-            isTvSeries: true,
-            episodes: [],
-            seriesName: finalSeriesName
-          };
-        }
-        groups[finalSeriesName].episodes!.push(video);
-      } else {
-        const cleanTitle = getCleanTitle(video.name);
-        standaloneVideos.push({ ...video, cleanTitle });
-      }
-    });
-
-    const seriesResult = Object.values(groups).map(group => {
-      group.episodes!.sort((a, b) => {
-        if (a.season !== b.season) return (a.season || 0) - (b.season || 0);
-        return (a.episode || 0) - (b.episode || 0);
-      });
-      const firstEp = group.episodes![0];
-      group.file = firstEp.file;
-      group.url = firstEp.url;
-      group.path = firstEp.path;
-      return group;
-    });
-
-    // Groupement des films en sagas via les collections TMDB
-    const collectionGroups: Record<string, { colName: string; films: VideoFile[] }> = {};
-    const usedVideoNames = new Set<string>();
-    const finalStandalone: VideoFile[] = [];
-
-    standaloneVideos.forEach(v => {
-      const col = movieCollections[v.name];
-      if (col) {
-        const key = `col_${col.id}`;
-        if (!collectionGroups[key]) collectionGroups[key] = { colName: col.name, films: [] };
-        collectionGroups[key].films.push(v);
-        usedVideoNames.add(v.name);
-      }
-    });
-
-    // Ne créer un groupe saga que s'il y a au moins 2 films locaux dans la collection
-    const groupedMovies: VideoFile[] = [];
-    Object.values(collectionGroups).forEach(({ colName, films }) => {
-      if (films.length > 1) {
-        films.sort((a, b) => {
-          const dA = releaseDates[a.name] || '';
-          const dB = releaseDates[b.name] || '';
-          return dA.localeCompare(dB) || a.name.localeCompare(b.name, undefined, { numeric: true });
-        });
-        const first = films[0];
-        groupedMovies.push({
-          ...first,
-          name: colName,
-          type: 'series',
-          isSeriesGroup: true,
-          isTvSeries: false,
-          episodes: films,
-          seriesName: colName
-        } as VideoFile);
-      } else {
-        // 1 seul film local dans la collection → laisser en standalone
-        films.forEach(f => usedVideoNames.delete(f.name));
-      }
-    });
-
-    standaloneVideos.forEach(v => {
-      if (!usedVideoNames.has(v.name)) {
-        finalStandalone.push(v);
-      }
-    });
-
-    return [...seriesResult, ...groupedMovies, ...finalStandalone];
-  }, [videos, movieCollections, releaseDates, whitelistedVideos]);
+  const groupedVideos = React.useMemo(
+    () => groupVideos(videos, movieCollections, releaseDates, whitelistedVideos),
+    [videos, movieCollections, releaseDates, whitelistedVideos]
+  );
 
   useEffect(() => {
     const fetchAllMetadata = async () => {
@@ -1419,20 +1200,10 @@ export default function App() {
     .filter((v): v is VideoFile => v !== undefined && (watchProgress[v.name] || 0) > 0 && (watchProgress[v.name] || 0) < 95 && !watchedVideos[v.name]);
   
   // De A à Z (Alphabetical) - Unwatched first
-  const alphabetical = [...groupedVideos].sort((a, b) => {
-    const aWatched = a.isSeriesGroup ? a.episodes?.every(ep => !!watchedVideos[ep.name]) : !!watchedVideos[a.name];
-    const bWatched = b.isSeriesGroup ? b.episodes?.every(ep => !!watchedVideos[ep.name]) : !!watchedVideos[b.name];
-    if (aWatched !== bWatched) return aWatched ? 1 : -1;
-    return a.name.localeCompare(b.name);
-  });
+  const alphabetical = sortAlphabetical(groupedVideos, watchedVideos);
 
   // Recommandations (Pseudo-random based on name length for stability) - Unwatched first
-  const recommendations = [...groupedVideos].sort((a, b) => {
-    const aWatched = a.isSeriesGroup ? a.episodes?.every(ep => !!watchedVideos[ep.name]) : !!watchedVideos[a.name];
-    const bWatched = b.isSeriesGroup ? b.episodes?.every(ep => !!watchedVideos[ep.name]) : !!watchedVideos[b.name];
-    if (aWatched !== bWatched) return aWatched ? 1 : -1;
-    return (a.name.length % 7) - (b.name.length % 7);
-  });
+  const recommendations = sortRecommendations(groupedVideos, watchedVideos);
 
   // Group by folder
   const folders = groupedVideos.reduce((acc, video) => {
@@ -1448,59 +1219,12 @@ export default function App() {
 
   const folderNames = Object.keys(folders).sort();
 
-  const filteredAndSortedVideos = React.useMemo(() => {
-    let result = [...groupedVideos];
-
-    if (filterGenre !== 'all') {
-      result = result.filter(v => {
-        const lookupKey = v.isSeriesGroup ? v.seriesName! : v.name;
-        const genres = videoGenres[lookupKey];
-        return genres && genres.includes(filterGenre as number);
-      });
-    }
-
-    if (filterResolution !== 'all') {
-      result = result.filter(v => {
-        const nameLower = (v.isSeriesGroup ? (v.episodes![0]?.name || v.name) : v.name).toLowerCase();
-        if (filterResolution === '4k') return nameLower.includes('2160p') || nameLower.includes('4k');
-        if (filterResolution === '1080p') return nameLower.includes('1080p');
-        if (filterResolution === '720p') return nameLower.includes('720p');
-        if (filterResolution === 'sd') return !nameLower.match(/1080p|720p|2160p|4k/);
-        return true;
-      });
-    }
-
-    result.sort((a, b) => {
-      // Priorité aux vidéos non-vues (Sauf si on trie par date d'ajout où l'on veut peut être voir les derniers même si vus?)
-      // Mais d'après la demande de l'utilisateur "tout ce qui est en vu ne soit pas mis en avant", on trie les vus à la fin
-      const aWatched = a.isSeriesGroup ? a.episodes?.every(ep => !!watchedVideos[ep.name]) : !!watchedVideos[a.name];
-      const bWatched = b.isSeriesGroup ? b.episodes?.every(ep => !!watchedVideos[ep.name]) : !!watchedVideos[b.name];
-      if (aWatched !== bWatched) return aWatched ? 1 : -1;
-
-      if (sortBy === 'alpha') {
-        const nameA = a.isSeriesGroup ? a.seriesName! : a.name;
-        const nameB = b.isSeriesGroup ? b.seriesName! : b.name;
-        return nameA.localeCompare(nameB);
-      } else if (sortBy === 'date') {
-        const lookupA = a.isSeriesGroup ? a.seriesName! : a.name;
-        const lookupB = b.isSeriesGroup ? b.seriesName! : b.name;
-        const dateA = releaseDates[lookupA] || (a.file?.lastModified || a.lastModified || 0).toString();
-        const dateB = releaseDates[lookupB] || (b.file?.lastModified || b.lastModified || 0).toString();
-        return dateB.localeCompare(dateA);
-      } else if (sortBy === 'size') {
-        const sizeA = a.isSeriesGroup ? a.episodes!.reduce((s, e) => s + (e.file?.size || e.size || 0), 0) : (a.file?.size || a.size || 0);
-        const sizeB = b.isSeriesGroup ? b.episodes!.reduce((s, e) => s + (e.file?.size || e.size || 0), 0) : (b.file?.size || b.size || 0);
-        return sizeB - sizeA;
-      } else if (sortBy === 'duration') {
-        const durA = a.isSeriesGroup ? a.episodes!.reduce((s, e) => s + (videoDurations[e.name] || 0), 0) : (videoDurations[a.name] || 0);
-        const durB = b.isSeriesGroup ? b.episodes!.reduce((s, e) => s + (videoDurations[e.name] || 0), 0) : (videoDurations[b.name] || 0);
-        return durB - durA;
-      }
-      return 0;
-    });
-
-    return result;
-  }, [groupedVideos, sortBy, filterGenre, filterResolution, releaseDates, videoGenres, videoDurations]);
+  const filteredAndSortedVideos = React.useMemo(
+    () => filterAndSortVideos(groupedVideos, {
+      sortBy, filterGenre, filterResolution, watchedVideos, releaseDates, videoGenres, videoDurations,
+    }),
+    [groupedVideos, sortBy, filterGenre, filterResolution, watchedVideos, releaseDates, videoGenres, videoDurations]
+  );
 
   const searchResults = searchQuery.trim() 
     ? filteredAndSortedVideos.filter(v => v.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -1630,32 +1354,6 @@ export default function App() {
     );
   };
 
-
-  const formatSize = (bytes: number) => {
-    if (!bytes) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatDuration = (seconds: number) => {
-    if (!seconds) return 'Inconnue';
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
-  };
-
-  const getResolution = (name: string) => {
-    const n = name.toLowerCase();
-    if (n.includes('2160p') || n.includes('4k') || n.includes('uhd')) return '4K';
-    if (n.includes('1440p')) return '2K';
-    if (n.includes('1080p') || n.includes('fhd')) return '1080p';
-    if (n.includes('720p') || n.includes('hd')) return '720p';
-    if (n.includes('480p') || n.includes('sd')) return 'SD';
-    return '';
-  };
 
   const createPlaylist = () => {
     if (!newPlaylistName.trim()) return;
