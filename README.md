@@ -107,18 +107,34 @@ npm run dev
 ```
 > Ouvre http://localhost:3000 — fonctionne en mode "sélection de fichiers" depuis le navigateur.
 
-### Compiler l'APK Android
+### Vérifications (lint & tests)
 ```bash
-# 1. Construire le bundle web
+npm run lint   # vérification des types (tsc --noEmit)
+npm test       # tests unitaires (Vitest)
+```
+> Ces vérifications sont aussi exécutées automatiquement en CI (GitHub Actions) sur chaque push et pull request.
+
+### Compiler l'APK Android
+
+**1. Construire le bundle web et synchroniser Capacitor**
+```bash
 npm run build
-
-# 2. Synchroniser avec Capacitor
 npx cap sync android
+```
 
-# 3. Ouvrir dans Android Studio
+**2a. Via Android Studio**
+```bash
 npx cap open android
 ```
-Dans Android Studio : `Build > Build Bundle(s) / APK(s) > Build APK(s)`
+Puis : `Build > Build Bundle(s) / APK(s) > Build APK(s)`
+
+**2b. En ligne de commande (Gradle)**
+```bash
+cd android
+./gradlew assembleRelease   # APK release   → app/build/outputs/apk/release/
+./gradlew assembleDebug     # APK debug      → app/build/outputs/apk/debug/
+```
+> Sous Windows, utiliser `gradlew.bat` à la place de `./gradlew`.
 
 ---
 
@@ -144,6 +160,7 @@ Dans l'onglet **Paramètres** ⚙️ de l'application :
 | [TypeScript 5.8](https://www.typescriptlang.org/) | Typage statique |
 | [Capacitor 8](https://capacitorjs.com/) | Bridge web ↔ natif Android |
 | [TailwindCSS 4](https://tailwindcss.com/) | Styles utilitaires |
+| [Vitest](https://vitest.dev/) | Tests unitaires |
 | [Lucide React](https://lucide.dev/) | Icônes |
 | [TMDB API](https://www.themoviedb.org/documentation/api) | Métadonnées films & séries |
 | [OpenSubtitles API](https://www.opensubtitles.com/) | Sous-titres multilingues |
@@ -155,19 +172,34 @@ Dans l'onglet **Paramètres** ⚙️ de l'application :
 ```
 localstream/
 ├── src/
-│   ├── App.tsx          # Composant principal (logique & UI complète)
-│   ├── main.tsx         # Point d'entrée React
-│   └── index.css        # Styles globaux
+│   ├── App.tsx              # Composant racine : état & orchestration des écrans
+│   ├── main.tsx             # Point d'entrée React
+│   ├── index.css            # Styles globaux
+│   ├── lib/                 # Logique pure (sans React), testable
+│   │   ├── types.ts         #   types & constantes partagés (VideoFile, Playlist…)
+│   │   ├── utils.ts         #   helpers (getCleanTitle, formatSize, srt2vtt, isPersonalVideo…)
+│   │   ├── grouping.ts      #   regroupement séries & sagas (groupVideos)
+│   │   ├── sorting.ts       #   filtres & tri (filterAndSortVideos)
+│   │   ├── http.ts          #   proxy HTTP / fetch
+│   │   ├── tmdb.ts          #   service API TMDB (recherche, détails, URLs d'images)
+│   │   ├── opensubtitles.ts #   service API OpenSubtitles
+│   │   └── __tests__/       #   tests unitaires (vitest)
+│   ├── hooks/
+│   │   └── useTmdbMetadata.ts  # couche métadonnées TMDB (état + récupération)
+│   └── components/
+│       ├── VideoRow.tsx     # carrousel d'affiches (ligne d'accueil)
+│       └── BottomNav.tsx    # barre de navigation mobile
 ├── public/
-│   └── logo.png         # Logo de l'application
-├── android/             # Projet Android (Capacitor)
+│   └── logo.png             # Logo de l'application
+├── android/                 # Projet Android (Capacitor)
 │   └── app/src/main/java/com/localstream/app/
-│       ├── MainActivity.java      # Activité principale Capacitor
-│       ├── PlayerActivity.java   # Lecteur vidéo natif Android
-│       └── VideoLauncherPlugin.java
-├── index.html           # Point d'entrée HTML
-├── capacitor.config.ts  # Configuration Capacitor
-├── vite.config.ts       # Configuration Vite
+│       ├── MainActivity.java        # Activité principale Capacitor
+│       ├── PlayerActivity.java      # Lecteur vidéo natif Android
+│       └── VideoLauncherPlugin.java # Pont natif (lecteurs externes, sous-titres)
+├── server.ts                # Serveur dev/preview (Express + proxy OpenSubtitles)
+├── index.html               # Point d'entrée HTML
+├── capacitor.config.ts      # Configuration Capacitor
+├── vite.config.ts           # Configuration Vite & Vitest
 └── package.json
 ```
 
