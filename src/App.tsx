@@ -7,6 +7,7 @@ import { srt2vtt, safeSetItem, getCleanTitle, getResolution, formatSize, formatD
 import { osLogin, osSearch, osDownloadVtt } from './lib/opensubtitles';
 import { getPopular } from './lib/tmdb';
 import { filterAndSortVideos } from './lib/sorting';
+import { getHeroCandidates } from './lib/hero';
 import { useTmdbMetadata } from './hooks/useTmdbMetadata';
 import { VideoRow } from './components/VideoRow';
 import { BottomNav } from './components/BottomNav';
@@ -842,10 +843,23 @@ export default function App() {
     return () => window.removeEventListener('focus', handleFocusScan);
   }, []);
 
-  const heroVideo = recentAdditions.find(v => {
-    if (v.isSeriesGroup) return v.episodes?.some(ep => !watchedVideos[ep.name]);
-    return !watchedVideos[v.name];
-  }) || recentAdditions[0] || groupedVideos[0];
+  // Hero rotatif (#4) : on fait défiler les films/séries non vus ou non terminés
+  // plutôt que d'afficher toujours le dernier ajouté.
+  const heroCandidates = React.useMemo(
+    () => getHeroCandidates(groupedVideos, watchedVideos, watchProgress),
+    [groupedVideos, watchedVideos, watchProgress]
+  );
+
+  const [heroIndex, setHeroIndex] = useState(0);
+  useEffect(() => {
+    if (heroCandidates.length <= 1) return;
+    const id = setInterval(() => setHeroIndex(i => i + 1), 10000);
+    return () => clearInterval(id);
+  }, [heroCandidates.length]);
+
+  const heroVideo = heroCandidates.length > 0
+    ? heroCandidates[heroIndex % heroCandidates.length]
+    : (recentAdditions[0] || groupedVideos[0]);
 
   const createPlaylist = () => {
     if (!newPlaylistName.trim()) return;
