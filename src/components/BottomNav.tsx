@@ -14,7 +14,7 @@ export interface BottomNavProps {
 const BottomNavComponent: React.FC<BottomNavProps> = ({
   activeTab, isLibraryViewActive, onHome, onLibrary, onPlaylists, onHistory,
 }) => (
-  <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-950/90 backdrop-blur-md border-t border-white/10 z-40 flex items-center justify-around pb-safe pt-2 px-2" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}>
+  <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-950/90 backdrop-blur-md border-t border-white/10 z-40 flex items-center justify-around pt-2 px-2" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}>
     <button
       onClick={onHome}
       className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'home' && !isLibraryViewActive ? 'text-red-500' : 'text-zinc-500 hover:text-zinc-300'}`}

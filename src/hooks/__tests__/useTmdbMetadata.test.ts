@@ -62,13 +62,13 @@ describe('useTmdbMetadata', () => {
       await result.current.fetchSingleMetadata(v('Inception.2010.1080p.mkv'));
     });
 
-    expect(result.current.posters['Inception.2010.1080p.mkv']).toBe('https://image.tmdb.org/t/p/w500/p.jpg');
+    expect(result.current.posters['Inception.2010.1080p.mkv']).toBe('https://image.tmdb.org/t/p/w342/p.jpg');
     expect(result.current.overviews['Inception.2010.1080p.mkv']).toBe('rêve');
 
-    // La persistance localStorage se fait dans un effet → on attend qu'elle soit écrite.
+    // La persistance localStorage se fait dans un effet débouncé (1 s) → on attend qu'elle soit écrite.
     await waitFor(() => {
       const saved = JSON.parse(localStorage.getItem('moviePosters') || '{}');
-      expect(saved['Inception.2010.1080p.mkv']).toBe('https://image.tmdb.org/t/p/w500/p.jpg');
-    });
+      expect(saved['Inception.2010.1080p.mkv']).toBe('https://image.tmdb.org/t/p/w342/p.jpg');
+    }, { timeout: 3000 });
   });
 });

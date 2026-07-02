@@ -64,6 +64,8 @@ export const safeSetItem = (key: string, value: string) => {
     localStorage.setItem(key, value);
   } catch (e) {
     console.warn(`Stockage local saturé, impossible d'enregistrer "${key}".`, e);
+    // Notifie l'UI (App affiche un toast) — sinon l'échec est invisible pour l'utilisateur.
+    window.dispatchEvent(new CustomEvent('localstream:storage-full', { detail: { key } }));
   }
 };
 
