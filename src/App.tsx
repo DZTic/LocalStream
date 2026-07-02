@@ -11,6 +11,7 @@ import { filterAndSortVideos } from './lib/sorting';
 import { getHeroCandidates } from './lib/hero';
 import { useTmdbMetadata } from './hooks/useTmdbMetadata';
 import { usePlaylists } from './hooks/usePlaylists';
+import { useWatchedState } from './hooks/useWatchedState';
 import { VideoRow } from './components/VideoRow';
 import { BottomNav } from './components/BottomNav';
 
@@ -80,31 +81,6 @@ export default function App() {
   };
 
   
-  // TMDB Credentials & Posters
-  const [watchedVideos, setWatchedVideos] = useState<Record<string, boolean>>(() => {
-    try {
-      const saved = localStorage.getItem('watchedVideos');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
-  
-  const resetProgress = useCallback((videoName: string) => {
-    setWatchProgress(prev => {
-      const newState = { ...prev };
-      delete newState[videoName];
-      safeSetItem('watchProgress', JSON.stringify(newState));
-      return newState;
-    });
-    setWatchPositions(prev => {
-      const newState = { ...prev };
-      delete newState[videoName];
-      safeSetItem('watchPositions', JSON.stringify(newState));
-      return newState;
-    });
-  }, []);
-
   const [tmdbApiKey, setTmdbApiKey] = useState(localStorage.getItem('tmdbApiKey') || '');
   // Bannière d'aide à la configuration TMDB (affichée tant que pas de clé, dismissible)
   const [tmdbBannerDismissed, setTmdbBannerDismissed] = useState(localStorage.getItem('tmdbBannerDismissed') === '1');
@@ -114,15 +90,6 @@ export default function App() {
   const [filterGenre, setFilterGenre] = useState<number | 'all'>('all');
   const [filterResolution, setFilterResolution] = useState<string | 'all'>('all');
 
-  const [recentlyWatched, setRecentlyWatched] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('recentlyWatched');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-  
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
   const [localSubtitles, setLocalSubtitles] = useState<Subtitle[]>([]);
   const [isSearchingSubs, setIsSearchingSubs] = useState(false);
@@ -191,42 +158,13 @@ export default function App() {
   const [newPlaylistName, setNewPlaylistName] = useState('');
   
   const [newHistoryItemName, setNewHistoryItemName] = useState('');
-  const [forceAvailableVideos, setForceAvailableVideos] = useState<Record<string, boolean>>(() => {
-    try {
-      const saved = localStorage.getItem('forceAvailableVideos');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
 
-  const toggleForceAvailable = (videoName: string) => {
-    setForceAvailableVideos(prev => {
-      const newState = { ...prev, [videoName]: !prev[videoName] };
-      safeSetItem('forceAvailableVideos', JSON.stringify(newState));
-      return newState;
-    });
-  };
-
-  const addManualHistoryItem = () => {
-    if (!newHistoryItemName.trim()) return;
-    const name = newHistoryItemName.trim();
-    
-    setWatchedVideos(prev => {
-      const newState = { ...prev, [name]: true };
-      safeSetItem('watchedVideos', JSON.stringify(newState));
-      return newState;
-    });
-    
-    setForceAvailableVideos(prev => {
-      const newState = { ...prev, [name]: true };
-      safeSetItem('forceAvailableVideos', JSON.stringify(newState));
-      return newState;
-    });
-
+  // Ajoute l'entrée saisie puis vide le champ.
+  const handleAddHistory = () => {
+    addManualHistoryItem(newHistoryItemName);
     setNewHistoryItemName('');
   };
-  
+
   const [isScanning, setIsScanning] = useState(false);
   const [diagLogs, setDiagLogs] = useState<string[]>([]);
   const addLog = (msg: string) => {
@@ -243,74 +181,25 @@ export default function App() {
     clearMetadataCache,
   } = useTmdbMetadata({ videos, whitelistedVideos, tmdbApiKey, addLog });
 
-  // Défini après useTmdbMetadata car dépend de groupedVideos.
-  const toggleWatched = useCallback((videoName: string) => {
-    setWatchedVideos(prev => {
-      // Trouver si c'est un groupe de vidéos (série ou collection)
-      const group = groupedVideos.find(v => (v.seriesName === videoName || v.name === videoName) && v.isSeriesGroup);
-
-      let isCurrentlyWatched;
-      if (group && group.episodes) {
-        // Pour un groupe, on considère qu'il est vu si TOUS les épisodes sont vus
-        isCurrentlyWatched = group.episodes.every(ep => !!prev[ep.name]);
-      } else {
-        isCurrentlyWatched = !!prev[videoName];
-      }
-
-      const newState = { ...prev };
-      const targetValue = !isCurrentlyWatched;
-
-      if (group && group.episodes) {
-        // On marque le nom du groupe ET tous ses épisodes
-        newState[videoName] = targetValue;
-        group.episodes.forEach(ep => {
-          newState[ep.name] = targetValue;
-        });
-      } else {
-        // C'est un épisode seul
-        newState[videoName] = targetValue;
-
-        // Propagation automatique vers le groupe de série s'il existe
-        const parentSeries = groupedVideos.find(g => g.isSeriesGroup && g.episodes?.some(ep => ep.name === videoName));
-        if (parentSeries) {
-          const seriesKey = parentSeries.seriesName || parentSeries.name;
-          const allEpsWatched = parentSeries.episodes!.every(ep => !!newState[ep.name]);
-          newState[seriesKey] = allEpsWatched;
-        }
-      }
-
-      safeSetItem('watchedVideos', JSON.stringify(newState));
-      return newState;
-    });
-  }, [groupedVideos]);
   const [permsNeeded, setPermsNeeded] = useState(false);
   const [externalPlayers, setExternalPlayers] = useState<{name: string, packageId: string}[]>([]);
   const [selectedExternalPlayer, setSelectedExternalPlayer] = useState<string>(localStorage.getItem('selectedExternalPlayer') || '');
 
-  const [watchProgress, setWatchProgress] = useState<Record<string, number>>(() => {
-    try {
-      const saved = localStorage.getItem('watchProgress');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
-
-  const [watchPositions, setWatchPositions] = useState<Record<string, number>>(() => {
-    try {
-      const saved = localStorage.getItem('watchPositions');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
+  // État de visionnage : vu/non vu, progression, reprise, historique récent.
+  const {
+    watchedVideos,
+    watchProgress, setWatchProgress,
+    watchPositions, setWatchPositions,
+    recentlyWatched, setRecentlyWatched,
+    forceAvailableVideos,
+    toggleWatched,
+    resetProgress,
+    toggleForceAvailable,
+    addManualHistoryItem,
+  } = useWatchedState(groupedVideos);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    safeSetItem('watchPositions', JSON.stringify(watchPositions));
-  }, [watchPositions]);
 
   useEffect(() => {
     // passive: ne bloque pas le compositing du scroll ; le setState fonctionnel
@@ -1587,10 +1476,10 @@ export default function App() {
                           value={newHistoryItemName}
                           onChange={(e) => setNewHistoryItemName(e.target.value)}
                           className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:border-red-600 focus:outline-none transition-all placeholder:text-zinc-500"
-                          onKeyDown={(e) => e.key === 'Enter' && addManualHistoryItem()}
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddHistory()}
                         />
                         <button
-                          onClick={addManualHistoryItem}
+                          onClick={handleAddHistory}
                           disabled={!newHistoryItemName.trim()}
                           className="bg-red-600 hover:bg-red-700 disabled:opacity-30 text-white px-4 py-2 rounded-xl text-xs font-black transition-all active:scale-95 shadow-lg shadow-red-900/20 whitespace-nowrap"
                         >
