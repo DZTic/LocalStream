@@ -52,19 +52,40 @@ export function useTmdbMetadata({ videos, whitelistedVideos, tmdbApiKey, addLog 
     [videos, movieCollections, releaseDates, whitelistedVideos]
   );
 
-  // Persistance du cache de métadonnées
+  // Persistance du cache de métadonnées, débouncée : le scan initial déclenche
+  // des rafales de setState — on regroupe les écritures (10 JSON.stringify) en une seule.
   useEffect(() => {
-    safeSetItem('moviePosters', JSON.stringify(posters));
-    safeSetItem('movieBackdrops', JSON.stringify(backdrops));
-    safeSetItem('movieOverviews', JSON.stringify(overviews));
-    safeSetItem('movieReleaseDates', JSON.stringify(releaseDates));
-    safeSetItem('movieGenres', JSON.stringify(videoGenres));
-    safeSetItem('tmdbIds', JSON.stringify(tmdbIds));
-    safeSetItem('movieCollections', JSON.stringify(movieCollections));
-    safeSetItem('episodeOverviews', JSON.stringify(episodeOverviews));
-    safeSetItem('episodePosters', JSON.stringify(episodePosters));
-    safeSetItem('episodeNames', JSON.stringify(episodeNames));
+    const id = setTimeout(() => {
+      safeSetItem('moviePosters', JSON.stringify(posters));
+      safeSetItem('movieBackdrops', JSON.stringify(backdrops));
+      safeSetItem('movieOverviews', JSON.stringify(overviews));
+      safeSetItem('movieReleaseDates', JSON.stringify(releaseDates));
+      safeSetItem('movieGenres', JSON.stringify(videoGenres));
+      safeSetItem('tmdbIds', JSON.stringify(tmdbIds));
+      safeSetItem('movieCollections', JSON.stringify(movieCollections));
+      safeSetItem('episodeOverviews', JSON.stringify(episodeOverviews));
+      safeSetItem('episodePosters', JSON.stringify(episodePosters));
+      safeSetItem('episodeNames', JSON.stringify(episodeNames));
+    }, 1000);
+    return () => clearTimeout(id);
   }, [posters, backdrops, overviews, releaseDates, videoGenres, tmdbIds, movieCollections, episodeOverviews, episodePosters, episodeNames]);
+
+  /** Vide tout le cache TMDB (localStorage + état) pour repartir de zéro. */
+  const clearMetadataCache = () => {
+    ['moviePosters', 'movieBackdrops', 'movieOverviews', 'movieReleaseDates', 'movieGenres',
+      'tmdbIds', 'movieCollections', 'episodeOverviews', 'episodePosters', 'episodeNames',
+    ].forEach(key => localStorage.removeItem(key));
+    setPosters({});
+    setBackdrops({});
+    setOverviews({});
+    setReleaseDates({});
+    setVideoGenres({});
+    setTmdbIds({});
+    setMovieCollections({});
+    setEpisodeOverviews({});
+    setEpisodePosters({});
+    setEpisodeNames({});
+  };
 
   // Récupération automatique en masse (affiches + épisodes)
   useEffect(() => {
@@ -236,10 +257,13 @@ export function useTmdbMetadata({ videos, whitelistedVideos, tmdbApiKey, addLog 
     const fetchCollections = async () => {
       if (!tmdbApiKey || videos.length === 0) return;
 
-      // Filtrer les films qui : ne sont pas une série et n'ont pas encore de collection enregistrée
+      // Filtrer les films qui : ne sont pas une série, n'ont pas encore de collection
+      // enregistrée, et ont DÉJÀ une affiche en cache. Les films sans affiche sont
+      // traités par fetchAllMetadata (Phase 1b) — les inclure ici doublerait les
+      // requêtes TMDB au premier scan.
       const standalonefilms = videos.filter(v => {
         const isSeriesEp = !!v.name.match(/[sS]\d+[eE]\d+|\d+x\d+/i) || !!v.seriesName;
-        return !isSeriesEp;
+        return !isSeriesEp && !movieCollections[v.name] && !!posters[v.name];
       });
 
       const processFilm = async (video: VideoFile) => {
@@ -375,5 +399,6 @@ export function useTmdbMetadata({ videos, whitelistedVideos, tmdbApiKey, addLog 
     movieCollections, episodeOverviews, episodePosters, episodeNames,
     isFetchingMetadata, isRefreshingMetadata,
     fetchSingleMetadata,
+    clearMetadataCache,
   };
 }

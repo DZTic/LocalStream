@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Settings, FolderOpen, Play, Search, X, Download, ChevronLeft, Subtitles, LogIn, Image as ImageIcon, Info, ListPlus, Check, Trash2, ListVideo, RefreshCw, Cloud, CloudOff, RotateCcw, RotateCw, Pause, Clock, Plus, History, Film } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { Settings, FolderOpen, Play, Search, X, Download, ChevronLeft, Subtitles, LogIn, Image as ImageIcon, Info, ListPlus, Check, Trash2, ListVideo, RefreshCw, Cloud, CloudOff, RotateCcw, RotateCw, Pause, Clock, Plus, History, Film, AlertTriangle, EyeOff } from 'lucide-react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { VideoFile, Subtitle, Playlist, TMDB_GENRES } from './lib/types';
-import { srt2vtt, safeSetItem, getCleanTitle, getResolution, formatSize, formatDuration } from './lib/utils';
+import { srt2vtt, safeSetItem, getCleanTitle, getResolution, formatSize, formatDuration, isPersonalVideo } from './lib/utils';
 import { osLogin, osSearch, osDownloadVtt } from './lib/opensubtitles';
 import { getPopular } from './lib/tmdb';
 import { filterAndSortVideos } from './lib/sorting';
@@ -37,11 +38,28 @@ export default function App() {
   const [currentVideo, setCurrentVideo] = useState<VideoFile | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  
+  // Recherche mobile : ouverte en plein header via une icône loupe (évite que
+  // le champ toujours affiché ne serre le logo et ne pousse les boutons hors écran).
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Toasts non bloquants (remplacent les alert() natifs de la WebView)
+  const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' | 'info' }[]>([]);
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev.slice(-2), { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  }, []);
+
+  // Confirmation avant action destructive (suppression de playlist…)
+  const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
+
   // OpenSubtitles Credentials
   const [osApiKey, setOsApiKey] = useState(localStorage.getItem('osApiKey') || '');
   const [osUsername, setOsUsername] = useState(localStorage.getItem('osUsername') || '');
-  const [osPassword, setOsPassword] = useState(localStorage.getItem('osPassword') || '');
+  // Le mot de passe n'est JAMAIS persisté (il était auparavant stocké en clair
+  // dans localStorage) : il ne vit qu'en mémoire, le temps d'obtenir un token.
+  const [osPassword, setOsPassword] = useState('');
   const [osToken, setOsToken] = useState(localStorage.getItem('osToken') || '');
   
   // Settings
@@ -64,6 +82,8 @@ export default function App() {
 
   
   const [tmdbApiKey, setTmdbApiKey] = useState(localStorage.getItem('tmdbApiKey') || '');
+  // Bannière d'aide à la configuration TMDB (affichée tant que pas de clé, dismissible)
+  const [tmdbBannerDismissed, setTmdbBannerDismissed] = useState(localStorage.getItem('tmdbBannerDismissed') === '1');
   const [videoDurations, setVideoDurations] = useState<Record<string, number>>({});
 
   const [sortBy, setSortBy] = useState<'alpha' | 'date' | 'size' | 'duration'>('alpha');
@@ -158,7 +178,9 @@ export default function App() {
     movieCollections, episodeOverviews, episodePosters, episodeNames,
     isFetchingMetadata, isRefreshingMetadata,
     fetchSingleMetadata,
+    clearMetadataCache,
   } = useTmdbMetadata({ videos, whitelistedVideos, tmdbApiKey, addLog });
+
   const [permsNeeded, setPermsNeeded] = useState(false);
   const [externalPlayers, setExternalPlayers] = useState<{name: string, packageId: string}[]>([]);
   const [selectedExternalPlayer, setSelectedExternalPlayer] = useState<string>(localStorage.getItem('selectedExternalPlayer') || '');
@@ -180,21 +202,38 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
+    // passive: ne bloque pas le compositing du scroll ; le setState fonctionnel
+    // évite un re-render quand la valeur booléenne n'a pas changé.
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
+      const scrolled = window.scrollY > 50;
+      setIsScrolled(prev => (prev === scrolled ? prev : scrolled));
     };
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Save credentials
+  // Save credentials (jamais le mot de passe — sécurité)
   useEffect(() => {
     safeSetItem('osApiKey', osApiKey);
     safeSetItem('osUsername', osUsername);
-    safeSetItem('osPassword', osPassword);
     safeSetItem('osToken', osToken);
     safeSetItem('videoPlayer', videoPlayer);
-  }, [osApiKey, osUsername, osPassword, osToken, videoPlayer]);
+    // Purge un éventuel mot de passe stocké en clair par les anciennes versions.
+    localStorage.removeItem('osPassword');
+  }, [osApiKey, osUsername, osToken, videoPlayer]);
+
+  // Signale à l'utilisateur quand le stockage local est saturé (au plus 1×/min).
+  const lastStorageToastRef = useRef(0);
+  useEffect(() => {
+    const onStorageFull = () => {
+      const now = Date.now();
+      if (now - lastStorageToastRef.current < 60000) return;
+      lastStorageToastRef.current = now;
+      showToast("Stockage local saturé : certaines données ne sont plus sauvegardées.", 'error');
+    };
+    window.addEventListener('localstream:storage-full', onStorageFull);
+    return () => window.removeEventListener('localstream:storage-full', onStorageFull);
+  }, [showToast]);
 
   useEffect(() => {
     safeSetItem('tmdbApiKey', tmdbApiKey);
@@ -267,10 +306,13 @@ export default function App() {
   const extractedDurationsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    let cancelled = false;
+
     const extractDurations = async () => {
       for (const video of videos) {
+        if (cancelled) return;
         if (extractedDurationsRef.current.has(video.name)) continue;
-        
+
         try {
           const duration = await new Promise<number>((resolve) => {
             const vid = document.createElement('video');
@@ -282,8 +324,8 @@ export default function App() {
             vid.onerror = () => resolve(0);
             vid.src = video.file ? URL.createObjectURL(video.file) : video.url;
           });
-          
-          if (duration > 0) {
+
+          if (duration > 0 && !cancelled) {
             setVideoDurations(prev => ({ ...prev, [video.name]: duration }));
           }
           extractedDurationsRef.current.add(video.name);
@@ -292,11 +334,16 @@ export default function App() {
         }
       }
     };
-    
+
     // Run in background to not block main thread
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     if (videos.length > 0) {
-      setTimeout(extractDurations, 2000);
+      timeoutId = setTimeout(extractDurations, 2000);
     }
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [videos]);
 
   const scanDirectoryRecursively = async (directory: typeof Directory[keyof typeof Directory], basePath: string, debugLogs: string[]): Promise<VideoFile[]> => {
@@ -372,7 +419,9 @@ export default function App() {
 
   const startNativeScan = async (quiet = false) => {
     if (!Capacitor.isNativePlatform()) return;
-    if (!quiet) setIsScanning(true);
+    // Toujours signaler le scan en cours (l'écran vide affiche un indicateur),
+    // "quiet" ne concerne que les popups d'erreur.
+    setIsScanning(true);
     const debugLogs: string[] = [];
     try {
       const stats = await Filesystem.checkPermissions();
@@ -410,13 +459,13 @@ export default function App() {
       });
 
       if (!quiet && allVideos.length === 0 && debugLogs.length > 0) {
-        alert("Aucune vidéo trouvée.\nErreurs rencontrées :\n" + debugLogs.slice(0, 5).join("\n"));
+        showToast("Aucune vidéo trouvée dans les dossiers scannés.", 'error');
       }
     } catch (e: any) {
       console.error(e);
-      if (!quiet) alert("Erreur générale : " + e.message);
+      if (!quiet) showToast("Erreur pendant le scan : " + e.message, 'error');
     } finally {
-      if (!quiet) setIsScanning(false);
+      setIsScanning(false);
     }
   };
 
@@ -483,14 +532,22 @@ export default function App() {
         });
       }
     }
-    // Diff update for folder select (web)
+    // Diff update for folder select (web) + révocation des object URLs
+    // qui ne seront plus référencés (sinon les blobs restent en mémoire).
     setVideos(prev => {
       const currentPaths = new Set(videoFiles.map(v => v.path));
       const kept = prev.filter(v => currentPaths.has(v.path));
-      
+
       const existingPaths = new Set(kept.map(v => v.path));
       const extra = videoFiles.filter(v => !existingPaths.has(v.path));
-      
+
+      const removed = prev.filter(v => !currentPaths.has(v.path));
+      const unusedNew = videoFiles.filter(v => existingPaths.has(v.path));
+      [...removed, ...unusedNew].forEach(v => {
+        if (v.file && v.url?.startsWith('blob:')) URL.revokeObjectURL(v.url);
+        if (v.subtitleUrl?.startsWith('blob:')) URL.revokeObjectURL(v.subtitleUrl);
+      });
+
       return [...kept, ...extra];
     });
   };
@@ -498,7 +555,7 @@ export default function App() {
   const [activePlaylist, setActivePlaylist] = useState<Playlist | null>(null);
   const [activePlaylistIndex, setActivePlaylistIndex] = useState<number>(0);
 
-  const playVideo = (video: VideoFile, playlist?: Playlist, index?: number) => {
+  const playVideo = useCallback((video: VideoFile, playlist?: Playlist, index?: number) => {
     let videoToPlay = video;
     if (video.isSeriesGroup && video.episodes && video.episodes.length > 0) {
       // Trouver le premier épisode non vu
@@ -559,7 +616,7 @@ export default function App() {
           }
         }).catch(err => {
           console.error("Erreur lecteur natif", err);
-          alert("Erreur : " + err);
+          showToast("Impossible de lancer la lecture : " + err, 'error');
         });
       return;
     }
@@ -573,11 +630,11 @@ export default function App() {
       setActiveSubtitleUrl(null);
     }
     setSubtitles([]);
-  };
+  }, [watchedVideos, watchPositions, videoPlayer, selectedExternalPlayer, activeSubtitleNativePath, activeSubtitleUrl, toggleWatched, showToast]);
 
   const loginOpenSubtitles = async () => {
     if (!osApiKey || !osUsername || !osPassword) {
-      alert("Veuillez remplir tous les champs.");
+      showToast("Veuillez remplir tous les champs OpenSubtitles.", 'error');
       return;
     }
 
@@ -586,12 +643,14 @@ export default function App() {
       const token = await osLogin(osApiKey, osUsername, osPassword);
       if (token) {
         setOsToken(token);
-        alert('Connexion réussie !');
+        // Seul le token est conservé — on efface le mot de passe de la mémoire.
+        setOsPassword('');
+        showToast('Connexion réussie !', 'success');
       } else {
-        alert('Erreur de connexion.');
+        showToast('Échec de la connexion OpenSubtitles.', 'error');
       }
     } catch (error) {
-      alert('Erreur de connexion.');
+      showToast('Échec de la connexion OpenSubtitles.', 'error');
     } finally {
       setIsLoggingIn(false);
     }
@@ -604,15 +663,18 @@ export default function App() {
       const cleanName = currentVideo.name.replace(/\.(mp4|mkv|webm|avi|mov)$/i, '').replace(/[\.\-_]/g, ' ');
       setSubtitles(await osSearch(osApiKey, cleanName));
     } catch (error) {
-      alert("Erreur lors de la recherche de sous-titres.");
+      showToast("Erreur lors de la recherche de sous-titres.", 'error');
     } finally {
       setIsSearchingSubs(false);
     }
   };
 
+  // URL du dernier sous-titre téléchargé (à révoquer quand on le remplace).
+  const downloadedSubUrlRef = useRef<string | null>(null);
+
   const downloadSubtitle = async (fileId: string) => {
     if (!osApiKey || !osToken) {
-      alert("Vous devez être connecté à OpenSubtitles.");
+      showToast("Vous devez être connecté à OpenSubtitles (voir Paramètres).", 'error');
       setShowSubtitlesModal(false);
       setShowSettings(true);
       return;
@@ -621,67 +683,83 @@ export default function App() {
       const vttContent = await osDownloadVtt(osApiKey, osToken, fileId);
       if (vttContent) {
         const blob = new Blob([vttContent], { type: 'text/vtt' });
-        setActiveSubtitleUrl(URL.createObjectURL(blob));
+        if (downloadedSubUrlRef.current) URL.revokeObjectURL(downloadedSubUrlRef.current);
+        const url = URL.createObjectURL(blob);
+        downloadedSubUrlRef.current = url;
+        setActiveSubtitleUrl(url);
         setShowSubtitlesModal(false);
       } else {
-        alert("Erreur de téléchargement.");
+        showToast("Erreur de téléchargement du sous-titre (session expirée ?). Reconnectez-vous dans les Paramètres.", 'error');
       }
     } catch (error) {
-      alert("Erreur lors du téléchargement.");
+      showToast("Erreur lors du téléchargement du sous-titre.", 'error');
     }
   };
 
-  const tvShows = groupedVideos.filter(v => v.isSeriesGroup);
-  const movies = groupedVideos.filter(v => !v.isSeriesGroup);
-  
+  // Toutes les listes dérivées sont mémoïsées : App re-rend souvent (scroll,
+  // rotation du hero, progression) et ces tris/filtres sont coûteux sur mobile.
+  const { tvShows, movies } = useMemo(() => ({
+    tvShows: groupedVideos.filter(v => v.isSeriesGroup),
+    movies: groupedVideos.filter(v => !v.isSeriesGroup),
+  }), [groupedVideos]);
+
   // Nouveautés (Recently Added) - Unwatched first
-  const recentAdditions = [...groupedVideos].sort((a, b) => {
+  const recentAdditions = useMemo(() => [...groupedVideos].sort((a, b) => {
     const aWatched = a.isSeriesGroup ? a.episodes?.every(ep => !!watchedVideos[ep.name]) : !!watchedVideos[a.name];
     const bWatched = b.isSeriesGroup ? b.episodes?.every(ep => !!watchedVideos[ep.name]) : !!watchedVideos[b.name];
     if (aWatched !== bWatched) return aWatched ? 1 : -1;
     return (b.file?.lastModified || b.lastModified || 0) - (a.file?.lastModified || a.lastModified || 0);
-  });
-  
+  }), [groupedVideos, watchedVideos]);
+
   // Vus récemment (Recently Watched)
-  const recentlyWatchedVideos = recentlyWatched
+  const recentlyWatchedVideos = useMemo(() => recentlyWatched
     .map(name => groupedVideos.find(v => v.name === name || (v.episodes && v.episodes.some(ep => ep.name === name))))
     .filter((v): v is VideoFile => v !== undefined)
-    .filter((v, i, a) => a.indexOf(v) === i); // remove duplicates if multiple episodes of same series are watched
-  
+    .filter((v, i, a) => a.indexOf(v) === i), // remove duplicates if multiple episodes of same series are watched
+    [recentlyWatched, groupedVideos]);
+
   // En cours (In Progress)
-  const inProgressVideos = recentlyWatched
+  const inProgressVideos = useMemo(() => recentlyWatched
     .map(name => videos.find(v => v.name === name))
-    .filter((v): v is VideoFile => v !== undefined && (watchProgress[v.name] || 0) > 0 && (watchProgress[v.name] || 0) < 95 && !watchedVideos[v.name]);
-  
+    .filter((v): v is VideoFile => v !== undefined && (watchProgress[v.name] || 0) > 0 && (watchProgress[v.name] || 0) < 95 && !watchedVideos[v.name]),
+    [recentlyWatched, videos, watchProgress, watchedVideos]);
+
   // De A à Z (Alphabetical) - Unwatched first
-  const alphabetical = [...groupedVideos].sort((a, b) => {
+  const alphabetical = useMemo(() => [...groupedVideos].sort((a, b) => {
     const aWatched = a.isSeriesGroup ? a.episodes?.every(ep => !!watchedVideos[ep.name]) : !!watchedVideos[a.name];
     const bWatched = b.isSeriesGroup ? b.episodes?.every(ep => !!watchedVideos[ep.name]) : !!watchedVideos[b.name];
     if (aWatched !== bWatched) return aWatched ? 1 : -1;
     return a.name.localeCompare(b.name);
-  });
+  }), [groupedVideos, watchedVideos]);
 
   // Recommandations (Pseudo-random based on name length for stability) - Unwatched first
-  const recommendations = [...groupedVideos].sort((a, b) => {
+  const recommendations = useMemo(() => [...groupedVideos].sort((a, b) => {
     const aWatched = a.isSeriesGroup ? a.episodes?.every(ep => !!watchedVideos[ep.name]) : !!watchedVideos[a.name];
     const bWatched = b.isSeriesGroup ? b.episodes?.every(ep => !!watchedVideos[ep.name]) : !!watchedVideos[b.name];
     if (aWatched !== bWatched) return aWatched ? 1 : -1;
     return (a.name.length % 7) - (b.name.length % 7);
-  });
+  }), [groupedVideos, watchedVideos]);
 
   // Group by folder
-  const folders = groupedVideos.reduce((acc, video) => {
+  const folders = useMemo(() => groupedVideos.reduce((acc, video) => {
     const parts = video.path.split('/');
     const folderName = parts.length > 1 ? parts[0] : 'Racine';
-    
+
     if (!acc[folderName]) {
       acc[folderName] = [];
     }
     acc[folderName].push(video);
     return acc;
-  }, {} as Record<string, VideoFile[]>);
+  }, {} as Record<string, VideoFile[]>), [groupedVideos]);
 
-  const folderNames = Object.keys(folders).sort();
+  const folderNames = useMemo(() => Object.keys(folders).sort(), [folders]);
+
+  // Vidéos personnelles détectées (exclues de la bibliothèque, réintégrables
+  // via les Paramètres → whitelist).
+  const personalVideos = useMemo(
+    () => videos.filter(v => isPersonalVideo(v.name, v.path || '')),
+    [videos]
+  );
 
   const filteredAndSortedVideos = React.useMemo(
     () => filterAndSortVideos(groupedVideos, {
@@ -690,9 +768,16 @@ export default function App() {
     [groupedVideos, sortBy, filterGenre, filterResolution, releaseDates, videoGenres, videoDurations, watchedVideos]
   );
 
-  const searchResults = searchQuery.trim() 
-    ? filteredAndSortedVideos.filter(v => v.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : [];
+  // Recherche débouncée : évite de re-filtrer toute la bibliothèque à chaque frappe.
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQuery(searchQuery), 250);
+    return () => clearTimeout(id);
+  }, [searchQuery]);
+
+  const searchResults = useMemo(() => debouncedQuery.trim()
+    ? filteredAndSortedVideos.filter(v => v.name.toLowerCase().includes(debouncedQuery.toLowerCase()))
+    : [], [debouncedQuery, filteredAndSortedVideos]);
 
   const historyItems = React.useMemo(() => {
     const items = Object.keys(watchedVideos)
@@ -719,11 +804,16 @@ export default function App() {
     }
   }, [isLibraryViewActive]);
 
+  // Re-scan au retour sur l'app, au plus une fois toutes les 30 s
+  // (le focus peut se déclencher en rafale : permissions, changement d'app…).
+  const lastFocusScanRef = useRef(0);
   useEffect(() => {
     const handleFocusScan = () => {
-      if (Capacitor.isNativePlatform()) {
-        startNativeScan(true);
-      }
+      if (!Capacitor.isNativePlatform()) return;
+      const now = Date.now();
+      if (now - lastFocusScanRef.current < 30000) return;
+      lastFocusScanRef.current = now;
+      startNativeScan(true);
     };
     window.addEventListener('focus', handleFocusScan);
     return () => window.removeEventListener('focus', handleFocusScan);
@@ -753,7 +843,7 @@ export default function App() {
     setNewPlaylistName('');
   };
 
-  const handleOpenInfoModal = (video: VideoFile) => {
+  const handleOpenInfoModal = useCallback((video: VideoFile) => {
     // Si c'est un épisode individuel (pas un groupe), on remonte au groupe de série parent
     if (!video.isSeriesGroup && (video.season !== undefined || video.seriesName)) {
       const parentGroup = groupedVideos.find(g =>
@@ -779,17 +869,19 @@ export default function App() {
     } else {
       setSelectedSeason(null);
     }
-  };
+  }, [groupedVideos]);
 
-  // Props partagées par toutes les lignes de carrousel (cf. components/VideoRow)
-  const rowProps = {
+  // Props partagées par toutes les lignes de carrousel (cf. components/VideoRow).
+  // Mémoïsées, sinon un nouvel objet à chaque render neutralise le React.memo
+  // de VideoRow et toutes les rangées re-rendent en permanence.
+  const rowProps = useMemo(() => ({
     posters,
     watchProgress,
     watchedVideos,
     onOpenInfo: handleOpenInfoModal,
     onPlay: playVideo,
     onResetProgress: resetProgress,
-  };
+  }), [posters, watchProgress, watchedVideos, handleOpenInfoModal, playVideo, resetProgress]);
 
   const handleVideoEnded = () => {
     if (currentVideo) {
@@ -809,7 +901,33 @@ export default function App() {
       const nextVideo = groupedVideos.find(v => v.name === nextVideoName);
       if (nextVideo) {
         playVideo(nextVideo, activePlaylist, nextIndex);
+        return;
       }
+    }
+
+    // Hors playlist : si l'épisode appartient à une série, enchaîner sur le suivant.
+    if (currentVideo) {
+      const parentSeries = groupedVideos.find(g => g.isSeriesGroup && g.episodes?.some(ep => ep.name === currentVideo.name));
+      if (parentSeries?.episodes) {
+        const idx = parentSeries.episodes.findIndex(ep => ep.name === currentVideo.name);
+        const nextEpisode = parentSeries.episodes[idx + 1];
+        if (nextEpisode) {
+          showToast(`Épisode suivant : ${getCleanTitle(nextEpisode.name)}`, 'info');
+          playVideo(nextEpisode);
+        }
+      }
+    }
+  };
+
+  // Position de lecture : throttle des écritures. Sans cela, timeupdate (~4×/s)
+  // déclenche une sérialisation JSON + écriture localStorage à chaque tick.
+  const lastPositionSaveRef = useRef(0);
+
+  const savePlaybackPosition = () => {
+    if (!videoRef.current || !currentVideo) return;
+    const currentTime = videoRef.current.currentTime;
+    if (currentTime > 0) {
+      setWatchPositions(prev => ({ ...prev, [currentVideo.name]: currentTime * 1000 }));
     }
   };
 
@@ -820,16 +938,20 @@ export default function App() {
     if (!duration) return;
 
     const percentage = (currentTime / duration) * 100;
-    
-    setWatchPositions(prev => ({ ...prev, [currentVideo.name]: currentTime * 1000 }));
-    
+
+    const now = Date.now();
+    if (now - lastPositionSaveRef.current >= 5000) {
+      lastPositionSaveRef.current = now;
+      setWatchPositions(prev => ({ ...prev, [currentVideo.name]: currentTime * 1000 }));
+    }
+
     setWatchProgress(prev => {
       const prevPercentage = prev[currentVideo.name] || 0;
       // Update state if difference is > 1% or if it's finished
       if (Math.abs(percentage - prevPercentage) > 1 || percentage === 100) {
         const newProgress = { ...prev, [currentVideo.name]: percentage };
         safeSetItem('watchProgress', JSON.stringify(newProgress));
-        
+
         return newProgress;
       }
       return prev;
@@ -846,6 +968,45 @@ export default function App() {
     }
   };
 
+  // Bouton retour matériel Android : ferme la vue la plus "haute" (modal, lecteur,
+  // sous-vue) au lieu de quitter l'application. Ref réassignée à chaque render
+  // pour que le listener (enregistré une seule fois) voie l'état courant.
+  const backHandlerRef = useRef<() => boolean>(() => false);
+  backHandlerRef.current = () => {
+    if (confirmDialog) { setConfirmDialog(null); return true; }
+    if (showSubtitlesModal) { setShowSubtitlesModal(false); return true; }
+    if (showPlaylistSelector) { setShowPlaylistSelector(false); return true; }
+    if (infoVideo) { setInfoVideo(null); setExpandedEpisode(null); return true; }
+    if (showSettings) { setShowSettings(false); return true; }
+    if (currentVideo) { savePlaybackPosition(); setCurrentVideo(null); return true; }
+    if (isSearchOpen) { setIsSearchOpen(false); setSearchQuery(''); return true; }
+    if (searchQuery) { setSearchQuery(''); return true; }
+    if (selectedPlaylist) { setSelectedPlaylist(null); return true; }
+    if (activeTab !== 'home') { setActiveTab('home'); return true; }
+    if (isLibraryViewActive) {
+      setSortBy('alpha');
+      setFilterGenre('all');
+      setFilterResolution('all');
+      return true;
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = CapacitorApp.addListener('backButton', () => {
+      if (!backHandlerRef.current()) {
+        CapacitorApp.exitApp();
+      }
+    });
+    return () => { listener.then(l => l.remove()); };
+  }, []);
+
+  // Focus automatique du champ quand la recherche mobile s'ouvre.
+  useEffect(() => {
+    if (isSearchOpen) searchInputRef.current?.focus();
+  }, [isSearchOpen]);
+
   return (
     <div className="min-h-screen bg-black text-zinc-100 font-sans selection:bg-red-600/30">
       {/* Permission Gate */}
@@ -858,14 +1019,20 @@ export default function App() {
               LocalStream a besoin d'accéder à vos dossiers pour scanner et afficher vos vidéos. 
               Veuillez accorder les permissions nécessaires pour continuer.
             </p>
-            <button 
+            <button
               onClick={handleManualRequest}
               className="w-full bg-red-600 hover:bg-red-700 text-white font-black py-4 rounded-2xl transition-all shadow-xl shadow-red-900/20 active:scale-95 uppercase tracking-widest text-xs"
             >
               Accorder l'accès
             </button>
+            <button
+              onClick={() => VideoLauncher.openSettings()}
+              className="w-full mt-3 bg-zinc-800 hover:bg-zinc-700 text-white/80 font-bold py-3 rounded-2xl transition-all text-xs"
+            >
+              Ouvrir les réglages système
+            </button>
             <p className="mt-4 text-[10px] text-zinc-600 uppercase tracking-widest font-black">
-              Autorisation requise
+              Si la demande n'apparaît plus, activez la permission dans les réglages système.
             </p>
           </div>
         </div>
@@ -876,12 +1043,40 @@ export default function App() {
           className={`fixed top-0 z-50 w-full px-4 md:px-12 pb-3 md:pb-4 flex items-center justify-between transition-colors duration-300 ${(isScrolled || searchQuery.trim() || activeTab !== 'home') ? 'bg-black shadow-lg' : 'bg-gradient-to-b from-black/80 to-transparent'}`}
           style={{ paddingTop: 'max(env(safe-area-inset-top), 16px)' }}
         >
-          <div className="flex items-center gap-6 md:gap-10">
-            <h1 
-              className="text-lg md:text-3xl font-black text-red-600 tracking-tighter cursor-pointer active:scale-95 transition-transform"
+          {/* Mode recherche plein header (mobile) : le champ prend toute la
+              largeur avec un bouton fermer, sans écraser les autres commandes. */}
+          {isSearchOpen && (
+            <div className="flex md:hidden items-center gap-2 w-full">
+              <div className="relative flex items-center flex-1 min-w-0">
+                <Search className="w-4 h-4 text-white absolute left-3 pointer-events-none" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Rechercher un titre..."
+                  aria-label="Rechercher un titre"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-zinc-900/80 border border-zinc-700 text-white text-sm rounded-full pl-9 pr-4 py-2 focus:outline-none focus:border-zinc-500 focus:bg-black placeholder:text-zinc-500"
+                />
+              </div>
+              <button
+                onClick={() => { setIsSearchOpen(false); setSearchQuery(''); }}
+                aria-label="Fermer la recherche"
+                className="p-2 rounded-full hover:bg-zinc-800/50 transition-colors shrink-0"
+              >
+                <X className="w-6 h-6 text-white" />
+              </button>
+            </div>
+          )}
+
+          {/* En-tête normal — masqué sur mobile pendant la recherche */}
+          <div className={`${isSearchOpen ? 'hidden md:flex' : 'flex'} items-center gap-6 md:gap-10 min-w-0`}>
+            <h1
+              className="text-lg md:text-3xl font-black text-red-600 tracking-tighter cursor-pointer active:scale-95 transition-transform truncate"
               onClick={() => {
                 setActiveTab('home');
                 setSearchQuery('');
+                setIsSearchOpen(false);
                 setSortBy('alpha');
                 setFilterGenre('all');
                 setFilterResolution('all');
@@ -890,29 +1085,44 @@ export default function App() {
             >
               LOCALSTREAM
             </h1>
-
           </div>
-          <div className="flex items-center gap-2 md:gap-4">
+          <div className={`${isSearchOpen ? 'hidden md:flex' : 'flex'} items-center gap-1 md:gap-4 shrink-0`}>
+            {isFetchingMetadata && (
+              <RefreshCw className="w-4 h-4 animate-spin text-red-500 shrink-0" aria-label="Récupération des métadonnées TMDB en cours" />
+            )}
+            {/* Desktop : champ toujours affiché (place suffisante) */}
             {videos.length > 0 && (
-              <div className="relative flex items-center">
-                <Search className="w-4 h-4 md:w-5 md:h-5 text-white absolute left-3" />
+              <div className="relative hidden md:flex items-center">
+                <Search className="w-5 h-5 text-white absolute left-3" />
                 <input
                   type="text"
-                  placeholder="Rechercher..."
+                  placeholder="Titre..."
+                  aria-label="Rechercher un titre"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-zinc-900/80 border border-zinc-700 text-white text-sm rounded-full pl-9 md:pl-10 pr-4 py-1.5 focus:outline-none focus:border-zinc-500 focus:bg-black transition-all w-24 md:w-64 placeholder:text-zinc-500"
+                  className="bg-zinc-900/80 border border-zinc-700 text-white text-sm rounded-full pl-10 pr-4 py-1.5 focus:outline-none focus:border-zinc-500 focus:bg-black transition-all w-64 placeholder:text-zinc-500"
                 />
               </div>
             )}
-            <button 
+            {/* Mobile : icône loupe qui ouvre la recherche plein header */}
+            {videos.length > 0 && (
+              <button
+                onClick={() => setIsSearchOpen(true)}
+                aria-label="Rechercher"
+                className="md:hidden p-2 rounded-full hover:bg-zinc-800/50 transition-colors"
+              >
+                <Search className="w-5 h-5 text-white" />
+              </button>
+            )}
+            <button
               onClick={() => fileInputRef.current?.click()}
-              className="text-sm font-medium text-white hover:text-zinc-300 transition flex items-center gap-2 bg-zinc-800/50 md:bg-transparent px-3 py-1.5 md:p-0 rounded-full md:rounded-none"
+              aria-label="Changer de dossier"
+              className="text-sm font-medium text-white hover:text-zinc-300 transition flex items-center gap-2 md:bg-transparent p-2 md:p-0 rounded-full md:rounded-none"
             >
-              <FolderOpen className="w-4 h-4 md:hidden" />
+              <FolderOpen className="w-5 h-5 md:hidden" />
               <span className="hidden md:inline">Changer de dossier</span>
             </button>
-            <button 
+            <button
               onClick={() => {
                 setShowSettings(true);
                 if (Capacitor.isNativePlatform()) {
@@ -921,6 +1131,7 @@ export default function App() {
                     .catch(err => console.error("Error fetching players", err));
                 }
               }}
+              aria-label="Paramètres"
               className="p-2 rounded-full hover:bg-zinc-800/50 transition-colors"
             >
               <Settings className="w-5 h-5 text-white" />
@@ -937,18 +1148,20 @@ export default function App() {
               className="absolute top-0 left-0 right-0 px-4 pb-4 bg-gradient-to-b from-black/80 to-transparent z-10 flex items-center justify-between"
               style={{ paddingTop: 'max(env(safe-area-inset-top), 16px)' }}
             >
-              <button 
-                onClick={() => setCurrentVideo(null)}
+              <button
+                onClick={() => { savePlaybackPosition(); setCurrentVideo(null); }}
+                aria-label="Retour"
                 className="p-2 rounded-full hover:bg-zinc-800 transition-colors bg-black/40 md:bg-transparent"
               >
                 <ChevronLeft className="w-6 h-6 md:w-8 md:h-8" />
               </button>
               <div className="flex items-center gap-2">
-                <button 
+                <button
                   onClick={() => {
                     setShowSubtitlesModal(true);
                     if (subtitles.length === 0) searchSubtitles();
                   }}
+                  aria-label="Sous-titres"
                   className="p-2 rounded-full hover:bg-zinc-800 transition-colors flex items-center gap-2 bg-black/40 md:bg-transparent"
                 >
                   <Subtitles className="w-5 h-5 md:w-6 md:h-6" />
@@ -960,10 +1173,11 @@ export default function App() {
               <video 
                 ref={videoRef}
                 src={currentVideo.url} 
-                controls 
+                controls
                 autoPlay
                 onEnded={handleVideoEnded}
                 onTimeUpdate={handleTimeUpdate}
+                onPause={savePlaybackPosition}
                 onLoadedMetadata={handleLoadedMetadata}
                 crossOrigin="anonymous"
                 className="w-full h-full max-h-screen object-contain"
@@ -1149,7 +1363,14 @@ export default function App() {
                                 <span className="hidden md:inline">Tout lire</span>
                               </button>
                             )}
-                            <button onClick={() => deletePlaylist(selectedPlaylist.id)} className="p-2 bg-red-600/20 text-red-500 rounded hover:bg-red-600/40 transition flex items-center gap-2">
+                            <button
+                              onClick={() => setConfirmDialog({
+                                message: `Supprimer la liste "${selectedPlaylist.name}" ? Cette action est irréversible.`,
+                                onConfirm: () => deletePlaylist(selectedPlaylist.id),
+                              })}
+                              aria-label="Supprimer la liste"
+                              className="p-2 bg-red-600/20 text-red-500 rounded hover:bg-red-600/40 transition flex items-center gap-2"
+                            >
                               <Trash2 className="w-5 h-5" />
                               <span className="hidden md:inline">Supprimer la liste</span>
                             </button>
@@ -1166,8 +1387,8 @@ export default function App() {
                                 : !!watchedVideos[video.name];
 
                               return (
-                                <div 
-                                  key={index}
+                                <div
+                                  key={videoName}
                                   className="group flex flex-col"
                                   onClick={() => handleOpenInfoModal(video)}
                                 >
@@ -1183,9 +1404,10 @@ export default function App() {
                                       <button onClick={(e) => { e.stopPropagation(); playVideo(video, selectedPlaylist, index); }} className="bg-white text-black p-3 rounded-full hover:bg-white/80">
                                         <Play className="w-6 h-6 fill-black" />
                                       </button>
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); removeVideoFromPlaylist(selectedPlaylist.id, video.name); }} 
-                                        className="absolute top-2 right-2 p-1.5 bg-red-600/80 rounded-full hover:bg-red-600 transition"
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); removeVideoFromPlaylist(selectedPlaylist.id, video.name); }}
+                                        aria-label="Retirer de la liste"
+                                        className="absolute top-2 right-2 p-2 bg-red-600/80 rounded-full hover:bg-red-600 transition"
                                       >
                                         <X className="w-3.5 h-3.5 text-white" />
                                       </button>
@@ -1314,8 +1536,9 @@ export default function App() {
                                 {!item.isLocal && (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); toggleForceAvailable(item.id); }}
-                                    className={`absolute top-2 left-2 z-40 p-1.5 rounded-full transition ${item.isForcedAvailable ? 'bg-green-600/90 text-white' : 'bg-zinc-800/90 text-zinc-400'}`}
+                                    className={`absolute top-2 left-2 z-40 p-2 rounded-full transition ${item.isForcedAvailable ? 'bg-green-600/90 text-white' : 'bg-zinc-800/90 text-zinc-400'}`}
                                     title={item.isForcedAvailable ? "Rendre indisponible" : "Rendre disponible"}
+                                    aria-label={item.isForcedAvailable ? "Rendre indisponible" : "Rendre disponible"}
                                   >
                                     {item.isForcedAvailable ? <Cloud className="w-3.5 h-3.5" /> : <CloudOff className="w-3.5 h-3.5" />}
                                   </button>
@@ -1329,8 +1552,9 @@ export default function App() {
                                   )}
                                   <button
                                     onClick={(e) => { e.stopPropagation(); toggleWatched(item.id); }}
-                                    className={`absolute top-2 right-2 p-1.5 bg-red-600/80 rounded-full hover:bg-red-600 transition`}
+                                    className={`absolute top-2 right-2 p-2 bg-red-600/80 rounded-full hover:bg-red-600 transition`}
                                     title="Retirer de l'historique"
+                                    aria-label="Retirer de l'historique"
                                   >
                                     <Trash2 className="w-3.5 h-3.5 text-white" />
                                   </button>
@@ -1348,20 +1572,20 @@ export default function App() {
                     })()}
                   </div>
                 ) : searchQuery.trim() ? (
-                  <div className="px-4 md:px-12 min-h-screen pt-4">
+                  <div className="px-4 md:px-12 min-h-screen pt-24">
                     <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">
                       Résultats pour "{searchQuery}"
                     </h2>
                     {searchResults.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                        {searchResults.map((video, index) => {
-                          const isWatched = video.isSeriesGroup 
+                        {searchResults.map((video) => {
+                          const isWatched = video.isSeriesGroup
                             ? (video.episodes && video.episodes.length > 0 && video.episodes.every(ep => !!watchedVideos[ep.name]))
                             : !!watchedVideos[video.name];
 
                           return (
-                            <div 
-                              key={index}
+                            <div
+                              key={video.nativeUri || video.path || video.name}
                               className="group flex flex-col"
                               onClick={() => handleOpenInfoModal(video)}
                             >
@@ -1380,7 +1604,7 @@ export default function App() {
                                   </div>
                                 )}
                                 {getResolution(video.name) && (
-                                  <div className="absolute bottom-2 left-2 z-10 bg-black/60 backdrop-blur-sm text-white text-[10px] font-black px-1.5 py-0.5 rounded border border-white/20 uppercase tracking-tighter">
+                                  <div className="absolute bottom-2 left-2 z-10 bg-black/70 text-white text-[10px] font-black px-1.5 py-0.5 rounded border border-white/20 uppercase tracking-tighter">
                                     {getResolution(video.name)}
                                   </div>
                                 )}
@@ -1427,14 +1651,14 @@ export default function App() {
                     </h2>
                     {filteredAndSortedVideos.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                        {filteredAndSortedVideos.map((video, index) => {
-                          const isWatched = video.isSeriesGroup 
+                        {filteredAndSortedVideos.map((video) => {
+                          const isWatched = video.isSeriesGroup
                             ? (video.episodes && video.episodes.length > 0 && video.episodes.every(ep => !!watchedVideos[ep.name]))
                             : !!watchedVideos[video.name];
 
                           return (
-                            <div 
-                              key={index}
+                            <div
+                              key={video.nativeUri || video.path || video.name}
                               className="group relative aspect-[2/3] bg-zinc-800 rounded-md overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-30 shadow-lg"
                               onClick={() => handleOpenInfoModal(video)}
                             >
@@ -1447,7 +1671,7 @@ export default function App() {
                               </div>
                             )}
                             {getResolution(video.name) && (
-                              <div className="absolute bottom-2 left-2 z-10 bg-black/60 backdrop-blur-sm text-white text-[10px] font-black px-1.5 py-0.5 rounded border border-white/20 uppercase tracking-tighter">
+                              <div className="absolute bottom-2 left-2 z-10 bg-black/70 text-white text-[10px] font-black px-1.5 py-0.5 rounded border border-white/20 uppercase tracking-tighter">
                                 {getResolution(video.name)}
                               </div>
                             )}
@@ -1493,10 +1717,11 @@ export default function App() {
                       <div className="relative h-[60vh] md:h-[80vh] w-full mb-8">
                         <div className="absolute inset-0">
                           {backdrops[heroVideo.name] || posters[heroVideo.name] ? (
-                            <img 
-                              src={backdrops[heroVideo.name] || posters[heroVideo.name]} 
-                              alt={heroVideo.name} 
-                              className="w-full h-full object-cover" 
+                            <img
+                              src={backdrops[heroVideo.name] || posters[heroVideo.name]}
+                              alt={heroVideo.name}
+                              decoding="async"
+                              className="w-full h-full object-cover"
                             />
                           ) : (
                             <div className="w-full h-full bg-zinc-800" />
@@ -1534,6 +1759,32 @@ export default function App() {
                     
                     {/* Rows */}
                     <div className="relative z-20 -mt-12 md:-mt-24">
+                      {/* Bannière onboarding TMDB : sans clé, aucune affiche/synopsis
+                          et rien ne l'explique — on guide vers les Paramètres. */}
+                      {!tmdbApiKey && !tmdbBannerDismissed && groupedVideos.length > 0 && (
+                        <div className="mx-4 md:mx-12 mb-6 bg-zinc-900/95 border border-zinc-700 rounded-2xl p-4 flex items-start gap-3 shadow-xl">
+                          <ImageIcon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white font-bold mb-1">Ajoutez les affiches et synopsis</p>
+                            <p className="text-xs text-zinc-400 leading-relaxed mb-3">
+                              Configurez une clé API TMDB (gratuite) pour récupérer automatiquement les affiches, résumés et regroupements en sagas.
+                            </p>
+                            <button
+                              onClick={() => setShowSettings(true)}
+                              className="bg-red-600 hover:bg-red-700 text-white text-xs font-black px-4 py-2 rounded-lg transition-colors active:scale-95"
+                            >
+                              Configurer TMDB
+                            </button>
+                          </div>
+                          <button
+                            onClick={() => { setTmdbBannerDismissed(true); safeSetItem('tmdbBannerDismissed', '1'); }}
+                            aria-label="Masquer cette bannière"
+                            className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-500 shrink-0"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                       {inProgressVideos.length > 0 && (
                         <VideoRow title="Continuer la lecture" items={inProgressVideos} {...rowProps} />
                       )}
@@ -1598,8 +1849,14 @@ export default function App() {
 
       {/* Info Modal */}
       {infoVideo && (
-        <div className="fixed inset-0 bg-black/95 md:bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-12 overflow-y-auto">
-          <div className="bg-zinc-950 md:rounded-3xl w-full h-full md:h-auto md:max-h-[90vh] md:max-w-6xl overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.8)] relative animate-in fade-in zoom-in-95 duration-500 flex flex-col border border-white/5">
+        <div
+          className="fixed inset-0 bg-black/95 md:bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-0 md:p-12 overflow-y-auto"
+          onClick={() => { setInfoVideo(null); setExpandedEpisode(null); }}
+        >
+          <div
+            className="bg-zinc-950 md:rounded-3xl w-full h-full md:h-auto md:max-h-[90vh] md:max-w-6xl overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.8)] relative animate-in fade-in zoom-in-95 duration-500 flex flex-col border border-white/5"
+            onClick={(e) => e.stopPropagation()}
+          >
             
             {/* Header / Hero Section */}
             <div className="relative w-full shrink-0" style={{ height: 'max(48vh, 260px)' }}>
@@ -1618,8 +1875,9 @@ export default function App() {
               </div>
               
               {/* Bouton fermer — safe-area pour eviter le status bar Android */}
-              <button 
-                onClick={() => { setInfoVideo(null); setExpandedEpisode(null); }} 
+              <button
+                onClick={() => { setInfoVideo(null); setExpandedEpisode(null); }}
+                aria-label="Fermer"
                 className="absolute right-4 z-50 p-2.5 bg-black/60 hover:bg-zinc-700 rounded-full text-white backdrop-blur-xl transition-all shadow-2xl border border-white/20 active:scale-90"
                 style={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}
               >
@@ -1644,25 +1902,30 @@ export default function App() {
                     </h2>
                   </div>
                   
-                   <div className="flex flex-wrap items-center gap-2 md:gap-4">
-                    <button 
-                      onClick={() => playVideo(infoVideo)} 
-                      className="bg-white text-black px-6 md:px-10 py-2.5 md:py-4 rounded-xl flex items-center justify-center gap-2 font-black text-sm md:text-xl hover:bg-zinc-200 active:scale-95 transition-all shadow-xl group flex-1 md:flex-none"
+                   {/* Grille 2 colonnes sur mobile : hauteurs homogènes, pas de
+                       débordement quand un label passe sur 2 lignes. */}
+                   <div className="grid grid-cols-2 md:flex md:flex-wrap md:items-center gap-2 md:gap-4">
+                    <button
+                      onClick={() => playVideo(infoVideo)}
+                      className="bg-white text-black px-4 md:px-10 py-2.5 md:py-4 rounded-xl flex items-center justify-center gap-2 font-black text-sm md:text-xl hover:bg-zinc-200 active:scale-95 transition-all shadow-xl group"
                     >
-                      <Play className="w-5 h-5 md:w-7 md:h-7 fill-black group-hover:scale-110 transition-transform" /> 
+                      <Play className="w-5 h-5 md:w-7 md:h-7 fill-black group-hover:scale-110 transition-transform shrink-0" />
                       {(() => {
-                        const target = (infoVideo.isSeriesGroup && infoVideo.episodes) 
+                        const target = (infoVideo.isSeriesGroup && infoVideo.episodes)
                           ? (infoVideo.episodes.find(ep => !watchedVideos[ep.name]) || infoVideo.episodes[0])
                           : infoVideo;
                         const pos = watchPositions[target.name] || 0;
+                        const pct = watchProgress[target.name] || 0;
                         const isTargetWatched = !!watchedVideos[target.name];
-                        return (pos > 0 && !isTargetWatched) ? `REPRENDRE À ${formatDuration(pos / 1000)}` : 'LECTURE';
+                        // Même seuil que le lecteur (handleLoadedMetadata) : au-delà
+                        // de 95 % on repart du début, donc pas de label "REPRENDRE".
+                        return (pos > 0 && !isTargetWatched && pct < 95) ? `REPRENDRE À ${formatDuration(pos / 1000)}` : 'LECTURE';
                       })()}
                     </button>
-                    
-                    <button 
+
+                    <button
                       onClick={() => toggleWatched(infoVideo.isSeriesGroup ? infoVideo.seriesName! : infoVideo.name)}
-                      className={`px-4 md:px-8 py-2.5 md:py-4 rounded-xl flex items-center justify-center gap-2 font-black text-sm md:text-xl transition-all border shadow-lg flex-1 md:flex-none active:scale-95 ${
+                      className={`px-4 md:px-8 py-2.5 md:py-4 rounded-xl flex items-center justify-center gap-2 font-black text-sm md:text-xl transition-all border shadow-lg active:scale-95 ${
                         (infoVideo.isSeriesGroup 
                           ? (infoVideo.episodes && infoVideo.episodes.length > 0 && infoVideo.episodes.every(ep => !!watchedVideos[ep.name]))
                           : !!watchedVideos[infoVideo.name]
@@ -1683,17 +1946,17 @@ export default function App() {
                     <button 
                       onClick={() => fetchSingleMetadata(infoVideo)}
                       disabled={isRefreshingMetadata}
-                      className="px-4 py-2.5 md:py-4 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/20 active:scale-95 transition-all shadow-xl flex items-center gap-2 font-bold text-sm disabled:opacity-50"
+                      className="px-4 py-2.5 md:py-4 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/20 active:scale-95 transition-all shadow-xl flex items-center justify-center gap-2 font-bold text-sm disabled:opacity-50"
                       title="Recharger les données TMDB"
                     >
                       <RefreshCw className={`w-4 h-4 ${isRefreshingMetadata ? 'animate-spin text-red-400' : 'text-zinc-300'}`} />
                       <span className="hidden sm:inline">{isRefreshingMetadata ? 'Chargement…' : 'TMDB'}</span>
                     </button>
                     
-                    <div className="relative flex-1 md:flex-none">
-                      <button 
+                    <div className="relative md:flex-none">
+                      <button
                         onClick={() => setShowPlaylistSelector(!showPlaylistSelector)}
-                        className="px-4 py-2.5 md:py-4 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/20 active:scale-95 transition-all shadow-xl flex items-center justify-center gap-2 font-bold text-sm"
+                        className="w-full h-full md:w-auto md:h-auto px-4 py-2.5 md:py-4 bg-white/5 border border-white/10 rounded-xl text-white hover:bg-white/20 active:scale-95 transition-all shadow-xl flex items-center justify-center gap-2 font-bold text-sm"
                         title="Ajouter à une liste de lecture"
                       >
                         <ListPlus className="w-4 h-4 text-zinc-300" />
@@ -1842,8 +2105,8 @@ export default function App() {
                       const res = getResolution(ep.name);
                       const isExpanded = expandedEpisode === ep.name;
                       return (
-                        <div 
-                          key={idx} 
+                        <div
+                          key={ep.name}
                           className={`flex flex-col p-2 md:p-4 bg-zinc-900/40 hover:bg-zinc-900/80 rounded-[1.5rem] transition-all duration-500 group border border-white/5 hover:border-white/10 shadow-xl relative overflow-hidden ${isExpanded ? 'bg-zinc-900 border-red-600/20' : ''}`}
                         >
                           <div className="flex items-center gap-4 md:gap-6">
@@ -2034,11 +2297,17 @@ export default function App() {
 
       {/* Settings Modal */}
       {showSettings && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowSettings(false)}
+        >
+          <div
+            className="bg-zinc-900 border border-zinc-800 rounded-lg w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between p-4 border-b border-zinc-800 shrink-0">
               <h3 className="text-lg font-semibold">Paramètres</h3>
-              <button onClick={() => setShowSettings(false)} className="p-2 rounded-full hover:bg-zinc-800 transition-colors">
+              <button onClick={() => setShowSettings(false)} aria-label="Fermer" className="p-2 rounded-full hover:bg-zinc-800 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2150,14 +2419,22 @@ export default function App() {
                     />
                     <div className="mt-2 text-[10px] text-zinc-500 flex justify-between items-center pr-2">
                       <span>Nécessaire pour les affiches et synopsis.</span>
-                      <button 
+                      <button
                         onClick={async () => {
                           addLog("Test de la clé API...");
                           try {
                             const r = await getPopular(tmdbApiKey);
-                            if (r.ok) addLog("Test API réussi !");
-                            else addLog("Test API échoué - Code : " + r.status);
-                          } catch(e: any) { addLog("Erreur test : " + e.message); }
+                            if (r.ok) {
+                              addLog("Test API réussi !");
+                              showToast("Clé TMDB valide !", 'success');
+                            } else {
+                              addLog("Test API échoué - Code : " + r.status);
+                              showToast(`Clé TMDB invalide (code ${r.status}).`, 'error');
+                            }
+                          } catch(e: any) {
+                            addLog("Erreur test : " + e.message);
+                            showToast("Test impossible : " + e.message, 'error');
+                          }
                         }}
                         className="text-red-500 font-bold hover:underline"
                       >
@@ -2167,6 +2444,64 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {/* Bibliothèque : re-scan et cache */}
+              <div className="pt-4 border-t border-zinc-800">
+                <h4 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Film className="w-4 h-4" /> Bibliothèque
+                </h4>
+                <div className="space-y-3">
+                  {Capacitor.isNativePlatform() && (
+                    <button
+                      onClick={() => { startNativeScan(false); showToast("Scan de la bibliothèque relancé.", 'info'); }}
+                      disabled={isScanning}
+                      className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm font-bold py-2 rounded border border-zinc-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isScanning ? 'animate-spin' : ''}`} />
+                      {isScanning ? 'Scan en cours…' : 'Relancer le scan'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setConfirmDialog({
+                      message: "Vider le cache des métadonnées TMDB (affiches, synopsis…) ? Elles seront re-téléchargées au prochain scan.",
+                      onConfirm: () => { clearMetadataCache(); showToast("Cache des métadonnées vidé.", 'success'); },
+                    })}
+                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold py-2 rounded border border-zinc-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Vider le cache métadonnées
+                  </button>
+                </div>
+              </div>
+
+              {/* Vidéos personnelles exclues du scan (whitelist pour les réintégrer) */}
+              {personalVideos.length > 0 && (
+                <div className="pt-4 border-t border-zinc-800">
+                  <h4 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1 flex items-center gap-2">
+                    <EyeOff className="w-4 h-4" /> Vidéos exclues ({personalVideos.length})
+                  </h4>
+                  <p className="text-[10px] text-zinc-500 mb-3 leading-relaxed">
+                    Vidéos détectées comme personnelles (caméra, WhatsApp…) et masquées de la bibliothèque. Activez celles à réintégrer.
+                  </p>
+                  <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                    {personalVideos.map(v => {
+                      const included = whitelistedVideos.has(v.name);
+                      return (
+                        <button
+                          key={v.path || v.name}
+                          onClick={() => toggleWhitelist(v.name)}
+                          className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded bg-zinc-950 border border-zinc-800 hover:border-zinc-600 transition text-left"
+                        >
+                          <span className="text-xs text-zinc-300 truncate flex-1">{v.name}</span>
+                          <span className={`text-[10px] font-black uppercase tracking-wider shrink-0 px-2 py-0.5 rounded-full ${included ? 'bg-green-600/20 text-green-500' : 'bg-zinc-800 text-zinc-500'}`}>
+                            {included ? 'Visible' : 'Masquée'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2174,14 +2509,20 @@ export default function App() {
 
       {/* Subtitles Modal */}
       {showSubtitlesModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl">
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowSubtitlesModal(false)}
+        >
+          <div
+            className="bg-zinc-900 border border-zinc-800 rounded-lg w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between p-4 border-b border-zinc-800">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <Subtitles className="w-5 h-5 text-red-600" />
                 Sous-titres
               </h3>
-              <button onClick={() => setShowSubtitlesModal(false)} className="p-2 rounded-full hover:bg-zinc-800 transition-colors">
+              <button onClick={() => setShowSubtitlesModal(false)} aria-label="Fermer" className="p-2 rounded-full hover:bg-zinc-800 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2253,6 +2594,61 @@ export default function App() {
         style={{ display: 'none' }}
         multiple
       />
+
+      {/* Toasts (remplacent les alert() bloquants) */}
+      {toasts.length > 0 && (
+        <div
+          className="fixed left-4 right-4 md:left-auto md:right-8 md:w-96 z-[120] flex flex-col gap-2 pointer-events-none"
+          style={{ bottom: 'calc(max(env(safe-area-inset-bottom), 8px) + 76px)' }}
+          role="status"
+          aria-live="polite"
+        >
+          {toasts.map(toast => (
+            <div
+              key={toast.id}
+              className={`flex items-start gap-3 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium animate-in fade-in slide-in-from-bottom-4 duration-300 ${
+                toast.type === 'error' ? 'bg-red-950/95 border-red-800 text-red-100'
+                : toast.type === 'success' ? 'bg-emerald-950/95 border-emerald-800 text-emerald-100'
+                : 'bg-zinc-900/95 border-zinc-700 text-zinc-100'
+              }`}
+            >
+              {toast.type === 'error' ? <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                : toast.type === 'success' ? <Check className="w-4 h-4 shrink-0 mt-0.5" />
+                : <Info className="w-4 h-4 shrink-0 mt-0.5" />}
+              <span className="flex-1">{toast.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Dialogue de confirmation (actions destructives) */}
+      {confirmDialog && (
+        <div
+          className="fixed inset-0 bg-black/80 z-[130] flex items-center justify-center p-6"
+          onClick={() => setConfirmDialog(null)}
+        >
+          <div
+            className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-white text-sm leading-relaxed mb-6">{confirmDialog.message}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setConfirmDialog(null)}
+                className="py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null); }}
+                className="py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-black transition-colors"
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

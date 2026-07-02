@@ -79,9 +79,9 @@ describe('formatDuration', () => {
 
 describe('URLs TMDB', () => {
   it('construit les URLs avec la bonne taille', () => {
-    expect(posterUrl('/abc.jpg')).toBe('https://image.tmdb.org/t/p/w500/abc.jpg');
-    expect(backdropUrl('/abc.jpg')).toBe('https://image.tmdb.org/t/p/original/abc.jpg');
-    expect(stillUrl('/abc.jpg')).toBe('https://image.tmdb.org/t/p/w500/abc.jpg');
+    expect(posterUrl('/abc.jpg')).toBe('https://image.tmdb.org/t/p/w342/abc.jpg');
+    expect(backdropUrl('/abc.jpg')).toBe('https://image.tmdb.org/t/p/w1280/abc.jpg');
+    expect(stillUrl('/abc.jpg')).toBe('https://image.tmdb.org/t/p/w300/abc.jpg');
   });
   it('renvoie undefined sans chemin', () => {
     expect(posterUrl(null)).toBeUndefined();
