@@ -15,6 +15,7 @@ interface InfoModalProps {
   episodePosters: Record<string, string>;
   watchedVideos: Record<string, boolean>;
   watchPositions: Record<string, number>;
+  watchProgress: Record<string, number>;
   videoDurations: Record<string, number>;
   tmdbApiKey: string;
   isRefreshingMetadata: boolean;
@@ -37,7 +38,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({
   video: infoVideo,
   posters, backdrops, overviews, videoGenres, releaseDates,
   episodeNames, episodeOverviews, episodePosters,
-  watchedVideos, watchPositions, videoDurations,
+  watchedVideos, watchPositions, watchProgress, videoDurations,
   tmdbApiKey, isRefreshingMetadata, playlists,
   selectedSeason, expandedEpisode,
   onClose, onPlay, onToggleWatched, onResetProgress, onRefreshMetadata,

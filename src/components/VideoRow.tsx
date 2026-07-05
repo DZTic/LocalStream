@@ -26,14 +26,20 @@ const VideoRowComponent: React.FC<VideoRowProps> = ({
     <div className="mb-8">
       <h2 className="text-lg md:text-2xl font-bold text-white mb-2 md:mb-4 px-4 md:px-12">{title}</h2>
       <div className="flex gap-2 md:gap-3 overflow-x-auto px-4 md:px-12 pb-8 pt-2 scrollbar-hide snap-x">
-        {items.map((video, idx) => {
+        {items.map((video) => {
           const isWatched = video.isSeriesGroup
             ? (video.episodes && video.episodes.length > 0 && video.episodes.every(ep => !!watchedVideos[ep.name]))
             : !!watchedVideos[video.name];
+          const resolution = getResolution(video.name);
+          // Pour un groupe (série/saga), la progression est stockée par épisode :
+          // on affiche celle du premier épisode en cours.
+          const progress = video.isSeriesGroup && video.episodes
+            ? (video.episodes.map(ep => watchProgress[ep.name] || 0).find(p => p > 0 && p < 100) || 0)
+            : (watchProgress[video.name] || 0);
 
           return (
             <div
-              key={idx}
+              key={video.nativeUri || video.path || video.name}
               className="flex-none w-28 md:w-48 snap-start group"
               onClick={() => onOpenInfo(video)}
             >
@@ -57,30 +63,31 @@ const VideoRowComponent: React.FC<VideoRowProps> = ({
                     </p>
                   </div>
                 )}
-                {getResolution(video.name) && (
-                  <div className="absolute bottom-2 left-2 z-10 bg-black/60 backdrop-blur-sm text-white text-[8px] md:text-[10px] font-black px-1.5 py-0.5 rounded border border-white/20 uppercase tracking-tighter">
-                    {getResolution(video.name)}
+                {resolution && (
+                  <div className="absolute bottom-2 left-2 z-10 bg-black/70 text-white text-[8px] md:text-[10px] font-black px-1.5 py-0.5 rounded border border-white/20 uppercase tracking-tighter">
+                    {resolution}
                   </div>
                 )}
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors hidden md:flex flex-col items-center justify-center gap-4 pointer-events-none">
-                  <button onClick={(e) => { e.stopPropagation(); onPlay(video); }} className="pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-4 group-hover:translate-y-0 duration-300 bg-white text-black p-3 rounded-full hover:bg-white/80">
+                  <button aria-label="Lire" onClick={(e) => { e.stopPropagation(); onPlay(video); }} className="pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-4 group-hover:translate-y-0 duration-300 bg-white text-black p-3 rounded-full hover:bg-white/80">
                     <Play className="w-6 h-6 fill-black" />
                   </button>
-                  <button onClick={(e) => { e.stopPropagation(); onOpenInfo(video); }} className="pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-4 group-hover:translate-y-0 duration-300 delay-75 bg-zinc-800/80 text-white p-3 rounded-full hover:bg-zinc-700/80 border border-white/20">
+                  <button aria-label="Plus d'infos" onClick={(e) => { e.stopPropagation(); onOpenInfo(video); }} className="pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-4 group-hover:translate-y-0 duration-300 delay-75 bg-zinc-800/80 text-white p-3 rounded-full hover:bg-zinc-700/80 border border-white/20">
                     <Info className="w-6 h-6" />
                   </button>
                 </div>
 
-                {watchProgress[video.name] > 0 && watchProgress[video.name] < 100 && (
+                {progress > 0 && progress < 100 && (
                   <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-600">
-                    <div className="h-full bg-red-600" style={{ width: `${watchProgress[video.name]}%` }} />
+                    <div className="h-full bg-red-600" style={{ width: `${progress}%` }} />
                   </div>
                 )}
                 {title === "Continuer la lecture" && watchProgress[video.name] > 0 && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onResetProgress(video.name); }}
-                    className="absolute bottom-2 right-2 p-1.5 md:p-1 bg-black/60 rounded-full text-white pointer-events-auto hover:bg-red-600 transition-colors shadow-lg z-30 opacity-100 md:opacity-0 group-hover:opacity-100"
+                    className="absolute bottom-2 right-2 p-2 md:p-1 bg-black/60 rounded-full text-white pointer-events-auto hover:bg-red-600 transition-colors shadow-lg z-30 opacity-100 md:opacity-0 group-hover:opacity-100"
                     title="Reprendre à zéro"
+                    aria-label="Reprendre à zéro"
                   >
                     <RotateCcw className="w-4 h-4 md:w-3 md:h-3" />
                   </button>

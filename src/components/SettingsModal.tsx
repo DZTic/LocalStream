@@ -1,6 +1,8 @@
 import React from 'react';
-import { X, Subtitles, Play, LogIn, RefreshCw, Image as ImageIcon } from 'lucide-react';
+import { X, Subtitles, Play, LogIn, RefreshCw, Image as ImageIcon, Trash2, EyeOff, Film } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { VideoFile } from '../lib/types';
+
 
 interface SettingsModalProps {
   osApiKey: string;
@@ -24,6 +26,12 @@ interface SettingsModalProps {
   onOpenSystemSettings: () => void;
   onTmdbApiKeyChange: (value: string) => void;
   onTestTmdbKey: () => void;
+  personalVideos: VideoFile[];
+  whitelistedVideos: Set<string>;
+  onToggleWhitelist: (name: string) => void;
+  isScanning: boolean;
+  onStartScan: () => void;
+  onClearMetadataCache: () => void;
 }
 
 /** Modale des paramètres : OpenSubtitles, lecteur vidéo, TMDB. */
@@ -34,6 +42,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose, onOsApiKeyChange, onOsUsernameChange, onOsPasswordChange, onLogin,
   onVideoPlayerChange, onSelectedExternalPlayerChange, onRefreshPlayers, onOpenSystemSettings,
   onTmdbApiKeyChange, onTestTmdbKey,
+  personalVideos, whitelistedVideos, onToggleWhitelist, isScanning, onStartScan, onClearMetadataCache,
 }) => (
   <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div className="bg-zinc-900 border border-zinc-800 rounded-lg w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
@@ -153,6 +162,61 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Bibliothèque : re-scan et cache */}
+        <div className="pt-4 border-t border-zinc-800">
+          <h4 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Film className="w-4 h-4" /> Bibliothèque
+          </h4>
+          <div className="space-y-3">
+            {Capacitor.isNativePlatform() && (
+              <button
+                onClick={onStartScan}
+                disabled={isScanning}
+                className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm font-bold py-2 rounded border border-zinc-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${isScanning ? 'animate-spin' : ''}`} />
+                {isScanning ? 'Scan en cours…' : 'Relancer le scan'}
+              </button>
+            )}
+            <button
+              onClick={onClearMetadataCache}
+              className="w-full bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold py-2 rounded border border-zinc-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Vider le cache métadonnées
+            </button>
+          </div>
+        </div>
+
+        {/* Vidéos personnelles exclues du scan (whitelist pour les réintégrer) */}
+        {personalVideos.length > 0 && (
+          <div className="pt-4 border-t border-zinc-800">
+            <h4 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <EyeOff className="w-4 h-4" /> Vidéos exclues ({personalVideos.length})
+            </h4>
+            <p className="text-[10px] text-zinc-500 mb-3 leading-relaxed">
+              Vidéos détectées comme personnelles (caméra, WhatsApp…) et masquées de la bibliothèque. Activez celles à réintégrer.
+            </p>
+            <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar pr-1 text-left">
+              {personalVideos.map(v => {
+                const included = whitelistedVideos.has(v.name);
+                return (
+                  <button
+                    key={v.path || v.name}
+                    onClick={() => onToggleWhitelist(v.name)}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded bg-zinc-950 border border-zinc-800 hover:border-zinc-600 transition text-left"
+                  >
+                    <span className="text-xs text-zinc-300 truncate flex-1">{v.name}</span>
+                    <span className={`text-[10px] font-black uppercase tracking-wider shrink-0 px-2 py-0.5 rounded-full ${included ? 'bg-green-600/20 text-green-500' : 'bg-zinc-800 text-zinc-500'}`}>
+                      {included ? 'Visible' : 'Masquée'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   </div>

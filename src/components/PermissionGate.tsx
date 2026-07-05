@@ -3,10 +3,11 @@ import { FolderOpen } from 'lucide-react';
 
 interface PermissionGateProps {
   onRequest: () => void;
+  onOpenSystemSettings: () => void;
 }
 
 /** Écran bloquant demandant l'accès au stockage (Android). */
-export const PermissionGate: React.FC<PermissionGateProps> = ({ onRequest }) => (
+export const PermissionGate: React.FC<PermissionGateProps> = ({ onRequest, onOpenSystemSettings }) => (
   <div className="fixed inset-0 bg-black z-[100] flex items-center justify-center p-6 text-center">
     <div className="max-w-sm">
       <FolderOpen className="w-16 h-16 text-red-600 mx-auto mb-6" />
@@ -21,8 +22,14 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({ onRequest }) => 
       >
         Accorder l'accès
       </button>
+      <button
+        onClick={onOpenSystemSettings}
+        className="w-full mt-3 bg-zinc-800 hover:bg-zinc-700 text-white/80 font-bold py-3 rounded-2xl transition-all text-xs"
+      >
+        Ouvrir les réglages système
+      </button>
       <p className="mt-4 text-[10px] text-zinc-600 uppercase tracking-widest font-black">
-        Autorisation requise
+        Si la demande n'apparaît plus, activez la permission dans les réglages système.
       </p>
     </div>
   </div>

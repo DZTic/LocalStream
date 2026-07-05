@@ -42,7 +42,7 @@ export const PlaylistsScreen: React.FC<PlaylistsScreenProps> = ({
                 <span className="hidden md:inline">Tout lire</span>
               </button>
             )}
-            <button onClick={() => onDeletePlaylist(selectedPlaylist.id)} className="p-2 bg-red-600/20 text-red-500 rounded hover:bg-red-600/40 transition flex items-center gap-2">
+            <button onClick={() => onDeletePlaylist(selectedPlaylist.id)} aria-label="Supprimer la liste" className="p-2 bg-red-600/20 text-red-500 rounded hover:bg-red-600/40 transition flex items-center gap-2">
               <Trash2 className="w-5 h-5" />
               <span className="hidden md:inline">Supprimer la liste</span>
             </button>
@@ -56,7 +56,7 @@ export const PlaylistsScreen: React.FC<PlaylistsScreenProps> = ({
 
               return (
                 <div
-                  key={index}
+                  key={videoName}
                   className="group flex flex-col"
                   onClick={() => onOpenInfo(video)}
                 >
@@ -74,7 +74,8 @@ export const PlaylistsScreen: React.FC<PlaylistsScreenProps> = ({
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); onRemoveVideo(selectedPlaylist.id, video.name); }}
-                        className="absolute top-2 right-2 p-1.5 bg-red-600/80 rounded-full hover:bg-red-600 transition"
+                        aria-label="Retirer de la liste"
+                        className="absolute top-2 right-2 p-2 bg-red-600/80 rounded-full hover:bg-red-600 transition"
                       >
                         <X className="w-3.5 h-3.5 text-white" />
                       </button>

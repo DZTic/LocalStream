@@ -92,8 +92,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
                 {!item.isLocal && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onToggleForceAvailable(item.id); }}
-                    className={`absolute top-2 left-2 z-40 p-1.5 rounded-full transition ${item.isForcedAvailable ? 'bg-green-600/90 text-white' : 'bg-zinc-800/90 text-zinc-400'}`}
+                    className={`absolute top-2 left-2 z-40 p-2 rounded-full transition ${item.isForcedAvailable ? 'bg-green-600/90 text-white' : 'bg-zinc-800/90 text-zinc-400'}`}
                     title={item.isForcedAvailable ? "Rendre indisponible" : "Rendre disponible"}
+                    aria-label={item.isForcedAvailable ? "Rendre indisponible" : "Rendre disponible"}
                   >
                     {item.isForcedAvailable ? <Cloud className="w-3.5 h-3.5" /> : <CloudOff className="w-3.5 h-3.5" />}
                   </button>
@@ -107,8 +108,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
                   )}
                   <button
                     onClick={(e) => { e.stopPropagation(); onToggleWatched(item.id); }}
-                    className={`absolute top-2 right-2 p-1.5 bg-red-600/80 rounded-full hover:bg-red-600 transition`}
+                    className={`absolute top-2 right-2 p-2 bg-red-600/80 rounded-full hover:bg-red-600 transition`}
                     title="Retirer de l'historique"
+                    aria-label="Retirer de l'historique"
                   >
                     <Trash2 className="w-3.5 h-3.5 text-white" />
                   </button>

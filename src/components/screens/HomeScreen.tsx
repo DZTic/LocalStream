@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Info } from 'lucide-react';
+import { Play, Info, Image as ImageIcon, X } from 'lucide-react';
 import { VideoFile, Playlist } from '../../lib/types';
 import { getCleanTitle } from '../../lib/utils';
 import { VideoRow } from '../VideoRow';
@@ -19,6 +19,10 @@ interface HomeScreenProps {
   alphabetical: VideoFile[];
   watchProgress: Record<string, number>;
   watchedVideos: Record<string, boolean>;
+  groupedVideosCount: number;
+  showTmdbBanner: boolean;
+  onConfigureTmdb: () => void;
+  onDismissTmdbBanner: () => void;
   onOpenInfo: (video: VideoFile) => void;
   onPlay: (video: VideoFile, playlist?: Playlist, index?: number) => void;
   onResetProgress: (name: string) => void;
@@ -30,7 +34,8 @@ const SYSTEM_FOLDERS = ['Movies', 'Download', 'Downloads', 'Documents', 'Racine'
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   heroVideo, backdrops, posters, overviews,
   inProgressVideos, recentAdditions, recommendations, tvShows, movies, folders, folderNames, alphabetical,
-  watchProgress, watchedVideos, onOpenInfo, onPlay, onResetProgress,
+  watchProgress, watchedVideos, groupedVideosCount, showTmdbBanner,
+  onConfigureTmdb, onDismissTmdbBanner, onOpenInfo, onPlay, onResetProgress,
 }) => {
   // Props partagées par toutes les lignes de carrousel (cf. components/VideoRow)
   const rowProps = {
@@ -52,6 +57,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <img
                 src={backdrops[heroVideo.name] || posters[heroVideo.name]}
                 alt={heroVideo.name}
+                decoding="async"
                 className="w-full h-full object-cover"
               />
             ) : (
@@ -90,6 +96,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* Rows */}
       <div className="relative z-20 -mt-12 md:-mt-24">
+        {/* Bannière onboarding TMDB : sans clé, aucune affiche/synopsis
+            et rien ne l'explique — on guide vers les Paramètres. */}
+        {showTmdbBanner && groupedVideosCount > 0 && (
+          <div className="mx-4 md:mx-12 mb-6 bg-zinc-900/95 border border-zinc-700 rounded-2xl p-4 flex items-start gap-3 shadow-xl">
+            <ImageIcon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-white font-bold mb-1">Ajoutez les affiches et synopsis</p>
+              <p className="text-xs text-zinc-400 leading-relaxed mb-3">
+                Configurez une clé API TMDB (gratuite) pour récupérer automatiquement les affiches, résumés et regroupements en sagas.
+              </p>
+              <button
+                onClick={onConfigureTmdb}
+                className="bg-red-600 hover:bg-red-700 text-white text-xs font-black px-4 py-2 rounded-lg transition-colors active:scale-95"
+              >
+                Configurer TMDB
+              </button>
+            </div>
+            <button
+              onClick={onDismissTmdbBanner}
+              aria-label="Masquer cette bannière"
+              className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-500 shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         {inProgressVideos.length > 0 && (
           <VideoRow title="Continuer la lecture" items={inProgressVideos} {...rowProps} />
         )}

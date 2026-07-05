@@ -22,14 +22,14 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
     </h2>
     {videos.length > 0 ? (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {videos.map((video, index) => {
+        {videos.map((video) => {
           const isWatched = video.isSeriesGroup
             ? (video.episodes && video.episodes.length > 0 && video.episodes.every(ep => !!watchedVideos[ep.name]))
             : !!watchedVideos[video.name];
 
           return (
             <div
-              key={index}
+              key={video.nativeUri || video.path || video.name}
               className="group relative aspect-[2/3] bg-zinc-800 rounded-md overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-30 shadow-lg"
               onClick={() => onOpenInfo(video)}
             >
@@ -39,7 +39,7 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
                 </div>
               )}
               {getResolution(video.name) && (
-                <div className="absolute bottom-2 left-2 z-10 bg-black/60 backdrop-blur-sm text-white text-[10px] font-black px-1.5 py-0.5 rounded border border-white/20 uppercase tracking-tighter">
+                <div className="absolute bottom-2 left-2 z-10 bg-black/70 text-white text-[10px] font-black px-1.5 py-0.5 rounded border border-white/20 uppercase tracking-tighter">
                   {getResolution(video.name)}
                 </div>
               )}

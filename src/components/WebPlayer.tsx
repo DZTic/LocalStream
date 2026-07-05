@@ -10,6 +10,7 @@ interface WebPlayerProps {
   onOpenSubtitles: () => void;
   onEnded: () => void;
   onTimeUpdate: () => void;
+  onPause: () => void;
   onLoadedMetadata: () => void;
 }
 
@@ -20,7 +21,7 @@ type FeedbackType = 'rewind' | 'forward' | 'pause' | 'play';
  * Sur Android natif, la lecture passe par PlayerActivity — ce composant ne sert pas.
  */
 export const WebPlayer: React.FC<WebPlayerProps> = ({
-  video, videoRef, activeSubtitleUrl, onClose, onOpenSubtitles, onEnded, onTimeUpdate, onLoadedMetadata,
+  video, videoRef, activeSubtitleUrl, onClose, onOpenSubtitles, onEnded, onTimeUpdate, onPause, onLoadedMetadata,
 }) => {
   const [feedback, setFeedback] = useState<{ type: FeedbackType, visible: boolean }>({ type: 'pause', visible: false });
 
@@ -37,6 +38,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({
       >
         <button
           onClick={onClose}
+          aria-label="Retour"
           className="p-2 rounded-full hover:bg-zinc-800 transition-colors bg-black/40 md:bg-transparent"
         >
           <ChevronLeft className="w-6 h-6 md:w-8 md:h-8" />
@@ -44,6 +46,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={onOpenSubtitles}
+            aria-label="Sous-titres"
             className="p-2 rounded-full hover:bg-zinc-800 transition-colors flex items-center gap-2 bg-black/40 md:bg-transparent"
           >
             <Subtitles className="w-5 h-5 md:w-6 md:h-6" />
@@ -59,6 +62,7 @@ export const WebPlayer: React.FC<WebPlayerProps> = ({
           autoPlay
           onEnded={onEnded}
           onTimeUpdate={onTimeUpdate}
+          onPause={onPause}
           onLoadedMetadata={onLoadedMetadata}
           crossOrigin="anonymous"
           className="w-full h-full max-h-screen object-contain"

@@ -16,20 +16,20 @@ interface SearchScreenProps {
 export const SearchScreen: React.FC<SearchScreenProps> = ({
   searchQuery, searchResults, posters, watchedVideos, watchProgress, onOpenInfo,
 }) => (
-  <div className="px-4 md:px-12 min-h-screen pt-4">
+  <div className="px-4 md:px-12 min-h-screen pt-24">
     <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">
       Résultats pour "{searchQuery}"
     </h2>
     {searchResults.length > 0 ? (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {searchResults.map((video, index) => {
+        {searchResults.map((video) => {
           const isWatched = video.isSeriesGroup
             ? (video.episodes && video.episodes.length > 0 && video.episodes.every(ep => !!watchedVideos[ep.name]))
             : !!watchedVideos[video.name];
 
           return (
             <div
-              key={index}
+              key={video.nativeUri || video.path || video.name}
               className="group flex flex-col"
               onClick={() => onOpenInfo(video)}
             >
@@ -45,7 +45,7 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                   </div>
                 )}
                 {getResolution(video.name) && (
-                  <div className="absolute bottom-2 left-2 z-10 bg-black/60 backdrop-blur-sm text-white text-[10px] font-black px-1.5 py-0.5 rounded border border-white/20 uppercase tracking-tighter">
+                  <div className="absolute bottom-2 left-2 z-10 bg-black/70 text-white text-[10px] font-black px-1.5 py-0.5 rounded border border-white/20 uppercase tracking-tighter">
                     {getResolution(video.name)}
                   </div>
                 )}
