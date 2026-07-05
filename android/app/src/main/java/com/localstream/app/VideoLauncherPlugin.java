@@ -18,6 +18,7 @@ import android.content.pm.ResolveInfo;
 import java.util.ArrayList;
 import java.util.List;
 import android.app.Activity;
+import android.content.ContentUris;
 import android.provider.DocumentsContract;
 import android.database.Cursor;
 import android.provider.MediaStore;
@@ -83,6 +84,110 @@ public class VideoLauncherPlugin extends com.getcapacitor.Plugin {
 
         JSObject response = new JSObject();
         response.put("players", playersArray);
+        call.resolve(response);
+    }
+
+    /**
+     * Chemin relatif au stockage partagé : "/storage/emulated/0/Movies/x.mp4" -> "Movies/x.mp4".
+     * Sert au regroupement par dossier et au matching des sous-titres côté JS.
+     */
+    private String toRelativePath(String data, String displayName) {
+        if (data == null || data.isEmpty()) return displayName;
+        String primary = "/storage/emulated/0/";
+        if (data.startsWith(primary)) return data.substring(primary.length());
+        // Volume secondaire (carte SD) : /storage/XXXX-XXXX/...
+        if (data.startsWith("/storage/")) {
+            int slash = data.indexOf('/', "/storage/".length());
+            if (slash != -1) return data.substring(slash + 1);
+        }
+        return data.startsWith("/") ? data.substring(1) : data;
+    }
+
+    /**
+     * Scan de la bibliothèque via l'index MediaStore : beaucoup plus rapide que
+     * le parcours récursif Filesystem, et fournit les durées sans lire les fichiers.
+     */
+    @PluginMethod
+    public void scanVideos(PluginCall call) {
+        JSONArray videosArray = new JSONArray();
+        JSONArray subtitlesArray = new JSONArray();
+        try {
+            android.content.ContentResolver resolver = getContext().getContentResolver();
+
+            String[] videoProjection = {
+                MediaStore.Video.Media._ID,
+                MediaStore.Video.Media.DISPLAY_NAME,
+                MediaStore.Video.Media.DATA,
+                MediaStore.Video.Media.SIZE,
+                MediaStore.Video.Media.DATE_MODIFIED,
+                MediaStore.Video.Media.DURATION
+            };
+            Cursor cursor = resolver.query(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                videoProjection, null, null, null);
+            if (cursor != null) {
+                int idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID);
+                int nameCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME);
+                int dataCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA);
+                int sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE);
+                int dateCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_MODIFIED);
+                int durCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION);
+                while (cursor.moveToNext()) {
+                    String name = cursor.getString(nameCol);
+                    String data = cursor.getString(dataCol);
+                    if (name == null) continue;
+                    JSONObject v = new JSONObject();
+                    v.put("name", name);
+                    v.put("path", data != null ? data : "");
+                    v.put("uri", ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, cursor.getLong(idCol)).toString());
+                    v.put("size", cursor.getLong(sizeCol));
+                    v.put("lastModified", cursor.getLong(dateCol) * 1000L);
+                    v.put("durationMs", cursor.getLong(durCol));
+                    v.put("relativePath", toRelativePath(data, name));
+                    videosArray.put(v);
+                }
+                cursor.close();
+            }
+
+            // Sous-titres voisins (srt/vtt/ass/ssa), indexés par MediaStore.Files
+            Uri filesUri = MediaStore.Files.getContentUri("external");
+            String[] subProjection = {
+                MediaStore.Files.FileColumns._ID,
+                MediaStore.Files.FileColumns.DISPLAY_NAME,
+                MediaStore.Files.FileColumns.DATA
+            };
+            String subSelection = MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE ? OR "
+                + MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE ? OR "
+                + MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE ? OR "
+                + MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE ?";
+            String[] subArgs = { "%.srt", "%.vtt", "%.ass", "%.ssa" };
+            Cursor subCursor = resolver.query(filesUri, subProjection, subSelection, subArgs, null);
+            if (subCursor != null) {
+                int idCol = subCursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID);
+                int nameCol = subCursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME);
+                int dataCol = subCursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA);
+                while (subCursor.moveToNext()) {
+                    String name = subCursor.getString(nameCol);
+                    String data = subCursor.getString(dataCol);
+                    if (name == null) continue;
+                    JSONObject s = new JSONObject();
+                    s.put("name", name);
+                    s.put("path", data != null ? data : "");
+                    s.put("uri", ContentUris.withAppendedId(filesUri, subCursor.getLong(idCol)).toString());
+                    s.put("relativePath", toRelativePath(data, name));
+                    subtitlesArray.put(s);
+                }
+                subCursor.close();
+            }
+        } catch (Exception e) {
+            Log.e("LocalStream", "Error in scanVideos", e);
+            call.reject("Scan MediaStore impossible : " + e.getMessage());
+            return;
+        }
+
+        JSObject response = new JSObject();
+        response.put("videos", videosArray);
+        response.put("subtitles", subtitlesArray);
         call.resolve(response);
     }
 
