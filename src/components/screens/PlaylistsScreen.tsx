@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChevronLeft, Play, Trash2, ListVideo, X } from 'lucide-react';
 import { VideoFile, Playlist } from '../../lib/types';
-import { getCleanTitle } from '../../lib/utils';
+import { VideoCard } from '../VideoCard';
 
 interface PlaylistsScreenProps {
   playlists: Playlist[];
@@ -9,6 +9,7 @@ interface PlaylistsScreenProps {
   groupedVideos: VideoFile[];
   posters: Record<string, string>;
   watchProgress: Record<string, number>;
+  watchedVideos: Record<string, boolean>;
   onSelectPlaylist: (playlist: Playlist | null) => void;
   onOpenInfo: (video: VideoFile) => void;
   onPlay: (video: VideoFile, playlist?: Playlist, index?: number) => void;
@@ -18,7 +19,7 @@ interface PlaylistsScreenProps {
 
 /** Écran "Listes de lecture" : grille des playlists puis détail d'une playlist. */
 export const PlaylistsScreen: React.FC<PlaylistsScreenProps> = ({
-  playlists, selectedPlaylist, groupedVideos, posters, watchProgress,
+  playlists, selectedPlaylist, groupedVideos, posters, watchProgress, watchedVideos,
   onSelectPlaylist, onOpenInfo, onPlay, onDeletePlaylist, onRemoveVideo,
 }) => (
   <div className="px-4 md:px-12 min-h-screen pt-20">
@@ -55,43 +56,23 @@ export const PlaylistsScreen: React.FC<PlaylistsScreenProps> = ({
               if (!video) return null;
 
               return (
-                <div
+                <VideoCard
                   key={videoName}
-                  className="group flex flex-col"
-                  onClick={() => onOpenInfo(video)}
+                  video={video}
+                  posterUrl={posters[video.name]}
+                  isWatched={!!watchedVideos[video.name]}
+                  progress={watchProgress[video.name]}
+                  onOpenInfo={onOpenInfo}
+                  onPlay={() => onPlay(video, selectedPlaylist, index)}
                 >
-                  <div className={`relative aspect-[2/3] bg-zinc-800 rounded-md overflow-hidden cursor-pointer transition-transform duration-300 group-hover:scale-105 group-hover:z-30 shadow-lg`}>
-                    {posters[video.name] ? (
-                      <img src={posters[video.name]} alt={getCleanTitle(video.name)} className="w-full h-full object-cover" loading="lazy" decoding="async" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center p-4 text-center">
-                        <span className="text-zinc-500 font-medium text-sm">{getCleanTitle(video.name)}</span>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center p-4">
-                      <button onClick={(e) => { e.stopPropagation(); onPlay(video, selectedPlaylist, index); }} className="bg-white text-black p-3 rounded-full hover:bg-white/80">
-                        <Play className="w-6 h-6 fill-black" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onRemoveVideo(selectedPlaylist.id, video.name); }}
-                        aria-label="Retirer de la liste"
-                        className="absolute top-2 right-2 p-2 bg-red-600/80 rounded-full hover:bg-red-600 transition"
-                      >
-                        <X className="w-3.5 h-3.5 text-white" />
-                      </button>
-                    </div>
-                    {watchProgress[video.name] > 0 && (
-                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-600">
-                        <div className="h-full bg-red-600" style={{ width: `${watchProgress[video.name]}%` }} />
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-2 px-1">
-                    <p className="text-[10px] md:text-xs font-medium text-zinc-400 break-words line-clamp-none">
-                      {getCleanTitle(video.name)}
-                    </p>
-                  </div>
-                </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRemoveVideo(selectedPlaylist.id, video.name); }}
+                    aria-label="Retirer de la liste"
+                    className="absolute top-2 right-2 p-2 bg-red-600/80 rounded-full hover:bg-red-600 transition z-40"
+                  >
+                    <X className="w-3.5 h-3.5 text-white" />
+                  </button>
+                </VideoCard>
               );
             })}
           </div>

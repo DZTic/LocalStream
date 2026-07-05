@@ -1,18 +1,19 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { FolderOpen, Search, RefreshCw, AlertTriangle, Check, Info, EyeOff, Film } from 'lucide-react';
+import { FolderOpen, Search, RefreshCw, Info } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
+import { VideoFile, Playlist } from './lib/types';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { VideoFile, Subtitle, Playlist } from './lib/types';
-import { srt2vtt, safeSetItem, isPersonalVideo, getCleanTitle } from './lib/utils';
-import { osLogin, osSearch, osDownloadVtt } from './lib/opensubtitles';
-import { getPopular } from './lib/tmdb';
+import { safeSetItem, getCleanTitle, isPersonalVideo } from './lib/utils';
 import { filterAndSortVideos } from './lib/sorting';
 import { getHeroCandidates } from './lib/hero';
-import { SubtitleEntry, parseSeriesInfo, buildSubtitleIndex, matchSubtitle, parentFolder, subtitleBaseName, videoBaseName, VIDEO_EXT_RE, SUBTITLE_EXT_RE } from './lib/scan';
+import { getPopular } from './lib/tmdb';
+import { parentFolder, parseSeriesInfo } from './lib/scan';
 import { useTmdbMetadata } from './hooks/useTmdbMetadata';
 import { usePlaylists } from './hooks/usePlaylists';
 import { useWatchedState } from './hooks/useWatchedState';
+import { useScan } from './hooks/useScan';
+import { useOpenSubtitles } from './hooks/useOpenSubtitles';
 import { VideoLauncher } from './plugins/videoLauncher';
 import { BottomNav } from './components/BottomNav';
 import { PermissionGate } from './components/PermissionGate';
@@ -31,12 +32,11 @@ import { Toasts, Toast } from './components/Toasts';
 import { ConfirmDialog, ConfirmDialogState } from './components/ConfirmDialog';
 
 export default function App() {
-  const [videos, setVideos] = useState<VideoFile[]>([]);
   const [currentVideo, setCurrentVideo] = useState<VideoFile | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
-  // Recherche mobile : ouverte en plein header via une icône loupe
+  // Recherche mobile
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -51,11 +51,16 @@ export default function App() {
   // Confirmation avant action destructive
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
-  // OpenSubtitles Credentials
-  const [osApiKey, setOsApiKey] = useState(localStorage.getItem('osApiKey') || '');
-  const [osUsername, setOsUsername] = useState(localStorage.getItem('osUsername') || '');
-  const [osPassword, setOsPassword] = useState(''); // Ne vit qu'en mémoire
-  const [osToken, setOsToken] = useState(localStorage.getItem('osToken') || '');
+  // Hook scan personnalisé
+  const {
+    videos,
+    setVideos,
+    isScanning,
+    diagLogs,
+    addLog,
+    startNativeScan,
+    handleFolderSelect,
+  } = useScan({ showToast });
 
   // Settings
   const [videoPlayer, setVideoPlayer] = useState<'internal' | 'external'>(localStorage.getItem('videoPlayer') as any || 'internal');
@@ -84,15 +89,6 @@ export default function App() {
   const [filterGenre, setFilterGenre] = useState<number | 'all'>('all');
   const [filterResolution, setFilterResolution] = useState<string | 'all'>('all');
 
-  const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
-  const [localSubtitles, setLocalSubtitles] = useState<Subtitle[]>([]);
-  const [isSearchingSubs, setIsSearchingSubs] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [activeSubtitleUrl, setActiveSubtitleUrl] = useState<string | null>(null);
-  const [activeSubtitleNativePath, setActiveSubtitleNativePath] = useState<string | null>(null);
-  const subtitleInputRef = useRef<HTMLInputElement>(null);
-  const [showSubtitlesModal, setShowSubtitlesModal] = useState(false);
-
   const [infoVideo, setInfoVideo] = useState<VideoFile | null>(null);
   const [expandedEpisode, setExpandedEpisode] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -112,13 +108,7 @@ export default function App() {
 
   const [newHistoryItemName, setNewHistoryItemName] = useState('');
 
-  const [isScanning, setIsScanning] = useState(false);
-  const [, setDiagLogs] = useState<string[]>([]);
-  const addLog = useCallback((msg: string) => {
-    setDiagLogs(prev => [new Date().toLocaleTimeString() + ": " + msg, ...prev].slice(0, 50));
-  }, []);
-
-  // Couche métadonnées TMDB (état + regroupement + récupération auto/manuelle)
+  // Couche métadonnées TMDB
   const {
     groupedVideos,
     posters, backdrops, overviews, releaseDates, videoGenres,
@@ -132,7 +122,7 @@ export default function App() {
   const [externalPlayers, setExternalPlayers] = useState<{name: string, packageId: string}[]>([]);
   const [selectedExternalPlayer, setSelectedExternalPlayer] = useState<string>(localStorage.getItem('selectedExternalPlayer') || '');
 
-  // État de visionnage via le hook partagé
+  // État de visionnage
   const {
     watchedVideos,
     watchProgress, setWatchProgress,
@@ -145,13 +135,41 @@ export default function App() {
     addManualHistoryItem,
   } = useWatchedState(groupedVideos);
 
+  // Hook OpenSubtitles personnalisé
+  const {
+    osApiKey,
+    setOsApiKey,
+    osUsername,
+    setOsUsername,
+    osPassword,
+    setOsPassword,
+    osToken,
+    subtitles,
+    setSubtitles,
+    localSubtitles,
+    isSearchingSubs,
+    isLoggingIn,
+    activeSubtitleUrl,
+    setActiveSubtitleUrl,
+    activeSubtitleNativePath,
+    setActiveSubtitleNativePath,
+    showSubtitlesModal,
+    setShowSubtitlesModal,
+    loginOpenSubtitles,
+    searchSubtitles,
+    downloadSubtitle,
+    openNativeSubtitlePicker,
+    handleLocalSubtitleSelection,
+  } = useOpenSubtitles({ currentVideo, showToast });
+
   const [activePlaylist, setActivePlaylist] = useState<Playlist | null>(null);
   const [activePlaylistIndex, setActivePlaylistIndex] = useState<number>(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const subtitleInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Bannière TMDB (onboarding)
+  // Bannière TMDB
   const [showTmdbBanner, setShowTmdbBanner] = useState(() => localStorage.getItem('showTmdbBanner') !== 'false');
 
   const handleDismissTmdbBanner = () => {
@@ -165,14 +183,10 @@ export default function App() {
 
   // Enregistrer les modifications de configuration
   useEffect(() => {
-    safeSetItem('osApiKey', osApiKey);
-    safeSetItem('osUsername', osUsername);
-    safeSetItem('osToken', osToken);
     safeSetItem('videoPlayer', videoPlayer);
-    localStorage.removeItem('osPassword'); // Nettoyage de l'ancien mot de passe en clair
-  }, [osApiKey, osUsername, osToken, videoPlayer]);
+  }, [videoPlayer]);
 
-  // Toast en cas de stockage saturé
+  // Toast en cas de stockage local saturé
   const lastStorageToastRef = useRef(0);
   useEffect(() => {
     const onStorageFull = () => {
@@ -240,7 +254,7 @@ export default function App() {
     return () => {
       window.removeEventListener('focus', checkGlobalPermissions);
     };
-  }, []);
+  }, [startNativeScan]);
 
   const [isSynopsisExpanded, setIsSynopsisExpanded] = useState(false);
   const [isEpisodeSynopsisExpanded, setIsEpisodeSynopsisExpanded] = useState(false);
@@ -277,7 +291,7 @@ export default function App() {
           }
           extractedDurationsRef.current.add(video.name);
         } catch (e) {
-          // Ignorer l'erreur
+          // Ignorer
         }
       }
     };
@@ -290,142 +304,6 @@ export default function App() {
       };
     }
   }, [videos]);
-
-  const scanDirectoryRecursively = async (directory: typeof Directory[keyof typeof Directory], basePath: string, debugLogs: string[]): Promise<VideoFile[]> => {
-    let result: VideoFile[] = [];
-    try {
-      const list = await Filesystem.readdir({ directory, path: basePath });
-      for (const item of list.files) {
-        const itemPath = basePath ? `${basePath}/${item.name}` : item.name;
-        if (item.type === 'directory') {
-          if (item.name.startsWith('.') || item.name === 'Android' || item.name === 'LOST.DIR') continue;
-          const subResult = await scanDirectoryRecursively(directory, itemPath, debugLogs);
-          result = [...result, ...subResult];
-        } else {
-          if (item.name.match(VIDEO_EXT_RE)) {
-            result.push({
-              url: item.uri,
-              name: item.name,
-              type: 'video/mp4',
-              path: itemPath,
-              nativeUri: item.uri
-            });
-          }
-        }
-      }
-    } catch (e: any) {
-      debugLogs.push(`Erreur scan dossier ${basePath}: ${e.message}`);
-    }
-    return result;
-  };
-
-  const scanViaMediaStore = async (): Promise<VideoFile[]> => {
-    const { videos: scanned, subtitles: scannedSubs } = await VideoLauncher.scanVideos();
-    
-    // Traduire ScannedSubtitle[] en SubtitleEntry[] pour les fonctions utilitaires
-    const subEntries: SubtitleEntry[] = scannedSubs.map(s => ({
-      name: s.name,
-      folder: parentFolder(s.relativePath || s.path || ''),
-      uri: s.path
-    }));
-    
-    const subIndex = buildSubtitleIndex(subEntries);
-
-    const videoFiles: VideoFile[] = scanned.map((v: any) => {
-      const parent = parentFolder(v.relativePath || v.path || '');
-      const matchedSub = matchSubtitle(subIndex, v.name, parent);
-      return {
-        url: Capacitor.convertFileSrc(v.path),
-        name: v.name,
-        type: 'video/mp4',
-        path: v.path,
-        nativeUri: `file://${v.path}`,
-        subtitleNativePath: matchedSub?.uri,
-        subtitleUrl: matchedSub ? Capacitor.convertFileSrc(matchedSub.uri) : undefined
-      };
-    });
-    return videoFiles;
-  };
-
-  const startNativeScan = async (quiet = false) => {
-    if (isScanning) return;
-    setIsScanning(true);
-    if (!quiet) addLog("Début du scan...");
-    try {
-      let scannedVideos: VideoFile[] = [];
-      if (Capacitor.isNativePlatform()) {
-        scannedVideos = await scanViaMediaStore();
-      } else {
-        const debugLogs: string[] = [];
-        scannedVideos = await scanDirectoryRecursively(Directory.Documents, '', debugLogs);
-        debugLogs.forEach(l => addLog(l));
-      }
-
-      setVideos(scannedVideos);
-      if (!quiet) {
-        if (scannedVideos.length > 0) {
-          showToast(`${scannedVideos.length} vidéos trouvées.`, 'success');
-        } else {
-          showToast("Aucune vidéo trouvée dans les dossiers scannés.", 'error');
-        }
-      }
-    } catch (e: any) {
-      addLog(`Erreur scan: ${e.message}`);
-      if (!quiet) showToast("Erreur pendant le scan : " + e.message, 'error');
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
-  const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const videoFiles: VideoFile[] = [];
-    const subtitleFiles: SubtitleEntry[] = [];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const relativePath = (file as any).webkitRelativePath || file.name;
-      const folder = parentFolder(relativePath);
-
-      if (file.name.match(VIDEO_EXT_RE)) {
-        const url = URL.createObjectURL(file);
-        videoFiles.push({
-          url: url,
-          name: file.name,
-          type: file.type || 'video/mp4',
-          path: relativePath,
-          file: file
-        });
-      } else if (file.name.match(SUBTITLE_EXT_RE)) {
-        const url = URL.createObjectURL(file);
-        subtitleFiles.push({
-          name: file.name,
-          uri: url,
-          folder: folder
-        });
-      }
-    }
-
-    const subIndex = buildSubtitleIndex(subtitleFiles);
-
-    const mappedVideos = videoFiles.map(video => {
-      const parent = parentFolder(video.path);
-      const matched = matchSubtitle(subIndex, video.name, parent);
-      if (matched) {
-        return {
-          ...video,
-          subtitleUrl: matched.uri
-        };
-      }
-      return video;
-    });
-
-    setVideos(mappedVideos);
-    showToast(`${mappedVideos.length} vidéos chargées.`, 'success');
-    if (e.target) e.target.value = '';
-  };
 
   const playVideo = useCallback((video: VideoFile, playlist?: Playlist, index?: number) => {
     let videoToPlay = video;
@@ -495,119 +373,13 @@ export default function App() {
       setActiveSubtitleUrl(null);
     }
     setSubtitles([]);
-  }, [watchedVideos, watchPositions, videoPlayer, selectedExternalPlayer, activeSubtitleNativePath, activeSubtitleUrl, toggleWatched, showToast]);
+  }, [watchedVideos, watchPositions, videoPlayer, selectedExternalPlayer, activeSubtitleNativePath, activeSubtitleUrl, toggleWatched, showToast, setRecentlyWatched, setWatchPositions, setWatchProgress, setActiveSubtitleUrl, setSubtitles]);
 
   const savePlaybackPosition = () => {
     if (videoRef.current && currentVideo) {
       const currentPosMs = videoRef.current.currentTime * 1000;
       setWatchPositions(prev => ({ ...prev, [currentVideo.name]: currentPosMs }));
     }
-  };
-
-  const loginOpenSubtitles = async () => {
-    if (!osApiKey || !osUsername || !osPassword) {
-      showToast("Veuillez remplir tous les champs OpenSubtitles.", 'error');
-      return;
-    }
-
-    setIsLoggingIn(true);
-    try {
-      const token = await osLogin(osApiKey, osUsername, osPassword);
-      if (token) {
-        setOsToken(token);
-        showToast('Connexion réussie !', 'success');
-      } else {
-        showToast('Échec de la connexion OpenSubtitles.', 'error');
-      }
-    } catch (err: any) {
-      showToast('Échec de la connexion OpenSubtitles.', 'error');
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  const searchSubtitles = async () => {
-    if (!currentVideo) return;
-    setIsSearchingSubs(true);
-    try {
-      const cleanTitle = getCleanTitle(currentVideo.name);
-      const results = await osSearch(osApiKey, cleanTitle);
-      const formatted = results.map((r: any) => ({
-        id: r.id,
-        language: r.language,
-        filename: r.filename,
-        url: '' // Sera téléchargé à la demande
-      }));
-      setSubtitles(formatted);
-    } catch (err) {
-      showToast("Erreur lors de la recherche de sous-titres.", 'error');
-    } finally {
-      setIsSearchingSubs(false);
-    }
-  };
-
-  const downloadSubtitle = async (fileId: string) => {
-    if (!osToken) {
-      showToast("Vous devez être connecté à OpenSubtitles (voir Paramètres).", 'error');
-      return;
-    }
-    try {
-      const srtText = await osDownloadVtt(osApiKey, fileId, osToken);
-      if (!srtText) {
-        showToast("Erreur de téléchargement du sous-titre (session expirée ?). Reconnectez-vous dans les Paramètres.", 'error');
-        return;
-      }
-      const vttText = srt2vtt(srtText);
-      const blob = new Blob([vttText], { type: 'text/vtt' });
-      const url = URL.createObjectURL(blob);
-
-      setSubtitles(prev => prev.map(sub => sub.id === fileId ? { ...sub, url } : sub));
-      setActiveSubtitleUrl(url);
-      setShowSubtitlesModal(false);
-      showToast("Sous-titre activé !", 'success');
-    } catch (err) {
-      showToast("Erreur lors du téléchargement du sous-titre.", 'error');
-    }
-  };
-
-  const openNativeSubtitlePicker = async () => {
-    try {
-      const res = await VideoLauncher.pickSubtitle();
-      const convertUri = Capacitor.convertFileSrc(res.path);
-      const newSub: Subtitle = {
-        id: `local-${Date.now()}`,
-        language: 'Local',
-        filename: res.name,
-        url: convertUri
-      };
-      setLocalSubtitles(prev => [...prev, newSub]);
-      setActiveSubtitleUrl(convertUri);
-      setActiveSubtitleNativePath(res.path);
-      setShowSubtitlesModal(false);
-    } catch (err) {
-      console.error("Selection annulée ou erreur", err);
-    }
-  };
-
-  const handleLocalSubtitleSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const newLocalSubs: Subtitle[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (file.name.endsWith('.srt') || file.name.endsWith('.vtt')) {
-        const url = URL.createObjectURL(file);
-        newLocalSubs.push({
-          id: `local-${Date.now()}-${i}`,
-          language: 'Local',
-          filename: file.name,
-          url: url
-        });
-      }
-    }
-    setLocalSubtitles(prev => [...prev, ...newLocalSubs]);
-    if (e.target) e.target.value = '';
   };
 
   const handleOpenInfoModal = (video: VideoFile) => {
@@ -713,7 +485,7 @@ export default function App() {
     setIsSearchOpen(false);
   };
 
-  // Logique de tri/recherche
+  // Filtrage des vidéos personnelles
   const personalVideos = useMemo(
     () => videos.filter(v => isPersonalVideo(v.name, v.path || '')),
     [videos]
@@ -759,7 +531,7 @@ export default function App() {
     if (isLibraryViewActive) {
       startNativeScan(true);
     }
-  }, [isLibraryViewActive]);
+  }, [isLibraryViewActive, startNativeScan]);
 
   useEffect(() => {
     const handleFocusScan = () => {
@@ -769,7 +541,7 @@ export default function App() {
     };
     window.addEventListener('focus', handleFocusScan);
     return () => window.removeEventListener('focus', handleFocusScan);
-  }, []);
+  }, [startNativeScan]);
 
   const heroCandidates = useMemo(
     () => getHeroCandidates(groupedVideos, watchedVideos, watchProgress),
@@ -930,6 +702,7 @@ export default function App() {
                     groupedVideos={groupedVideos}
                     posters={posters}
                     watchProgress={watchProgress}
+                    watchedVideos={watchedVideos}
                     onSelectPlaylist={setSelectedPlaylist}
                     onOpenInfo={handleOpenInfoModal}
                     onPlay={playVideo}

@@ -1,7 +1,6 @@
 import React from 'react';
-import { Play, Check } from 'lucide-react';
 import { VideoFile } from '../../lib/types';
-import { getCleanTitle, getResolution } from '../../lib/utils';
+import { VideoCard } from '../VideoCard';
 
 interface LibraryScreenProps {
   videos: VideoFile[];
@@ -28,47 +27,15 @@ export const LibraryScreen: React.FC<LibraryScreenProps> = ({
             : !!watchedVideos[video.name];
 
           return (
-            <div
+            <VideoCard
               key={video.nativeUri || video.path || video.name}
-              className="group relative aspect-[2/3] bg-zinc-800 rounded-md overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-30 shadow-lg"
-              onClick={() => onOpenInfo(video)}
-            >
-              {isWatched && (
-                <div className="absolute top-2 right-2 z-20 bg-green-600 rounded-full p-1 shadow-md">
-                  <Check className="w-3 h-3 text-white" />
-                </div>
-              )}
-              {getResolution(video.name) && (
-                <div className="absolute bottom-2 left-2 z-10 bg-black/70 text-white text-[10px] font-black px-1.5 py-0.5 rounded border border-white/20 uppercase tracking-tighter">
-                  {getResolution(video.name)}
-                </div>
-              )}
-              {posters[video.name] ? (
-                <img
-                  src={posters[video.name]}
-                  alt={video.name}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center p-4 text-center">
-                  <span className="text-zinc-500 font-medium text-sm line-clamp-3">{getCleanTitle(video.name)}</span>
-                </div>
-              )}
-              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center p-4">
-                <button onClick={(e) => { e.stopPropagation(); onPlay(video); }} className="bg-white text-black p-3 rounded-full hover:bg-white/80 mb-2">
-                  <Play className="w-6 h-6 fill-black" />
-                </button>
-                <p className="text-white text-xs font-medium text-center line-clamp-2 drop-shadow-md">
-                  {getCleanTitle(video.name)}
-                </p>
-              </div>
-              {watchProgress[video.name] > 0 && watchProgress[video.name] < 100 && (
-                <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-600">
-                  <div className="h-full bg-red-600" style={{ width: `${watchProgress[video.name]}%` }} />
-                </div>
-              )}
-            </div>
+              video={video}
+              posterUrl={posters[video.name]}
+              isWatched={isWatched}
+              progress={watchProgress[video.name]}
+              onOpenInfo={onOpenInfo}
+              onPlay={onPlay}
+            />
           );
         })}
       </div>
