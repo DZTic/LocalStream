@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { VideoFile } from '../lib/types';
 import { getCleanTitle, safeSetItem } from '../lib/utils';
 import { groupVideos } from '../lib/grouping';
@@ -43,6 +43,16 @@ export function useTmdbMetadata({ videos, whitelistedVideos, tmdbApiKey, addLog 
   const [episodeOverviews, setEpisodeOverviews] = useState<Record<string, string>>(() => loadJson('episodeOverviews', {}));
   const [episodePosters, setEpisodePosters] = useState<Record<string, string>>(() => loadJson('episodePosters', {}));
   const [episodeNames, setEpisodeNames] = useState<Record<string, string>>(() => loadJson('episodeNames', {}));
+  // Titres déjà cherchés sur TMDB sans résultat exploitable : on ne les
+  // ré-interroge plus. Sans ce marqueur, chaque métadonnée trouvée recalcule
+  // groupedVideos, ce qui re-déclenche l'effet et re-cherche en boucle toutes
+  // les vidéos introuvables (vidéos personnelles, clips…) → recherche « infinie ».
+  const [notFound, setNotFound] = useState<Record<string, boolean>>(() => loadJson('tmdbNotFound', {}));
+  // Verrou synchrone des titres déjà interrogés pendant cette session : le state
+  // `notFound` est asynchrone, donc si l'effet se re-déclenche (nouvelle référence
+  // de groupedVideos) avant que setNotFound soit committé, la même vidéo repartirait
+  // en recherche. Une ref évite ces requêtes concurrentes en double.
+  const attemptedRef = useRef<Set<string>>(new Set());
 
   const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
@@ -66,14 +76,15 @@ export function useTmdbMetadata({ videos, whitelistedVideos, tmdbApiKey, addLog 
       safeSetItem('episodeOverviews', JSON.stringify(episodeOverviews));
       safeSetItem('episodePosters', JSON.stringify(episodePosters));
       safeSetItem('episodeNames', JSON.stringify(episodeNames));
+      safeSetItem('tmdbNotFound', JSON.stringify(notFound));
     }, 1000);
     return () => clearTimeout(id);
-  }, [posters, backdrops, overviews, releaseDates, videoGenres, tmdbIds, movieCollections, episodeOverviews, episodePosters, episodeNames]);
+  }, [posters, backdrops, overviews, releaseDates, videoGenres, tmdbIds, movieCollections, episodeOverviews, episodePosters, episodeNames, notFound]);
 
   /** Vide tout le cache TMDB (localStorage + état) pour repartir de zéro. */
   const clearMetadataCache = () => {
     ['moviePosters', 'movieBackdrops', 'movieOverviews', 'movieReleaseDates', 'movieGenres',
-      'tmdbIds', 'movieCollections', 'episodeOverviews', 'episodePosters', 'episodeNames',
+      'tmdbIds', 'movieCollections', 'episodeOverviews', 'episodePosters', 'episodeNames', 'tmdbNotFound',
     ].forEach(key => localStorage.removeItem(key));
     setPosters({});
     setBackdrops({});
@@ -85,6 +96,8 @@ export function useTmdbMetadata({ videos, whitelistedVideos, tmdbApiKey, addLog 
     setEpisodeOverviews({});
     setEpisodePosters({});
     setEpisodeNames({});
+    setNotFound({});
+    attemptedRef.current.clear();
   };
 
   // Récupération automatique en masse (affiches + épisodes)
@@ -105,7 +118,11 @@ export function useTmdbMetadata({ videos, whitelistedVideos, tmdbApiKey, addLog 
         // Skip Phase 1 if already have poster
         let currentTvId = tmdbIds[lookupName];
 
-        if (!posters[lookupName] && cleanTitle) {
+        // On saute si on a déjà une affiche, si une recherche précédente n'a rien
+        // donné (notFound persisté), ou si ce titre est déjà en cours/tenté cette
+        // session (attemptedRef, synchrone). Sinon on verrouille avant de chercher.
+        if (!posters[lookupName] && !notFound[lookupName] && cleanTitle && !attemptedRef.current.has(lookupName)) {
+          attemptedRef.current.add(lookupName);
           try {
             // Cas spécial : groupe saga → utiliser l'API /collection/{id} directement
             if (video.isSeriesGroup && !video.isTvSeries && video.episodes && video.episodes.length > 0) {
@@ -181,9 +198,11 @@ export function useTmdbMetadata({ videos, whitelistedVideos, tmdbApiKey, addLog 
                 }
               } else {
                 addLog(`Aucun résultat valide pour : ${cleanTitle}`);
+                setNotFound(prev => ({ ...prev, [lookupName]: true }));
               }
             } else {
               addLog(`TMDB : Aucun résultat pour : ${cleanTitle}`);
+              setNotFound(prev => ({ ...prev, [lookupName]: true }));
             }
             } // fin else (non-saga)
           } catch (error: any) {
@@ -362,6 +381,8 @@ export function useTmdbMetadata({ videos, whitelistedVideos, tmdbApiKey, addLog 
           if (updates.releaseDate) setReleaseDates(prev => ({ ...prev, [lookupName]: updates.releaseDate }));
           if (updates.genres) setVideoGenres(prev => ({ ...prev, [lookupName]: updates.genres }));
           if (updates.tmdbId) setTmdbIds(prev => ({ ...prev, [lookupName]: updates.tmdbId }));
+          // Une recherche manuelle qui aboutit lève un éventuel marqueur "introuvable".
+          if (updates.poster) setNotFound(prev => { const n = { ...prev }; delete n[lookupName]; return n; });
 
           // Part 2: Episodes
           if (video.isSeriesGroup && video.isTvSeries && currentTvId) {

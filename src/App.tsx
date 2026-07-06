@@ -8,7 +8,7 @@ import { safeSetItem, getCleanTitle, isPersonalVideo } from './lib/utils';
 import { filterAndSortVideos } from './lib/sorting';
 import { getHeroCandidates } from './lib/hero';
 import { getPopular } from './lib/tmdb';
-import { parentFolder, parseSeriesInfo } from './lib/scan';
+import { parseSeriesInfo } from './lib/scan';
 import { useTmdbMetadata } from './hooks/useTmdbMetadata';
 import { usePlaylists } from './hooks/usePlaylists';
 import { useWatchedState } from './hooks/useWatchedState';
@@ -599,19 +599,6 @@ export default function App() {
   const tvShows = useMemo(() => groupedVideos.filter(v => v.isSeriesGroup), [groupedVideos]);
   const movies = useMemo(() => groupedVideos.filter(v => !v.isSeriesGroup), [groupedVideos]);
   
-  const folders = useMemo(() => {
-    const groups: Record<string, VideoFile[]> = {};
-    videos.forEach(v => {
-      const folder = parentFolder(v.path || '');
-      if (folder) {
-        if (!groups[folder]) groups[folder] = [];
-        groups[folder].push(v);
-      }
-    });
-    return groups;
-  }, [videos]);
-
-  const folderNames = useMemo(() => Object.keys(folders).sort(), [folders]);
   const alphabetical = useMemo(() => [...filteredAndSortedVideos].sort((a, b) => a.name.localeCompare(b.name)), [filteredAndSortedVideos]);
 
   return (
@@ -762,8 +749,6 @@ export default function App() {
                     recommendations={recommendations}
                     tvShows={tvShows}
                     movies={movies}
-                    folders={folders}
-                    folderNames={folderNames}
                     alphabetical={alphabetical}
                     watchProgress={watchProgress}
                     watchedVideos={watchedVideos}

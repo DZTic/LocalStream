@@ -51,6 +51,22 @@ describe('useTmdbMetadata', () => {
     expect(tmdb.searchMovie).not.toHaveBeenCalled();
   });
 
+  it('ne ré-interroge pas TMDB pour un titre déjà cherché sans résultat', async () => {
+    // searchMulti renvoie toujours [] (aucun résultat) pour ce titre introuvable.
+    (tmdb.searchMulti as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const { result, rerender } = render([v('Clip Inconnu Introuvable.mkv')], 'fake-key');
+
+    // 1er passage : une recherche est tentée, puis le titre est marqué introuvable.
+    await waitFor(() => expect(tmdb.searchMulti).toHaveBeenCalledTimes(1), { timeout: 3000 });
+
+    // Re-render (comme un recalcul de groupedVideos) : aucune nouvelle recherche.
+    rerender();
+    await new Promise(r => setTimeout(r, 50));
+    expect(tmdb.searchMulti).toHaveBeenCalledTimes(1);
+    void result;
+  });
+
   it('fetchSingleMetadata enregistre et persiste l\'affiche trouvée', async () => {
     (tmdb.searchMulti as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
       { title: 'Inception', media_type: 'movie', poster_path: '/p.jpg', overview: 'rêve', release_date: '2010-07-16', genre_ids: [28] },

@@ -14,8 +14,6 @@ interface HomeScreenProps {
   recommendations: VideoFile[];
   tvShows: VideoFile[];
   movies: VideoFile[];
-  folders: Record<string, VideoFile[]>;
-  folderNames: string[];
   alphabetical: VideoFile[];
   watchProgress: Record<string, number>;
   watchedVideos: Record<string, boolean>;
@@ -28,12 +26,10 @@ interface HomeScreenProps {
   onResetProgress: (name: string) => void;
 }
 
-const SYSTEM_FOLDERS = ['Movies', 'Download', 'Downloads', 'Documents', 'Racine'];
-
 /** Page d'accueil : section Hero + carrousels thématiques. */
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   heroVideo, backdrops, posters, overviews,
-  inProgressVideos, recentAdditions, recommendations, tvShows, movies, folders, folderNames, alphabetical,
+  inProgressVideos, recentAdditions, recommendations, tvShows, movies, alphabetical,
   watchProgress, watchedVideos, groupedVideosCount, showTmdbBanner,
   onConfigureTmdb, onDismissTmdbBanner, onOpenInfo, onPlay, onResetProgress,
 }) => {
@@ -129,16 +125,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <VideoRow title="Recommandations" items={recommendations.slice(0, 15)} {...rowProps} />
         <VideoRow title="Séries" items={tvShows} {...rowProps} />
         <VideoRow title="Films" items={movies} {...rowProps} />
-
-        {/* Dossiers */}
-        {folderNames.map(folderName => {
-          if (SYSTEM_FOLDERS.includes(folderName)) return null;
-
-          return folders[folderName].length > 0 && (
-            <VideoRow key={folderName} title={`Dossier : ${folderName}`} items={folders[folderName]} {...rowProps} />
-          );
-        })}
-
         <VideoRow title="De A à Z" items={alphabetical} {...rowProps} />
       </div>
     </>
