@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Thème applicatif (XML) : sert de thème de démarrage avant que Compose ne prenne
+      la main. L'UI réelle est thémée côté Compose (LocalStreamTheme). On garde donc un
+      thème sombre minimal, sans ActionBar, avec barres système transparentes (edge-to-edge).
+    -->
+    <style name="Theme.LocalStream" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ls_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

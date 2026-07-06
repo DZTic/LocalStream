@@ -13,7 +13,14 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(VideoLauncherPlugin.class);
         super.onCreate(savedInstanceState);
-        
+
+        // Sans ces deux réglages, certaines WebView système (notamment sur builds OEM
+        // comme Samsung) ignorent le meta viewport de index.html et mettent en page le
+        // contenu comme si l'écran était bien plus large (comportement "tablette"),
+        // provoquant un contenu tronqué/décalé sur téléphone.
+        getBridge().getWebView().getSettings().setUseWideViewPort(true);
+        getBridge().getWebView().getSettings().setLoadWithOverviewMode(true);
+
         // Request MANAGE_EXTERNAL_STORAGE automatically on startup
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {

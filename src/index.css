@@ -11,6 +11,15 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
+  /* Empêche tout débordement horizontal du document : certaines WebView Android
+     déplacent les éléments `position: fixed` (ex. le header) hors de l'écran
+     visible dès qu'un débordement horizontal existe, même minime. */
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  overflow-x: hidden;
 }
 
 
