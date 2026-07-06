@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LocalStream</string>
+
+    <!-- Onglets de navigation -->
+    <string name="tab_home">Accueil</string>
+    <string name="tab_library">Bibliothèque</string>
+    <string name="tab_playlists">Listes</string>
+    <string name="tab_history">Historique</string>
+</resources>

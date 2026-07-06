@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Palette sombre, alignée sur Tailwind (bg-black / zinc-900 / red-600). -->
+    <color name="ls_background">#FF000000</color>
+    <color name="ls_surface">#FF18181B</color>
+    <color name="ls_primary">#FFDC2626</color>
+    <color name="ic_launcher_background">#FF000000</color>
+</resources>

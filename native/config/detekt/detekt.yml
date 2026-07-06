@@ -1,0 +1,28 @@
+# Configuration detekt du module natif.
+# S'ajoute à la config par défaut (buildUponDefaultConfig = true).
+# Les règles inadaptées à Jetpack Compose y sont assouplies.
+
+build:
+  maxIssues: 0
+
+naming:
+  FunctionNaming:
+    # Les @Composable sont nommés en PascalCase (convention officielle Compose).
+    ignoreAnnotated: ['Composable']
+  TopLevelPropertyNaming:
+    # Les couleurs Compose (val Red600, val Black…) sont en PascalCase.
+    active: false
+
+style:
+  MagicNumber:
+    # Nombreux "nombres magiques" légitimes en UI (dp, sp, couleurs hex).
+    active: false
+  MaxLineLength:
+    active: false
+  UnusedPrivateMember:
+    # Les @Preview privées ne sont pas "appelées" au sens statique.
+    ignoreAnnotated: ['Preview']
+
+complexity:
+  LongMethod:
+    ignoreAnnotated: ['Composable']
