@@ -1,4 +1,4 @@
-package com.localstream.app.domain.model
+﻿package com.localstream.app.domain.model
 
 data class VideoItem(
     val url: String = "",
@@ -7,6 +7,7 @@ data class VideoItem(
     val path: String = "",
     val size: Long = 0L,
     val lastModified: Long = 0L,
+    val duration: Long = 0L,
     val nativeUri: String? = null,
     val subtitleNativePath: String? = null,
     val subtitleUrl: String? = null,
@@ -18,4 +19,3 @@ data class VideoItem(
     val episodes: List<VideoItem>? = null,
     val cleanTitle: String? = null,
 )
-
