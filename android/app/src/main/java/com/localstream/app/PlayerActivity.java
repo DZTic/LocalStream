@@ -185,16 +185,8 @@ public class PlayerActivity extends Activity {
         }
 
         if (subtitlePath != null && !subtitlePath.isEmpty()) {
-            Uri subtitleUri;
-            if (subtitlePath.startsWith("content://") || subtitlePath.startsWith("http://") || subtitlePath.startsWith("https://") || subtitlePath.startsWith("file://")) {
-                subtitleUri = Uri.parse(subtitlePath);
-            } else {
-                String actualSubPath = subtitlePath;
-                if (!actualSubPath.startsWith("/")) {
-                    actualSubPath = Environment.getExternalStorageDirectory().getPath() + "/" + actualSubPath;
-                }
-                subtitleUri = Uri.parse("file://" + actualSubPath);
-            }
+            // Detecte l'encodage et transcode en UTF-8 si besoin (accents, issue #48)
+            Uri subtitleUri = prepareSubtitleUri(subtitlePath);
             
             String mimeType = MimeTypes.APPLICATION_SUBRIP; // Default for SRT
             if (subtitlePath.toLowerCase().endsWith(".vtt")) {
@@ -284,6 +276,107 @@ public class PlayerActivity extends Activity {
         }
     }
 
+    /**
+     * Les .srt francais sont souvent encodes en Windows-1252, que Media3 lit en
+     * UTF-8 : les accents deviennent alors des caracteres invalides (issue #48).
+     * On detecte l'encodage et, si le fichier n'est pas de l'UTF-8 valide, on
+     * ecrit une copie transcodee en UTF-8 dans le cache avant de la donner a
+     * ExoPlayer. En cas de probleme, l'URI d'origine est conservee.
+     */
+    private Uri prepareSubtitleUri(String subtitlePath) {
+        try {
+            byte[] bytes;
+            String name = "subtitle.srt";
+            Uri originalUri;
+            if (subtitlePath.startsWith("content://")) {
+                originalUri = Uri.parse(subtitlePath);
+                Cursor c = getContentResolver().query(originalUri, null, null, null, null);
+                if (c != null && c.moveToFirst()) {
+                    int idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (idx != -1) name = c.getString(idx);
+                    c.close();
+                }
+                try (java.io.InputStream in = getContentResolver().openInputStream(originalUri)) {
+                    bytes = readAllBytes(in);
+                }
+            } else if (subtitlePath.startsWith("http://") || subtitlePath.startsWith("https://")) {
+                return Uri.parse(subtitlePath); // Distant : pas de transcodage local
+            } else {
+                String p = subtitlePath.startsWith("file://") ? subtitlePath.substring(7) : subtitlePath;
+                if (!p.startsWith("/")) {
+                    p = Environment.getExternalStorageDirectory().getPath() + "/" + p;
+                }
+                java.io.File f = new java.io.File(p);
+                name = f.getName();
+                originalUri = Uri.parse("file://" + p);
+                try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+                    bytes = readAllBytes(in);
+                }
+            }
+            if (bytes == null || bytes.length == 0) return originalUri;
+
+            String text = decodeIfNotUtf8(bytes);
+            if (text == null) return originalUri; // Deja UTF-8 : rien a faire
+
+            java.io.File dir = new java.io.File(getCacheDir(), "subtitles");
+            dir.mkdirs();
+            java.io.File out = new java.io.File(dir, "utf8_" + new java.io.File(name).getName());
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(out)) {
+                fos.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            android.util.Log.d("LocalStream", "Sous-titre transcode en UTF-8 : " + out.getAbsolutePath());
+            return Uri.fromFile(out);
+        } catch (Exception e) {
+            android.util.Log.w("LocalStream", "Transcodage sous-titre impossible, URI d'origine conservee", e);
+            return buildRawSubtitleUri(subtitlePath);
+        }
+    }
+
+    private Uri buildRawSubtitleUri(String subtitlePath) {
+        if (subtitlePath.startsWith("content://") || subtitlePath.startsWith("http://")
+                || subtitlePath.startsWith("https://") || subtitlePath.startsWith("file://")) {
+            return Uri.parse(subtitlePath);
+        }
+        String actualSubPath = subtitlePath;
+        if (!actualSubPath.startsWith("/")) {
+            actualSubPath = Environment.getExternalStorageDirectory().getPath() + "/" + actualSubPath;
+        }
+        return Uri.parse("file://" + actualSubPath);
+    }
+
+    private static byte[] readAllBytes(java.io.InputStream in) throws java.io.IOException {
+        if (in == null) return new byte[0];
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+        return out.toByteArray();
+    }
+
+    /**
+     * Renvoie null si les octets sont deja de l'UTF-8 valide (BOM accepte, Media3
+     * le gere). Sinon decode en UTF-16 (BOM) ou Windows-1252 et renvoie le texte.
+     */
+    @Nullable
+    private static String decodeIfNotUtf8(byte[] b) {
+        if (b.length >= 2 && b[0] == (byte) 0xFF && b[1] == (byte) 0xFE) {
+            return new String(b, 2, b.length - 2, java.nio.charset.StandardCharsets.UTF_16LE);
+        }
+        if (b.length >= 2 && b[0] == (byte) 0xFE && b[1] == (byte) 0xFF) {
+            return new String(b, 2, b.length - 2, java.nio.charset.StandardCharsets.UTF_16BE);
+        }
+        try {
+            java.nio.charset.CharsetDecoder decoder = java.nio.charset.StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT);
+            decoder.decode(java.nio.ByteBuffer.wrap(b));
+            return null;
+        } catch (java.nio.charset.CharacterCodingException e) {
+            // Windows-1252 decode tous les octets sans perte : aucun accent perdu
+            return new String(b, java.nio.charset.Charset.forName("windows-1252"));
+        }
+    }
+
     private void addExternalSubtitle(Uri subtitleUri) {
         if (player == null) return;
         
@@ -307,7 +400,9 @@ public class PlayerActivity extends Activity {
             mimeType = MimeTypes.TEXT_SSA;
         }
 
-        MediaItem.SubtitleConfiguration subtitleConfig = new MediaItem.SubtitleConfiguration.Builder(subtitleUri)
+        // Detecte l'encodage et transcode en UTF-8 si besoin (accents, issue #48)
+        Uri preparedSubtitleUri = prepareSubtitleUri(subtitleUri.toString());
+        MediaItem.SubtitleConfiguration subtitleConfig = new MediaItem.SubtitleConfiguration.Builder(preparedSubtitleUri)
             .setMimeType(mimeType)
             .setLanguage("fr")
             .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)

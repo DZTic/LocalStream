@@ -11,13 +11,21 @@ async function startServer() {
   // Proxy for OpenSubtitles to bypass CORS
   app.post("/api/os/proxy", async (req, res) => {
     try {
-      const { url, method, headers, body } = req.body;
+      const { url, method, headers, body, responseType } = req.body;
       const response = await fetch(url, {
         method: method || 'GET',
         headers: headers || {},
         body: body ? JSON.stringify(body) : undefined,
       });
-      
+
+      // Binaire (ex. sous-titres) : renvoyer les octets bruts pour que le client
+      // detecte l'encodage lui-meme (un .text() ici casserait les accents).
+      if (responseType === 'binary') {
+        const buf = Buffer.from(await response.arrayBuffer());
+        res.status(response.status).set('Content-Type', 'application/octet-stream').send(buf);
+        return;
+      }
+
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
         const data = await response.json();

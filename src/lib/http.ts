@@ -1,4 +1,5 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { base64ToUint8Array } from './utils';
 
 /**
  * Effectue une requête HTTP vers une API externe.
@@ -11,17 +12,28 @@ export const externalRequest = async (opts: {
   method?: string;
   headers?: Record<string, string>;
   body?: any;
-}): Promise<{ json: () => Promise<any>; text: () => Promise<string> }> => {
+  /** 'binary' : recupere les octets bruts (l'appelant detecte l'encodage). */
+  responseType?: 'binary';
+}): Promise<{ json: () => Promise<any>; text: () => Promise<string>; arrayBuffer: () => Promise<ArrayBuffer> }> => {
   if (Capacitor.isNativePlatform()) {
     const res = await CapacitorHttp.request({
       url: opts.url,
       method: opts.method || 'GET',
       headers: opts.headers || {},
       data: opts.body,
+      ...(opts.responseType === 'binary' ? { responseType: 'arraybuffer' as const } : {}),
     });
     return {
       json: async () => (typeof res.data === 'string' ? JSON.parse(res.data) : res.data),
       text: async () => (typeof res.data === 'string' ? res.data : JSON.stringify(res.data)),
+      arrayBuffer: async () => {
+        if (res.data instanceof ArrayBuffer) return res.data;
+        if (typeof res.data === 'string') {
+          // Selon la version du bridge, les binaires arrivent en base64
+          return base64ToUint8Array(res.data).buffer as ArrayBuffer;
+        }
+        throw new Error('Reponse binaire inattendue (CapacitorHttp)');
+      },
     };
   }
   const response = await fetch('/api/os/proxy', {
@@ -32,5 +44,6 @@ export const externalRequest = async (opts: {
   return {
     json: () => response.json(),
     text: () => response.text(),
+    arrayBuffer: () => response.arrayBuffer(),
   };
 };

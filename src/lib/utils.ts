@@ -45,13 +45,46 @@ export const getResolution = (name: string): string => {
 
 // Convertit un fichier SRT en VTT
 export const srt2vtt = (srt: string): string => {
-  let vtt = 'WEBVTT\n\n';
-  vtt += srt
+  const normalized = srt
     .replace(/\{\\([ibu])\}/g, '<$1>')
     .replace(/\{\\\/([ibu])\}/g, '</$1>')
     .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
     .replace(/\r\n/g, '\n');
-  return vtt;
+  // Garde-fou : ne pas empiler un second en-tete si le contenu est deja du VTT
+  if (/^\uFEFF?WEBVTT/.test(normalized)) return normalized;
+  return 'WEBVTT\n\n' + normalized;
+};
+
+/**
+ * Decode les octets d'un fichier de sous-titres en texte.
+ * Les .srt francais sont tres souvent encodes en Windows-1252 (Latin-1) :
+ * lus en UTF-8, tous les accents deviennent des caracteres de remplacement (issue #48).
+ * Strategie : BOM explicite (UTF-8/UTF-16) -> UTF-8 strict -> repli Windows-1252.
+ */
+export const decodeSubtitleBytes = (bytes: Uint8Array | ArrayBuffer): string => {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (b.length >= 3 && b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) {
+    return new TextDecoder('utf-8').decode(b.subarray(3));
+  }
+  if (b.length >= 2 && b[0] === 0xff && b[1] === 0xfe) {
+    return new TextDecoder('utf-16le').decode(b.subarray(2));
+  }
+  if (b.length >= 2 && b[0] === 0xfe && b[1] === 0xff) {
+    return new TextDecoder('utf-16be').decode(b.subarray(2));
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(b);
+  } catch {
+    return new TextDecoder('windows-1252').decode(b);
+  }
+};
+
+/** Convertit une chaine base64 (donnees binaires CapacitorHttp) en octets. */
+export const base64ToUint8Array = (base64: string): Uint8Array => {
+  const bin = atob(base64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 };
 
 /**
