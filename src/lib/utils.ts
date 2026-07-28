@@ -61,6 +61,16 @@ export const srt2vtt = (srt: string): string => {
  * lus en UTF-8, tous les accents deviennent des caracteres de remplacement (issue #48).
  * Strategie : BOM explicite (UTF-8/UTF-16) -> UTF-8 strict -> repli Windows-1252.
  */
+const CP1252_CONTROL_MAP: Record<string, string> = {
+  '\u0080': '\u20AC', '\u0082': '\u201A', '\u0083': '\u0192', '\u0084': '\u201E', '\u0085': '\u2026', '\u0086': '\u2020', '\u0087': '\u2021',
+  '\u0088': '\u02C6', '\u0089': '\u2030', '\u008A': '\u0160', '\u008B': '\u2039', '\u008C': '\u0152', '\u008E': '\u017D',
+  '\u0091': '\u2018', '\u0092': '\u2019', '\u0093': '\u201C', '\u0094': '\u201D', '\u0095': '\u2022', '\u0096': '\u2013', '\u0097': '\u2014',
+  '\u0098': '\u02DC', '\u0099': '\u2122', '\u009A': '\u0161', '\u009B': '\u203A', '\u009C': '\u0153', '\u009E': '\u017E', '\u009F': '\u0178',
+};
+
+const fixCp1252Controls = (str: string): string =>
+  str.replace(/[\u0080-\u009f]/g, (c) => CP1252_CONTROL_MAP[c] || c);
+
 export const decodeSubtitleBytes = (bytes: Uint8Array | ArrayBuffer): string => {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   if (b.length >= 3 && b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) {
@@ -75,7 +85,8 @@ export const decodeSubtitleBytes = (bytes: Uint8Array | ArrayBuffer): string => 
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(b);
   } catch {
-    return new TextDecoder('windows-1252').decode(b);
+    const raw = new TextDecoder('windows-1252').decode(b);
+    return fixCp1252Controls(raw);
   }
 };
 
