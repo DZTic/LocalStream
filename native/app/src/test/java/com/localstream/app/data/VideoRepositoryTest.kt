@@ -1,92 +1,69 @@
-package com.localstream.app.data
+﻿package com.localstream.app.data
 
-import com.localstream.app.data.local.InMemoryPreferencesDataSource
 import com.localstream.app.data.repository.VideoRepository
-import com.localstream.app.data.scanner.MediaStoreScanner
-import com.localstream.app.domain.model.FilterSortOptions
-import com.localstream.app.domain.model.SortBy
+import com.localstream.app.data.scanner.MediaScanner
+import com.localstream.app.domain.model.MovieCollection
+import com.localstream.app.domain.model.SubtitleEntry
 import com.localstream.app.domain.model.VideoItem
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
-import java.io.File
 
+/**
+ * Test du [VideoRepository] avec un scanner factice (Phase 4 — VideoRepository all\u00e9g\u00e9).
+ */
 class VideoRepositoryTest {
 
-    @get:Rule
-    val tempFolder = TemporaryFolder()
-
-    private lateinit var prefs: InMemoryPreferencesDataSource
-    private lateinit var moviesDir: File
     private lateinit var repo: VideoRepository
 
     @Before
     fun setUp() {
-        prefs = InMemoryPreferencesDataSource()
-        moviesDir = tempFolder.newFolder("Movies")
-        File(moviesDir, "MovieA.1080p.mkv").writeText("a")
-        File(moviesDir, "MovieB.720p.mkv").writeText("b")
+        val scanner = FakeMediaScanner(
+            listOf(
+                VideoItem(url = "file://a.mkv", name = "Alpha.mkv"),
+                VideoItem(url = "file://b.mkv", name = "Beta.S01E01.mkv"),
+                VideoItem(url = "file://c.mkv", name = "Beta.S01E02.mkv"),
+            )
+        )
+        repo = VideoRepository(scanner)
+    }
 
-        val scanner = MediaStoreScanner(customDirectories = listOf(moviesDir))
-        repo = VideoRepository(scanner, prefs)
+    @Test
+    fun scanAndLoad_returnsGroupedVideos() {
+        val result = repo.scanAndLoad()
+        // Alpha (1 film) + Beta group\u00e9 (1 s\u00e9rie) = 2 \u00e9l\u00e9ments
+        assertEquals(2, result.size)
+    }
+
+    @Test
+    fun getRawVideos_returnsAllFlatVideos() {
         repo.scanAndLoad()
+        assertEquals(3, repo.getRawVideos().size)
     }
 
     @Test
-    fun scanAndLoad_loadsGroupedVideos() {
-        assertEquals(2, repo.getGroupedVideos().size)
+    fun getGroupedVideos_returnsGroupedList() {
+        repo.scanAndLoad()
+        assertTrue(repo.getGroupedVideos().any { it.isSeriesGroup })
     }
 
     @Test
-    fun toggleWatched_updatesWatchedStateAndPersists() {
-        assertFalse(repo.getWatchedVideos()["MovieA.1080p.mkv"] ?: false)
-        val isNowWatched = repo.toggleWatched("MovieA.1080p.mkv")
-        assertTrue(isNowWatched)
-        assertTrue(repo.getWatchedVideos()["MovieA.1080p.mkv"] ?: false)
-        assertTrue(prefs.getWatchedVideos()["MovieA.1080p.mkv"] ?: false)
+    fun scanAndLoad_emptyScanner_returnsEmpty() {
+        val emptyRepo = VideoRepository(FakeMediaScanner(emptyList()))
+        assertEquals(0, emptyRepo.scanAndLoad().size)
     }
+}
 
-    @Test
-    fun watchProgress_updatesAndClearsProgress() {
-        repo.updateWatchProgress("MovieA.1080p.mkv", 42.0)
-        assertEquals(42.0, repo.getWatchProgress()["MovieA.1080p.mkv"]!!, 0.01)
-        assertEquals(42.0, prefs.getWatchProgress()["MovieA.1080p.mkv"]!!, 0.01)
-
-        repo.clearWatchProgress("MovieA.1080p.mkv")
-        assertFalse(repo.getWatchProgress().containsKey("MovieA.1080p.mkv"))
-    }
-
-    @Test
-    fun playlistManagement_createsAddsRemovesAndDeletesPlaylists() {
-        val playlist = repo.createPlaylist("Ma Liste")
-        assertEquals(1, repo.getPlaylists().size)
-        assertEquals("Ma Liste", playlist.name)
-
-        repo.addToPlaylist(playlist.id, "MovieA.1080p.mkv")
-        val updated = repo.getPlaylists().first { it.id == playlist.id }
-        assertEquals(listOf("MovieA.1080p.mkv"), updated.videoNames)
-
-        repo.removeFromPlaylist(playlist.id, "MovieA.1080p.mkv")
-        val afterRemove = repo.getPlaylists().first { it.id == playlist.id }
-        assertTrue(afterRemove.videoNames.isEmpty())
-
-        repo.deletePlaylist(playlist.id)
-        assertTrue(repo.getPlaylists().isEmpty())
-    }
-
-    @Test
-    fun getFilteredAndSortedVideos_appliesFilters() {
-        val sorted = repo.getFilteredAndSortedVideos(FilterSortOptions(sortBy = SortBy.ALPHA))
-        assertEquals(listOf("MovieA.1080p.mkv", "MovieB.720p.mkv"), sorted.map { it.name })
-    }
-
-    @Test
-    fun getHeroCandidates_returnsCandidates() {
-        val candidates = repo.getHeroCandidates()
-        assertEquals(2, candidates.size)
+private class FakeMediaScanner(private val videos: List<VideoItem>) : MediaScanner {
+    override fun scanVideoFiles() = videos
+    override fun scanSubtitleFiles() = emptyList<SubtitleEntry>()
+    override fun scanAndGroup(
+        whitelistedVideos: Set<String>,
+        movieCollections: Map<String, MovieCollection>,
+        releaseDates: Map<String, String>,
+    ): List<VideoItem> {
+        // Regroupement minimal pour les tests (utilise le VideoGrouper r\u00e9el)
+        return com.localstream.app.domain.VideoGrouper.groupVideos(videos, movieCollections, releaseDates, whitelistedVideos)
     }
 }

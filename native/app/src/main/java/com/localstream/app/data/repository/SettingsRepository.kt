@@ -1,25 +1,50 @@
 package com.localstream.app.data.repository
 
-import com.localstream.app.data.local.PreferencesDataSource
+import com.localstream.app.data.local.EncryptedPreferencesManager
+import com.localstream.app.data.local.UserPreferencesDataStore
+import kotlinx.coroutines.flow.Flow
 
 /**
- * Repository gérant la lecture et la mise à jour des paramètres de l'application.
+ * Repository des param\u00e8tres applicatifs (Phase 4).
+ *
+ * - Credentials sensibles  \u2192 [EncryptedPreferencesManager] (chiffrement AES-256-GCM)
+ * - Pr\u00e9f\u00e9rences l\u00e9g\u00e8res     \u2192 [UserPreferencesDataStore] (DataStore/Preferences)
  */
+@Suppress("TooManyFunctions")
 class SettingsRepository(
-    private val preferencesDataSource: PreferencesDataSource
+    private val encryptedPrefs: EncryptedPreferencesManager,
+    private val dataStore: UserPreferencesDataStore,
 ) {
-    fun getTmdbApiKey(): String = preferencesDataSource.getTmdbApiKey()
-    fun saveTmdbApiKey(key: String) = preferencesDataSource.saveTmdbApiKey(key)
 
-    fun getOpenSubtitlesApiKey(): String = preferencesDataSource.getOpenSubtitlesApiKey()
-    fun saveOpenSubtitlesApiKey(key: String) = preferencesDataSource.saveOpenSubtitlesApiKey(key)
+    // -------- Credentials chiffr\u00e9s --------
 
-    fun getOpenSubtitlesUsername(): String = preferencesDataSource.getOpenSubtitlesUsername()
-    fun saveOpenSubtitlesUsername(username: String) = preferencesDataSource.saveOpenSubtitlesUsername(username)
+    fun getTmdbApiKey(): String = encryptedPrefs.tmdbApiKey
+    fun saveTmdbApiKey(key: String) { encryptedPrefs.tmdbApiKey = key }
 
-    fun getOpenSubtitlesPassword(): String = preferencesDataSource.getOpenSubtitlesPassword()
-    fun saveOpenSubtitlesPassword(password: String) = preferencesDataSource.saveOpenSubtitlesPassword(password)
+    fun getOpenSubtitlesApiKey(): String = encryptedPrefs.openSubtitlesApiKey
+    fun saveOpenSubtitlesApiKey(key: String) { encryptedPrefs.openSubtitlesApiKey = key }
 
-    fun getExternalPlayerPackage(): String = preferencesDataSource.getExternalPlayerPackage()
-    fun saveExternalPlayerPackage(packageName: String) = preferencesDataSource.saveExternalPlayerPackage(packageName)
+    fun getOpenSubtitlesUsername(): String = encryptedPrefs.openSubtitlesUsername
+    fun saveOpenSubtitlesUsername(username: String) { encryptedPrefs.openSubtitlesUsername = username }
+
+    fun getOpenSubtitlesPassword(): String = encryptedPrefs.openSubtitlesPassword
+    fun saveOpenSubtitlesPassword(password: String) { encryptedPrefs.openSubtitlesPassword = password }
+
+    // -------- Pr\u00e9f\u00e9rences DataStore --------
+
+    val videoPlayerMode: Flow<String> = dataStore.videoPlayerMode
+    suspend fun saveVideoPlayerMode(mode: String) = dataStore.saveVideoPlayerMode(mode)
+
+    val externalPlayerPackage: Flow<String> = dataStore.externalPlayerPackage
+    suspend fun saveExternalPlayerPackage(pkg: String) = dataStore.saveExternalPlayerPackage(pkg)
+
+    val whitelistedVideos: Flow<Set<String>> = dataStore.whitelistedVideos
+    suspend fun saveWhitelistedVideos(whitelist: Set<String>) =
+        dataStore.saveWhitelistedVideos(whitelist)
+
+    val forceAvailableJson: Flow<String> = dataStore.forceAvailableJson
+    suspend fun saveForceAvailableJson(json: String) = dataStore.saveForceAvailableJson(json)
+
+    val legacyImportDone: Flow<Boolean> = dataStore.legacyImportDone
+    suspend fun markLegacyImportDone() = dataStore.markLegacyImportDone()
 }

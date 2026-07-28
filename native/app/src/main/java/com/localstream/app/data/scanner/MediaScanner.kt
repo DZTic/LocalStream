@@ -1,11 +1,11 @@
-package com.localstream.app.data.scanner
+﻿package com.localstream.app.data.scanner
 
 import com.localstream.app.domain.model.MovieCollection
 import com.localstream.app.domain.model.SubtitleEntry
 import com.localstream.app.domain.model.VideoItem
 
 /**
- * Interface d'abstraction pour le scan de fichiers multimédias locaux (vidéos + sous-titres).
+ * Interface d'abstraction pour le scan de fichiers multim\u00e9dias locaux (vid\u00e9os + sous-titres).
  */
 interface MediaScanner {
     fun scanVideoFiles(): List<VideoItem>
