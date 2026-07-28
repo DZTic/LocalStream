@@ -1,5 +1,5 @@
 import { externalRequest } from './http';
-import { srt2vtt } from './utils';
+import { srt2vtt, decodeSubtitleBytes } from './utils';
 import { Subtitle } from './types';
 
 const OS_BASE = 'https://api.opensubtitles.com/api/v1';
@@ -67,7 +67,9 @@ export const osDownloadVtt = async (
   });
   const data = await response.json();
   if (!data?.link) return null;
-  const subResponse = await externalRequest({ url: data.link, method: 'GET' });
-  const srtContent = await subResponse.text();
-  return srt2vtt(srtContent);
+  // Octets bruts + detection d'encodage : les .srt OpenSubtitles sont souvent
+  // en Windows-1252, un .text() les decoderait en UTF-8 et casserait les accents.
+  const subResponse = await externalRequest({ url: data.link, method: 'GET', responseType: 'binary' });
+  const bytes = await subResponse.arrayBuffer();
+  return srt2vtt(decodeSubtitleBytes(bytes));
 };

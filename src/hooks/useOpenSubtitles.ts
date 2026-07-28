@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Subtitle, VideoFile } from '../lib/types';
-import { srt2vtt, safeSetItem, getCleanTitle } from '../lib/utils';
+import { srt2vtt, decodeSubtitleBytes, safeSetItem, getCleanTitle } from '../lib/utils';
 import { osLogin, osSearch, osDownloadVtt } from '../lib/opensubtitles';
 import { VideoLauncher } from '../plugins/videoLauncher';
 
@@ -80,14 +81,30 @@ export function useOpenSubtitles({ currentVideo, showToast }: UseOpenSubtitlesPr
       return;
     }
     try {
-      const srtText = await osDownloadVtt(osApiKey, fileId, osToken);
-      if (!srtText) {
+      const vttText = await osDownloadVtt(osApiKey, osToken, fileId);
+      if (!vttText) {
         showToast("Erreur de téléchargement du sous-titre (session expirée ?). Reconnectez-vous dans les Paramètres.", 'error');
         return;
       }
-      const vttText = srt2vtt(srtText);
       const blob = new Blob([vttText], { type: 'text/vtt' });
       const url = URL.createObjectURL(blob);
+
+      if (Capacitor.isNativePlatform()) {
+        // Le lecteur natif ne peut pas lire une blob: URL : on ecrit le VTT
+        // (deja decode en UTF-8) dans le cache et on passe le chemin fichier.
+        try {
+          const written = await Filesystem.writeFile({
+            path: `subtitles/${fileId}.vtt`,
+            data: vttText,
+            directory: Directory.Cache,
+            encoding: Encoding.UTF8,
+            recursive: true,
+          });
+          setActiveSubtitleNativePath(written.uri);
+        } catch (writeErr) {
+          console.warn('Ecriture cache du sous-titre impossible', writeErr);
+        }
+      }
 
       setSubtitles(prev => prev.map(sub => sub.id === fileId ? { ...sub, url } : sub));
       setActiveSubtitleUrl(url);
@@ -117,7 +134,7 @@ export function useOpenSubtitles({ currentVideo, showToast }: UseOpenSubtitlesPr
     }
   }, []);
 
-  const handleLocalSubtitleSelection = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLocalSubtitleSelection = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -125,7 +142,11 @@ export function useOpenSubtitles({ currentVideo, showToast }: UseOpenSubtitlesPr
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (file.name.endsWith('.srt') || file.name.endsWith('.vtt')) {
-        const url = URL.createObjectURL(file);
+        // L'element <track> exige du VTT en UTF-8 : on detecte l'encodage
+        // (souvent Windows-1252) et on convertit le SRT au passage.
+        const text = decodeSubtitleBytes(await file.arrayBuffer());
+        const vtt = srt2vtt(text);
+        const url = URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' }));
         newLocalSubs.push({
           id: `local-${Date.now()}-${i}`,
           language: 'Local',

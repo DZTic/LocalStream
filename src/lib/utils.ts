@@ -45,13 +45,57 @@ export const getResolution = (name: string): string => {
 
 // Convertit un fichier SRT en VTT
 export const srt2vtt = (srt: string): string => {
-  let vtt = 'WEBVTT\n\n';
-  vtt += srt
+  const normalized = srt
     .replace(/\{\\([ibu])\}/g, '<$1>')
     .replace(/\{\\\/([ibu])\}/g, '</$1>')
     .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
     .replace(/\r\n/g, '\n');
-  return vtt;
+  // Garde-fou : ne pas empiler un second en-tete si le contenu est deja du VTT
+  if (/^\uFEFF?WEBVTT/.test(normalized)) return normalized;
+  return 'WEBVTT\n\n' + normalized;
+};
+
+/**
+ * Decode les octets d'un fichier de sous-titres en texte.
+ * Les .srt francais sont tres souvent encodes en Windows-1252 (Latin-1) :
+ * lus en UTF-8, tous les accents deviennent des caracteres de remplacement (issue #48).
+ * Strategie : BOM explicite (UTF-8/UTF-16) -> UTF-8 strict -> repli Windows-1252.
+ */
+const CP1252_CONTROL_MAP: Record<string, string> = {
+  '\u0080': '\u20AC', '\u0082': '\u201A', '\u0083': '\u0192', '\u0084': '\u201E', '\u0085': '\u2026', '\u0086': '\u2020', '\u0087': '\u2021',
+  '\u0088': '\u02C6', '\u0089': '\u2030', '\u008A': '\u0160', '\u008B': '\u2039', '\u008C': '\u0152', '\u008E': '\u017D',
+  '\u0091': '\u2018', '\u0092': '\u2019', '\u0093': '\u201C', '\u0094': '\u201D', '\u0095': '\u2022', '\u0096': '\u2013', '\u0097': '\u2014',
+  '\u0098': '\u02DC', '\u0099': '\u2122', '\u009A': '\u0161', '\u009B': '\u203A', '\u009C': '\u0153', '\u009E': '\u017E', '\u009F': '\u0178',
+};
+
+const fixCp1252Controls = (str: string): string =>
+  str.replace(/[\u0080-\u009f]/g, (c) => CP1252_CONTROL_MAP[c] || c);
+
+export const decodeSubtitleBytes = (bytes: Uint8Array | ArrayBuffer): string => {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (b.length >= 3 && b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) {
+    return new TextDecoder('utf-8').decode(b.subarray(3));
+  }
+  if (b.length >= 2 && b[0] === 0xff && b[1] === 0xfe) {
+    return new TextDecoder('utf-16le').decode(b.subarray(2));
+  }
+  if (b.length >= 2 && b[0] === 0xfe && b[1] === 0xff) {
+    return new TextDecoder('utf-16be').decode(b.subarray(2));
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(b);
+  } catch {
+    const raw = new TextDecoder('windows-1252').decode(b);
+    return fixCp1252Controls(raw);
+  }
+};
+
+/** Convertit une chaine base64 (donnees binaires CapacitorHttp) en octets. */
+export const base64ToUint8Array = (base64: string): Uint8Array => {
+  const bin = atob(base64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 };
 
 /**
