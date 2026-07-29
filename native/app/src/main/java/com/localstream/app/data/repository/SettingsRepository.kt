@@ -52,4 +52,7 @@ open class SettingsRepository(
 
     open val legacyImportDone: Flow<Boolean> get() = dataStore?.legacyImportDone ?: emptyFlow()
     open suspend fun markLegacyImportDone() { dataStore?.markLegacyImportDone() }
+
+    open val tmdbBannerDismissed: Flow<Boolean> get() = dataStore?.tmdbBannerDismissed ?: emptyFlow()
+    open suspend fun dismissTmdbBanner() { dataStore?.dismissTmdbBanner() }
 }

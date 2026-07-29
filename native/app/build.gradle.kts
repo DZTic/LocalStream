@@ -57,6 +57,8 @@ detekt {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose) // Phase 7
+    implementation(libs.androidx.lifecycle.runtime.compose) // Phase 7
     implementation(libs.androidx.activity.compose)
 
     implementation(platform(libs.androidx.compose.bom))

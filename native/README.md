@@ -68,11 +68,11 @@ Correspondance entre l'UI web actuelle (`../src/`) et les écrans natifs cibles.
 
 | Écran natif (route)      | Source web (`src/`)                         | Onglet       | Statut socle |
 | ------------------------ | ------------------------------------------- | ------------ | ------------ |
-| `home`                   | `components/screens/HomeScreen.tsx`         | Accueil      | Placeholder  |
-| `library`                | `components/screens/LibraryScreen.tsx`      | Bibliothèque | Placeholder  |
+| `home`                   | `components/screens/HomeScreen.tsx`         | Accueil      | Phase 7 ✅   |
+| `library`                | `components/screens/LibraryScreen.tsx`      | Bibliothèque | Phase 7 ✅   |
 | `playlists`              | `components/screens/PlaylistsScreen.tsx`    | Listes       | Placeholder  |
 | `history`                | `components/screens/HistoryScreen.tsx`      | Historique   | Placeholder  |
-| `search`                 | `components/screens/SearchScreen.tsx`       | —            | Placeholder  |
+| `search`                 | `components/screens/SearchScreen.tsx`       | —            | Phase 7 ✅   |
 | `settings`               | `components/SettingsModal.tsx`              | —            | Placeholder  |
 | `details/{id}`           | vue Héro / détails (`HomeScreen` + modales) | —            | Placeholder  |
 

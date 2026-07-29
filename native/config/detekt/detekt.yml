@@ -26,5 +26,8 @@ style:
 complexity:
   LongMethod:
     ignoreAnnotated: ['Composable']
+  LongParameterList:
+    # Les @Composable reçoivent légitimement état + callbacks en paramètres.
+    ignoreAnnotated: ['Composable']
   TooManyFunctions:
     active: false
