@@ -1,4 +1,4 @@
-package com.localstream.app.ui.navigation
+﻿package com.localstream.app.ui.navigation
 
 import android.net.Uri
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,10 +43,10 @@ import com.localstream.app.ui.screens.SettingsScreen
 import com.localstream.app.ui.theme.Black
 
 /**
- * Point d'entrée de l'UI (Phase 7) : gate de permission stockage (Phase 3),
- * [Scaffold] avec barre de navigation basse, et [NavHost] reliant les écrans
- * réels Accueil / Bibliothèque / Recherche aux placeholders des phases suivantes.
+ * Point d'entrée de l'UI (Phase 8) : gate de permission stockage (Phase 3),
+ * [Scaffold] avec barre de navigation basse, et [NavHost] reliant les écrans.
  */
+@Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
     val context = LocalContext.current
@@ -90,10 +90,11 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
     }
     val openSearch: () -> Unit = { navController.navigate(Routes.SEARCH) }
     val openSettings: () -> Unit = { navController.navigate(Routes.SETTINGS) }
-    // TODO(phase-9) : brancher la lecture sur le lecteur Media3 ; pour
-    // l'instant "Lecture" ouvre la fiche détail comme le tap sur la vignette.
     val openDetails: (VideoItem) -> Unit = { video ->
         navController.navigate(Routes.details(Uri.encode(video.name)))
+    }
+    val openDetailsByName: (String) -> Unit = { name ->
+        navController.navigate(Routes.details(Uri.encode(name)))
     }
 
     Scaffold(
@@ -166,14 +167,38 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable(Routes.PLAYLISTS) { PlaylistsScreen() }
-            composable(Routes.HISTORY) { HistoryScreen() }
-            composable(Routes.SETTINGS) { SettingsScreen() }
+            composable(Routes.PLAYLISTS) {
+                PlaylistsScreen(
+                    onLogoClick = resetToHome,
+                    onSearchClick = openSearch,
+                    onSettingsClick = openSettings,
+                    onOpenDetails = openDetailsByName,
+                )
+            }
+            composable(Routes.HISTORY) {
+                HistoryScreen(
+                    onLogoClick = resetToHome,
+                    onSearchClick = openSearch,
+                    onSettingsClick = openSettings,
+                    onOpenDetails = openDetailsByName,
+                )
+            }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
+                    onLogoClick = resetToHome,
+                    onSearchClick = openSearch,
+                    onSettingsClick = openSettings,
+                )
+            }
             composable(
                 route = Routes.DETAILS,
                 arguments = listOf(navArgument(Routes.ARG_ID) { type = NavType.StringType }),
             ) { entry ->
-                DetailsScreen(id = entry.arguments?.getString(Routes.ARG_ID).orEmpty())
+                DetailsScreen(
+                    id = entry.arguments?.getString(Routes.ARG_ID).orEmpty(),
+                    onBack = { navController.popBackStack() },
+                    onPlayVideo = openDetailsByName,
+                )
             }
         }
     }

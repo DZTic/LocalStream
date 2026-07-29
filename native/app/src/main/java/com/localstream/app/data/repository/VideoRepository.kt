@@ -2,24 +2,26 @@
 
 import com.localstream.app.data.scanner.MediaScanner
 import com.localstream.app.domain.HeroSelector
-import com.localstream.app.domain.VideoGrouper
 import com.localstream.app.domain.VideoFilterSorter
+import com.localstream.app.domain.VideoGrouper
 import com.localstream.app.domain.model.FilterSortOptions
 import com.localstream.app.domain.model.MovieCollection
 import com.localstream.app.domain.model.VideoItem
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Repository principal coordinateur du scan, du regroupement et du filtrage.
- *
- * Phase 4 : les \u00e9tats utilisateur (vus, progression, playlists) sont d\u00e9sormais
- * g\u00e9r\u00e9s par [WatchStateRepository] et [PlaylistRepository].
- * Ce repository se concentre sur les vid\u00e9os et la logique de filtrage.
  */
 class VideoRepository(
     private val mediaScanner: MediaScanner,
 ) {
     private var rawVideos: List<VideoItem> = emptyList()
     private var groupedVideos: List<VideoItem> = emptyList()
+
+    private val _videosFlow = MutableStateFlow<List<VideoItem>>(emptyList())
+    val observeVideos: Flow<List<VideoItem>> = _videosFlow.asStateFlow()
 
     fun scanAndLoad(
         movieCollections: Map<String, MovieCollection> = emptyMap(),
@@ -32,18 +34,17 @@ class VideoRepository(
             movieCollections = movieCollections,
             releaseDates = releaseDates,
         )
+        _videosFlow.value = groupedVideos
         return groupedVideos
     }
 
     fun getGroupedVideos(): List<VideoItem> = groupedVideos
     fun getRawVideos(): List<VideoItem> = rawVideos
 
-    /**
-     * Regroupe les vidéos déjà scannées (Phase 7) : re-applique [VideoGrouper] sur
-     * le dernier scan brut avec les collections TMDB / dates de sortie fraîchement
-     * récupérées, sans relancer une requête MediaStore. Permet le regroupement en
-     * sagas après enrichissement des métadonnées.
-     */
+    fun refreshVideos() {
+        _videosFlow.value = groupedVideos
+    }
+
     fun regroup(
         movieCollections: Map<String, MovieCollection> = emptyMap(),
         releaseDates: Map<String, String> = emptyMap(),
@@ -55,6 +56,7 @@ class VideoRepository(
             releaseDates = releaseDates,
             whitelistedVideos = whitelistedVideos,
         )
+        _videosFlow.value = groupedVideos
         return groupedVideos
     }
 
