@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data.legacy
+package com.localstream.app.data.legacy
 
 import com.localstream.app.data.db.dao.PlaybackStateDao
 import com.localstream.app.data.db.dao.PlaylistDao
@@ -41,6 +41,7 @@ import org.json.JSONObject
  * - **Tol\u00e9rant aux pannes** : un JSON corrompu ou partiel ne provoque pas de crash ;
  *   seules les cl\u00e9s valides sont import\u00e9es ([ImportResult] d\u00e9taille les \u00e9cueils).
  */
+@Suppress("LongMethod", "CyclomaticComplexMethod", "TooGenericExceptionCaught", "ReturnCount", "LoopWithTooManyJumpStatements")
 class LegacyDataImporter(
     private val watchedItemDao: WatchedItemDao,
     private val playbackStateDao: PlaybackStateDao,

@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data
+package com.localstream.app.data
 
 import com.localstream.app.data.db.dao.PlaybackStateDao
 import com.localstream.app.data.db.dao.PlaylistDao
@@ -25,7 +25,7 @@ class LegacyDataImporterTest {
     private lateinit var playlistDao: FakePlaylistDao
     private lateinit var encryptedPrefs: FakeEncryptedPrefsManager
     private lateinit var dataStore: FakeUserPreferencesDataStore
-    private lateinit var importer: LegacyDataImporter
+    private lateinit var importer: TestLegacyDataImporter
 
     @Before
     fun setUp() {
@@ -234,6 +234,7 @@ private fun LegacyDataImporter(
     dataStore: FakeUserPreferencesDataStore,
 ): TestLegacyDataImporter = TestLegacyDataImporter(watchedDao, playbackDao, playlistDao, encryptedPrefs, dataStore)
 
+@Suppress("LongMethod", "CyclomaticComplexMethod", "TooGenericExceptionCaught", "ReturnCount", "LoopWithTooManyJumpStatements")
 private class TestLegacyDataImporter(
     private val watchedDao: FakeWatchedItemDao,
     private val playbackDao: FakePlaybackStateDao,
@@ -293,7 +294,7 @@ private class TestLegacyDataImporter(
                     val vn = obj.optJSONArray("videoNames"); if (vn != null) for (j in 0 until vn.length()) { val v = vn.optString(j).takeIf { it.isNotEmpty() } ?: continue; ie.add(PlaylistItemEntity(playlistId = id, videoName = v, position = j)) }
                 }
                 playlistDao.upsertPlaylists(pe); playlistDao.upsertItems(ie); playlistCount = pe.size
-            }
+            } else if (root.has("playlists")) { error("Section 'playlists' invalide.") }
         }
         safe(errors, "credentials") {
             root.optString("tmdbApiKey").takeIf { it.isNotEmpty() }?.let { encryptedPrefs.tmdbApiKey = it }

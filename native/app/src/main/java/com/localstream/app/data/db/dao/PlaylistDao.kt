@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data.db.dao
+package com.localstream.app.data.db.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
@@ -10,6 +10,7 @@ import com.localstream.app.data.db.entity.PlaylistItemEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+@Suppress("TooManyFunctions")
 interface PlaylistDao {
 
     // -------- Playlists --------
