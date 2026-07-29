@@ -2,6 +2,7 @@
 
 import com.localstream.app.data.scanner.MediaScanner
 import com.localstream.app.domain.HeroSelector
+import com.localstream.app.domain.VideoGrouper
 import com.localstream.app.domain.VideoFilterSorter
 import com.localstream.app.domain.model.FilterSortOptions
 import com.localstream.app.domain.model.MovieCollection
@@ -36,6 +37,26 @@ class VideoRepository(
 
     fun getGroupedVideos(): List<VideoItem> = groupedVideos
     fun getRawVideos(): List<VideoItem> = rawVideos
+
+    /**
+     * Regroupe les vidéos déjà scannées (Phase 7) : re-applique [VideoGrouper] sur
+     * le dernier scan brut avec les collections TMDB / dates de sortie fraîchement
+     * récupérées, sans relancer une requête MediaStore. Permet le regroupement en
+     * sagas après enrichissement des métadonnées.
+     */
+    fun regroup(
+        movieCollections: Map<String, MovieCollection> = emptyMap(),
+        releaseDates: Map<String, String> = emptyMap(),
+        whitelistedVideos: Set<String> = emptySet(),
+    ): List<VideoItem> {
+        groupedVideos = VideoGrouper.groupVideos(
+            videos = rawVideos,
+            movieCollections = movieCollections,
+            releaseDates = releaseDates,
+            whitelistedVideos = whitelistedVideos,
+        )
+        return groupedVideos
+    }
 
     fun getFilteredAndSortedVideos(
         opts: FilterSortOptions,

@@ -4,13 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 /**
- * Écrans placeholder du socle. Ils réutilisent [PlaceholderScreen] et seront
- * remplacés par les implémentations réelles au fil des phases de migration.
+ * Écrans placeholder restants du socle. Ils seront remplacés par les
+ * implémentations réelles lors des phases suivantes (Phase 8 : fiche détail,
+ * épisodes, playlists, historique, paramètres).
  */
-
-@Composable
-fun LibraryScreen(modifier: Modifier = Modifier) =
-    PlaceholderScreen(title = "Bibliothèque", modifier = modifier)
 
 @Composable
 fun PlaylistsScreen(modifier: Modifier = Modifier) =
@@ -19,10 +16,6 @@ fun PlaylistsScreen(modifier: Modifier = Modifier) =
 @Composable
 fun HistoryScreen(modifier: Modifier = Modifier) =
     PlaceholderScreen(title = "Historique", modifier = modifier)
-
-@Composable
-fun SearchScreen(modifier: Modifier = Modifier) =
-    PlaceholderScreen(title = "Recherche", modifier = modifier)
 
 @Composable
 fun SettingsScreen(modifier: Modifier = Modifier) =

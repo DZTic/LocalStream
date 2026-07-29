@@ -1,10 +1,23 @@
 package com.localstream.app.ui.navigation
 
+import android.net.Uri
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -13,25 +26,78 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.localstream.app.LocalStreamApplication
+import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.components.LocalStreamBottomBar
+import com.localstream.app.ui.home.HomeViewModel
+import com.localstream.app.ui.library.LibraryViewModel
+import com.localstream.app.ui.permission.StoragePermissions
 import com.localstream.app.ui.screens.DetailsScreen
 import com.localstream.app.ui.screens.HistoryScreen
 import com.localstream.app.ui.screens.HomeScreen
 import com.localstream.app.ui.screens.LibraryScreen
+import com.localstream.app.ui.screens.PermissionScreen
 import com.localstream.app.ui.screens.PlaylistsScreen
 import com.localstream.app.ui.screens.SearchScreen
 import com.localstream.app.ui.screens.SettingsScreen
+import com.localstream.app.ui.theme.Black
 
 /**
- * Point d'entrée de l'UI : un [Scaffold] avec barre de navigation basse et le
- * [NavHost] contenant tous les écrans placeholder du socle.
+ * Point d'entrée de l'UI (Phase 7) : gate de permission stockage (Phase 3),
+ * [Scaffold] avec barre de navigation basse, et [NavHost] reliant les écrans
+ * réels Accueil / Bibliothèque / Recherche aux placeholders des phases suivantes.
  */
 @Composable
 fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
+    val context = LocalContext.current
+    val container = (context.applicationContext as LocalStreamApplication).container
+
+    // ViewModels partagés (scope activité) : bibliothèque + dérivation accueil.
+    val libraryViewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.factory(container))
+    val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModel.factory(libraryViewModel))
+
+    // Permission stockage : re-vérifiée à chaque retour au premier plan
+    // (comme le listener "focus" de l'app web).
+    var storageGranted by remember { mutableStateOf(StoragePermissions.hasStoragePermission(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        storageGranted = StoragePermissions.hasStoragePermission(context)
+    }
+
+    LaunchedEffect(storageGranted) {
+        if (storageGranted) libraryViewModel.refreshLibrary()
+    }
+
+    if (!storageGranted) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+        ) {
+            PermissionScreen(onPermissionGranted = { storageGranted = true })
+        }
+        return
+    }
+
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
+    /** Clic logo : retour accueil + réinitialisation filtres/recherche (resetHomeView du web). */
+    val resetToHome: () -> Unit = {
+        libraryViewModel.resetFilters()
+        navController.navigate(Routes.HOME) {
+            popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
+    val openSearch: () -> Unit = { navController.navigate(Routes.SEARCH) }
+    val openSettings: () -> Unit = { navController.navigate(Routes.SETTINGS) }
+    // TODO(phase-9) : brancher la lecture sur le lecteur Media3 ; pour
+    // l'instant "Lecture" ouvre la fiche détail comme le tap sur la vignette.
+    val openDetails: (VideoItem) -> Unit = { video ->
+        navController.navigate(Routes.details(Uri.encode(video.name)))
+    }
+
     Scaffold(
+        containerColor = Black,
         bottomBar = {
             // La barre basse n'apparaît que sur les destinations de premier niveau.
             val isTopLevel = TopLevelDestination.entries.any { it.route == currentRoute }
@@ -55,19 +121,53 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
         NavHost(
             navController = navController,
             startDestination = Routes.HOME,
-            modifier = Modifier.padding(innerPadding),
+            // Seule la barre basse est consommée ici : le hero de l'accueil passe
+            // sous la barre de statut (edge-to-edge), chaque écran gère ses insets.
+            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
         ) {
             composable(Routes.HOME) {
+                val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
                 HomeScreen(
-                    onOpenSearch = { navController.navigate(Routes.SEARCH) },
-                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                    onOpenDetails = { id -> navController.navigate(Routes.details(id)) },
+                    uiState = uiState,
+                    onPlay = openDetails,
+                    onOpenDetails = openDetails,
+                    onResetProgress = libraryViewModel::resetProgress,
+                    onDismissTmdbBanner = libraryViewModel::dismissTmdbBanner,
+                    onConfigureTmdb = openSettings,
+                    onLogoClick = resetToHome,
+                    onSearchClick = openSearch,
+                    onSettingsClick = openSettings,
                 )
             }
-            composable(Routes.LIBRARY) { LibraryScreen() }
+            composable(Routes.LIBRARY) {
+                val uiState by libraryViewModel.uiState.collectAsStateWithLifecycle()
+                LibraryScreen(
+                    uiState = uiState,
+                    onSortBy = libraryViewModel::setSortBy,
+                    onFilterGenre = libraryViewModel::setFilterGenre,
+                    onFilterResolution = libraryViewModel::setFilterResolution,
+                    onOpenDetails = openDetails,
+                    onLogoClick = resetToHome,
+                    onSearchClick = openSearch,
+                    onSettingsClick = openSettings,
+                )
+            }
+            composable(Routes.SEARCH) {
+                val uiState by libraryViewModel.uiState.collectAsStateWithLifecycle()
+                val query by libraryViewModel.searchQuery.collectAsStateWithLifecycle()
+                SearchScreen(
+                    query = query,
+                    results = uiState.searchResults,
+                    metadata = uiState.metadata,
+                    watched = uiState.watched,
+                    progress = uiState.progress,
+                    onQueryChange = libraryViewModel::onSearchChange,
+                    onOpenDetails = openDetails,
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable(Routes.PLAYLISTS) { PlaylistsScreen() }
             composable(Routes.HISTORY) { HistoryScreen() }
-            composable(Routes.SEARCH) { SearchScreen() }
             composable(Routes.SETTINGS) { SettingsScreen() }
             composable(
                 route = Routes.DETAILS,

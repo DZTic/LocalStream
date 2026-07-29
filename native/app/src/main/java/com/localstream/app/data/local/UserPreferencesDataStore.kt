@@ -78,11 +78,23 @@ class UserPreferencesDataStore(private val context: Context) {
         ds.edit { it[Keys.LEGACY_IMPORT_DONE] = true }
     }
 
+    // -------- Bannière onboarding TMDB --------
+
+    /** true si l'utilisateur a masqué la bannière "Configurer TMDB" de l'accueil. */
+    val tmdbBannerDismissed: Flow<Boolean> = ds.data.map { prefs ->
+        prefs[Keys.TMDB_BANNER_DISMISSED] ?: false
+    }
+
+    suspend fun dismissTmdbBanner() {
+        ds.edit { it[Keys.TMDB_BANNER_DISMISSED] = true }
+    }
+
     private object Keys {
         val WHITELISTED_VIDEOS = stringSetPreferencesKey("whitelisted_videos")
         val FORCE_AVAILABLE_JSON = stringPreferencesKey("force_available_json")
         val VIDEO_PLAYER_MODE = stringPreferencesKey("video_player_mode")
         val EXTERNAL_PLAYER_PACKAGE = stringPreferencesKey("external_player_package")
         val LEGACY_IMPORT_DONE = booleanPreferencesKey("legacy_import_done")
+        val TMDB_BANNER_DISMISSED = booleanPreferencesKey("tmdb_banner_dismissed")
     }
 }
