@@ -31,6 +31,9 @@ open class SettingsRepository(
     open fun getOpenSubtitlesPassword(): String = encryptedPrefs?.openSubtitlesPassword ?: ""
     open fun saveOpenSubtitlesPassword(password: String) { encryptedPrefs?.openSubtitlesPassword = password }
 
+    open fun getOpenSubtitlesToken(): String = encryptedPrefs?.openSubtitlesToken ?: ""
+    open fun saveOpenSubtitlesToken(token: String) { encryptedPrefs?.openSubtitlesToken = token }
+
     // -------- Préférences DataStore --------
 
     open val videoPlayerMode: Flow<String> get() = dataStore?.videoPlayerMode ?: emptyFlow()

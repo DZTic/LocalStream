@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data.local
+package com.localstream.app.data.local
 
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -46,6 +46,11 @@ class EncryptedPreferencesManager(context: Context) {
         get() = prefs.getString(KEY_OPENSUB_PASS, "") ?: ""
         set(value) = prefs.edit().putString(KEY_OPENSUB_PASS, value).apply()
 
+    /** Jeton de session OpenSubtitles (Phase 6) — effacé sur 401 définitif. */
+    var openSubtitlesToken: String
+        get() = prefs.getString(KEY_OPENSUB_TOKEN, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_OPENSUB_TOKEN, value).apply()
+
     /** Efface tous les credentials chiffr\u00e9s (utilis\u00e9 lors de la d\u00e9connexion). */
     fun clearAll() = prefs.edit().clear().apply()
 
@@ -55,5 +60,6 @@ class EncryptedPreferencesManager(context: Context) {
         private const val KEY_OPENSUB_API_KEY = "opensub_api_key"
         private const val KEY_OPENSUB_USER = "opensub_username"
         private const val KEY_OPENSUB_PASS = "opensub_password"
+        private const val KEY_OPENSUB_TOKEN = "opensub_token"
     }
 }
