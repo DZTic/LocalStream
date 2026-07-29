@@ -3,48 +3,50 @@ package com.localstream.app.data.repository
 import com.localstream.app.data.local.EncryptedPreferencesManager
 import com.localstream.app.data.local.UserPreferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /**
- * Repository des param\u00e8tres applicatifs (Phase 4).
+ * Repository des paramètres applicatifs (Phase 4, Phase 5).
  *
- * - Credentials sensibles  \u2192 [EncryptedPreferencesManager] (chiffrement AES-256-GCM)
- * - Pr\u00e9f\u00e9rences l\u00e9g\u00e8res     \u2192 [UserPreferencesDataStore] (DataStore/Preferences)
+ * - Credentials sensibles  -> [EncryptedPreferencesManager] (chiffrement AES-256-GCM)
+ * - Préférences légères     -> [UserPreferencesDataStore] (DataStore/Preferences)
  */
 @Suppress("TooManyFunctions")
-class SettingsRepository(
-    private val encryptedPrefs: EncryptedPreferencesManager,
-    private val dataStore: UserPreferencesDataStore,
+open class SettingsRepository(
+    private val encryptedPrefs: EncryptedPreferencesManager? = null,
+    private val dataStore: UserPreferencesDataStore? = null,
 ) {
 
-    // -------- Credentials chiffr\u00e9s --------
+    // -------- Credentials chiffrés --------
 
-    fun getTmdbApiKey(): String = encryptedPrefs.tmdbApiKey
-    fun saveTmdbApiKey(key: String) { encryptedPrefs.tmdbApiKey = key }
+    open fun getTmdbApiKey(): String = encryptedPrefs?.tmdbApiKey ?: ""
+    open fun saveTmdbApiKey(key: String) { encryptedPrefs?.tmdbApiKey = key }
 
-    fun getOpenSubtitlesApiKey(): String = encryptedPrefs.openSubtitlesApiKey
-    fun saveOpenSubtitlesApiKey(key: String) { encryptedPrefs.openSubtitlesApiKey = key }
+    open fun getOpenSubtitlesApiKey(): String = encryptedPrefs?.openSubtitlesApiKey ?: ""
+    open fun saveOpenSubtitlesApiKey(key: String) { encryptedPrefs?.openSubtitlesApiKey = key }
 
-    fun getOpenSubtitlesUsername(): String = encryptedPrefs.openSubtitlesUsername
-    fun saveOpenSubtitlesUsername(username: String) { encryptedPrefs.openSubtitlesUsername = username }
+    open fun getOpenSubtitlesUsername(): String = encryptedPrefs?.openSubtitlesUsername ?: ""
+    open fun saveOpenSubtitlesUsername(username: String) { encryptedPrefs?.openSubtitlesUsername = username }
 
-    fun getOpenSubtitlesPassword(): String = encryptedPrefs.openSubtitlesPassword
-    fun saveOpenSubtitlesPassword(password: String) { encryptedPrefs.openSubtitlesPassword = password }
+    open fun getOpenSubtitlesPassword(): String = encryptedPrefs?.openSubtitlesPassword ?: ""
+    open fun saveOpenSubtitlesPassword(password: String) { encryptedPrefs?.openSubtitlesPassword = password }
 
-    // -------- Pr\u00e9f\u00e9rences DataStore --------
+    // -------- Préférences DataStore --------
 
-    val videoPlayerMode: Flow<String> = dataStore.videoPlayerMode
-    suspend fun saveVideoPlayerMode(mode: String) = dataStore.saveVideoPlayerMode(mode)
+    open val videoPlayerMode: Flow<String> get() = dataStore?.videoPlayerMode ?: emptyFlow()
+    open suspend fun saveVideoPlayerMode(mode: String) { dataStore?.saveVideoPlayerMode(mode) }
 
-    val externalPlayerPackage: Flow<String> = dataStore.externalPlayerPackage
-    suspend fun saveExternalPlayerPackage(pkg: String) = dataStore.saveExternalPlayerPackage(pkg)
+    open val externalPlayerPackage: Flow<String> get() = dataStore?.externalPlayerPackage ?: emptyFlow()
+    open suspend fun saveExternalPlayerPackage(pkg: String) { dataStore?.saveExternalPlayerPackage(pkg) }
 
-    val whitelistedVideos: Flow<Set<String>> = dataStore.whitelistedVideos
-    suspend fun saveWhitelistedVideos(whitelist: Set<String>) =
-        dataStore.saveWhitelistedVideos(whitelist)
+    open val whitelistedVideos: Flow<Set<String>> get() = dataStore?.whitelistedVideos ?: emptyFlow()
+    open suspend fun saveWhitelistedVideos(whitelist: Set<String>) {
+        dataStore?.saveWhitelistedVideos(whitelist)
+    }
 
-    val forceAvailableJson: Flow<String> = dataStore.forceAvailableJson
-    suspend fun saveForceAvailableJson(json: String) = dataStore.saveForceAvailableJson(json)
+    open val forceAvailableJson: Flow<String> get() = dataStore?.forceAvailableJson ?: emptyFlow()
+    open suspend fun saveForceAvailableJson(json: String) { dataStore?.saveForceAvailableJson(json) }
 
-    val legacyImportDone: Flow<Boolean> = dataStore.legacyImportDone
-    suspend fun markLegacyImportDone() = dataStore.markLegacyImportDone()
+    open val legacyImportDone: Flow<Boolean> get() = dataStore?.legacyImportDone ?: emptyFlow()
+    open suspend fun markLegacyImportDone() { dataStore?.markLegacyImportDone() }
 }

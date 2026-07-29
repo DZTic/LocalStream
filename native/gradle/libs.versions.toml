@@ -1,5 +1,5 @@
-# Catalogue de versions centralis\u00e9 (Gradle Version Catalog).
-# Une seule source de v\u00e9rit\u00e9 pour les versions de d\u00e9pendances/plugins du module natif.
+# Catalogue de versions centralisé (Gradle Version Catalog).
+# Une seule source de vérité pour les versions de dépendances/plugins du module natif.
 [versions]
 agp = "8.13.0"
 kotlin = "2.0.21"
@@ -19,6 +19,11 @@ securityCrypto = "1.1.0-alpha06"
 coroutines = "1.9.0"
 json = "20240303"
 ksp = "2.0.21-1.0.28"
+# Phase 5 — API TMDB, Retrofit, Coil, OkHttp
+retrofit = "2.11.0"
+okhttp = "4.12.0"
+kotlinxSerializationJson = "1.7.3"
+coil = "2.7.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -50,11 +55,21 @@ security-crypto = { group = "androidx.security", name = "security-crypto", versi
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 json = { group = "org.json", name = "json", version.ref = "json" }
+# Phase 5 — API TMDB, Retrofit, Coil, OkHttp
+retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
+retrofit-converter-kotlinx-serialization = { group = "com.squareup.retrofit2", name = "converter-kotlinx-serialization", version.ref = "retrofit" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
-# Phase 4 — KSP (g\u00e9n\u00e9rateur Room)
+# Phase 4 — KSP (générateur Room)
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+# Phase 5 — Kotlin Serialization
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
