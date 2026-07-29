@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+﻿import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { FolderOpen, Search, RefreshCw, Info } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
@@ -28,6 +28,8 @@ import { SearchScreen } from './components/screens/SearchScreen';
 import { LibraryScreen } from './components/screens/LibraryScreen';
 import { PlaylistsScreen } from './components/screens/PlaylistsScreen';
 import { HistoryScreen, HistoryItem } from './components/screens/HistoryScreen';
+import { useLegacyBackup } from './hooks/useLegacyBackup';
+
 import { Toasts, Toast } from './components/Toasts';
 import { ConfirmDialog, ConfirmDialogState } from './components/ConfirmDialog';
 
@@ -51,7 +53,7 @@ export default function App() {
   // Confirmation avant action destructive
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
-  // Hook scan personnalisé
+  // Hook scan personnalisÃ©
   const {
     videos,
     setVideos,
@@ -65,7 +67,7 @@ export default function App() {
   // Settings
   const [videoPlayer, setVideoPlayer] = useState<'internal' | 'external'>(localStorage.getItem('videoPlayer') as any || 'internal');
   
-  // Vidéos personnelles manuellement incluses (whitelist)
+  // VidÃ©os personnelles manuellement incluses (whitelist)
   const [whitelistedVideos, setWhitelistedVideos] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem('whitelistedVideos');
@@ -108,7 +110,7 @@ export default function App() {
 
   const [newHistoryItemName, setNewHistoryItemName] = useState('');
 
-  // Couche métadonnées TMDB
+  // Couche mÃ©tadonnÃ©es TMDB
   const {
     groupedVideos,
     posters, backdrops, overviews, releaseDates, videoGenres,
@@ -122,7 +124,7 @@ export default function App() {
   const [externalPlayers, setExternalPlayers] = useState<{name: string, packageId: string}[]>([]);
   const [selectedExternalPlayer, setSelectedExternalPlayer] = useState<string>(localStorage.getItem('selectedExternalPlayer') || '');
 
-  // État de visionnage
+  // Ã‰tat de visionnage
   const {
     watchedVideos,
     watchProgress, setWatchProgress,
@@ -135,7 +137,9 @@ export default function App() {
     addManualHistoryItem,
   } = useWatchedState(groupedVideos);
 
-  // Hook OpenSubtitles personnalisé
+  // Export automatique vers localstream-backup.json (migration Phase 4)
+  useLegacyBackup([watchedVideos, watchProgress, watchPositions, recentlyWatched, forceAvailableVideos, playlists]);
+  // Hook OpenSubtitles personnalisÃ©
   const {
     osApiKey,
     setOsApiKey,
@@ -169,7 +173,7 @@ export default function App() {
   const subtitleInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Bannière TMDB
+  // BanniÃ¨re TMDB
   const [showTmdbBanner, setShowTmdbBanner] = useState(() => localStorage.getItem('showTmdbBanner') !== 'false');
 
   const handleDismissTmdbBanner = () => {
@@ -186,14 +190,14 @@ export default function App() {
     safeSetItem('videoPlayer', videoPlayer);
   }, [videoPlayer]);
 
-  // Toast en cas de stockage local saturé
+  // Toast en cas de stockage local saturÃ©
   const lastStorageToastRef = useRef(0);
   useEffect(() => {
     const onStorageFull = () => {
       const now = Date.now();
       if (now - lastStorageToastRef.current < 60000) return;
       lastStorageToastRef.current = now;
-      showToast("Stockage local saturé : certaines données ne sont plus sauvegardées.", 'error');
+      showToast("Stockage local saturÃ© : certaines donnÃ©es ne sont plus sauvegardÃ©es.", 'error');
     };
     window.addEventListener('localstream:storage-full', onStorageFull);
     return () => window.removeEventListener('localstream:storage-full', onStorageFull);
@@ -459,15 +463,15 @@ export default function App() {
   };
 
   const handleTestTmdbKey = async () => {
-    addLog("Test de la clé API...");
+    addLog("Test de la clÃ© API...");
     try {
       const r = await getPopular(tmdbApiKey);
       if (r.ok) {
-        addLog("Test API réussi !");
-        showToast("Clé TMDB valide !", 'success');
+        addLog("Test API rÃ©ussi !");
+        showToast("ClÃ© TMDB valide !", 'success');
       } else {
-        addLog("Test API échoué - Code : " + r.status);
-        showToast(`Clé TMDB invalide (code ${r.status}).`, 'error');
+        addLog("Test API Ã©chouÃ© - Code : " + r.status);
+        showToast(`ClÃ© TMDB invalide (code ${r.status}).`, 'error');
       }
     } catch(e: any) {
       addLog("Erreur test : " + e.message);
@@ -485,7 +489,7 @@ export default function App() {
     setIsSearchOpen(false);
   };
 
-  // Filtrage des vidéos personnelles
+  // Filtrage des vidÃ©os personnelles
   const personalVideos = useMemo(
     () => videos.filter(v => isPersonalVideo(v.name, v.path || '')),
     [videos]
@@ -559,7 +563,7 @@ export default function App() {
     ? heroCandidates[heroIndex % heroCandidates.length]
     : (filteredAndSortedVideos[0] || groupedVideos[0]);
 
-  // Bouton retour matériel Android
+  // Bouton retour matÃ©riel Android
   const backHandlerRef = useRef<() => boolean>(() => false);
   backHandlerRef.current = () => {
     if (confirmDialog) { setConfirmDialog(null); return true; }
@@ -645,10 +649,10 @@ export default function App() {
           <div>
             {videos.length === 0 ? (
               <div className="flex flex-col items-center justify-center min-h-screen px-4 text-center bg-zinc-900">
-                <h2 className="text-4xl md:text-5xl font-bold mb-4">Vos films et séries.</h2>
-                <h3 className="text-xl md:text-2xl text-zinc-300 mb-8">Où vous voulez. Quand vous voulez.</h3>
+                <h2 className="text-4xl md:text-5xl font-bold mb-4">Vos films et sÃ©ries.</h2>
+                <h3 className="text-xl md:text-2xl text-zinc-300 mb-8">OÃ¹ vous voulez. Quand vous voulez.</h3>
                 <p className="text-zinc-400 mb-8 max-w-md">
-                  Sélectionnez un dossier sur votre appareil contenant des vidéos pour commencer le streaming local.
+                  SÃ©lectionnez un dossier sur votre appareil contenant des vidÃ©os pour commencer le streaming local.
                 </p>
                 <button
                   onClick={() => fileInputRef.current?.click()}
@@ -664,7 +668,7 @@ export default function App() {
                     className="bg-zinc-800 text-white px-8 py-4 rounded font-bold text-lg flex items-center justify-center gap-2 hover:bg-zinc-700 transition-colors active:scale-95 mx-auto w-full md:w-auto"
                   >
                     {isScanning ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Search className="w-6 h-6" />}
-                    {isScanning ? "Analyse en cours..." : "Scanner le téléphone automatiquement"}
+                    {isScanning ? "Analyse en cours..." : "Scanner le tÃ©lÃ©phone automatiquement"}
                   </button>
                 )}
               </div>
@@ -697,7 +701,7 @@ export default function App() {
                       message: "Voulez-vous vraiment supprimer cette liste de lecture ?",
                       onConfirm: () => {
                         deletePlaylist(id);
-                        showToast("Liste de lecture supprimée.", 'info');
+                        showToast("Liste de lecture supprimÃ©e.", 'info');
                       }
                     })}
                     onRemoveVideo={removeVideoFromPlaylist}
@@ -713,7 +717,7 @@ export default function App() {
                       if (!newHistoryItemName.trim()) return;
                       addManualHistoryItem(newHistoryItemName);
                       setNewHistoryItemName('');
-                      showToast("Entrée ajoutée manuellement.", 'success');
+                      showToast("EntrÃ©e ajoutÃ©e manuellement.", 'success');
                     }}
                     onOpenInfo={handleOpenInfoModal}
                     onPlay={playVideo}
@@ -781,7 +785,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Inputs cachés */}
+      {/* Inputs cachÃ©s */}
       <input
         type="file"
         ref={fileInputRef}
@@ -851,14 +855,14 @@ export default function App() {
           isScanning={isScanning}
           onStartScan={() => {
             startNativeScan(false);
-            showToast("Scan de la bibliothèque relancé.", 'info');
+            showToast("Scan de la bibliothÃ¨que relancÃ©.", 'info');
           }}
           onClearMetadataCache={() => {
             setConfirmDialog({
-              message: "Vider le cache des métadonnées TMDB (affiches, synopsis…) ? Elles seront re-téléchargées au prochain scan.",
+              message: "Vider le cache des mÃ©tadonnÃ©es TMDB (affiches, synopsisâ€¦) ? Elles seront re-tÃ©lÃ©chargÃ©es au prochain scan.",
               onConfirm: () => {
                 clearMetadataCache();
-                showToast("Cache des métadonnées vidé.", 'success');
+                showToast("Cache des mÃ©tadonnÃ©es vidÃ©.", 'success');
               }
             });
           }}

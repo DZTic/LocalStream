@@ -1,4 +1,4 @@
-package com.localstream.app.data
+﻿package com.localstream.app.data
 
 import com.localstream.app.data.local.InMemoryPreferencesDataSource
 import com.localstream.app.domain.model.PlaylistInfo

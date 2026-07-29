@@ -3,18 +3,23 @@ package com.localstream.app.data.local
 import com.localstream.app.domain.model.PlaylistInfo
 
 /**
- * Implémentation en mémoire de [PreferencesDataSource] pour les tests unitaires JVM.
+ * Impl\u00e9mentation en m\u00e9moire de [PreferencesDataSource] pour les tests unitaires JVM.
  */
+@Suppress("TooManyFunctions")
 class InMemoryPreferencesDataSource : PreferencesDataSource {
     private var watchedVideosMap = mutableMapOf<String, Boolean>()
     private var watchProgressMap = mutableMapOf<String, Double>()
+    private var watchPositionsMap = mutableMapOf<String, Long>()
+    private var recentlyWatchedList = mutableListOf<String>()
     private var whitelistedVideosSet = mutableSetOf<String>()
+    private var forceAvailableMap = mutableMapOf<String, Boolean>()
     private var playlistsList = mutableListOf<PlaylistInfo>()
 
     private var tmdbApiKeyStr: String = ""
     private var openSubtitlesApiKeyStr: String = ""
     private var openSubtitlesUsernameStr: String = ""
     private var openSubtitlesPasswordStr: String = ""
+    private var videoPlayerModeStr: String = "internal"
     private var externalPlayerPackageStr: String = ""
 
     private val tmdbCache = mutableMapOf<String, MutableMap<String, String>>()
@@ -29,9 +34,24 @@ class InMemoryPreferencesDataSource : PreferencesDataSource {
         watchProgressMap = progress.toMutableMap()
     }
 
+    override fun getWatchPositions(): Map<String, Long> = watchPositionsMap.toMap()
+    override fun saveWatchPositions(positions: Map<String, Long>) {
+        watchPositionsMap = positions.toMutableMap()
+    }
+
+    override fun getRecentlyWatched(): List<String> = recentlyWatchedList.toList()
+    override fun saveRecentlyWatched(recent: List<String>) {
+        recentlyWatchedList = recent.toMutableList()
+    }
+
     override fun getWhitelistedVideos(): Set<String> = whitelistedVideosSet.toSet()
     override fun saveWhitelistedVideos(whitelist: Set<String>) {
         whitelistedVideosSet = whitelist.toMutableSet()
+    }
+
+    override fun getForceAvailableVideos(): Map<String, Boolean> = forceAvailableMap.toMap()
+    override fun saveForceAvailableVideos(map: Map<String, Boolean>) {
+        forceAvailableMap = map.toMutableMap()
     }
 
     override fun getPlaylists(): List<PlaylistInfo> = playlistsList.toList()
@@ -40,29 +60,22 @@ class InMemoryPreferencesDataSource : PreferencesDataSource {
     }
 
     override fun getTmdbApiKey(): String = tmdbApiKeyStr
-    override fun saveTmdbApiKey(key: String) {
-        tmdbApiKeyStr = key
-    }
+    override fun saveTmdbApiKey(key: String) { tmdbApiKeyStr = key }
 
     override fun getOpenSubtitlesApiKey(): String = openSubtitlesApiKeyStr
-    override fun saveOpenSubtitlesApiKey(key: String) {
-        openSubtitlesApiKeyStr = key
-    }
+    override fun saveOpenSubtitlesApiKey(key: String) { openSubtitlesApiKeyStr = key }
 
     override fun getOpenSubtitlesUsername(): String = openSubtitlesUsernameStr
-    override fun saveOpenSubtitlesUsername(username: String) {
-        openSubtitlesUsernameStr = username
-    }
+    override fun saveOpenSubtitlesUsername(username: String) { openSubtitlesUsernameStr = username }
 
     override fun getOpenSubtitlesPassword(): String = openSubtitlesPasswordStr
-    override fun saveOpenSubtitlesPassword(password: String) {
-        openSubtitlesPasswordStr = password
-    }
+    override fun saveOpenSubtitlesPassword(password: String) { openSubtitlesPasswordStr = password }
+
+    override fun getVideoPlayerMode(): String = videoPlayerModeStr
+    override fun saveVideoPlayerMode(mode: String) { videoPlayerModeStr = mode }
 
     override fun getExternalPlayerPackage(): String = externalPlayerPackageStr
-    override fun saveExternalPlayerPackage(packageName: String) {
-        externalPlayerPackageStr = packageName
-    }
+    override fun saveExternalPlayerPackage(packageName: String) { externalPlayerPackageStr = packageName }
 
     override fun getTmdbCacheMap(key: String): Map<String, String> =
         tmdbCache[key]?.toMap() ?: emptyMap()
@@ -71,7 +84,5 @@ class InMemoryPreferencesDataSource : PreferencesDataSource {
         tmdbCache[key] = map.toMutableMap()
     }
 
-    override fun clearTmdbCache() {
-        tmdbCache.clear()
-    }
+    override fun clearTmdbCache() { tmdbCache.clear() }
 }
