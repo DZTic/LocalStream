@@ -3,7 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.detekt)
-    alias(libs.plugins.ksp) // Phase 4 : g\u00e9n\u00e9ration Room
+    alias(libs.plugins.ksp) // Phase 4 : génération Room
+    alias(libs.plugins.kotlin.serialization) // Phase 5 : kotlinx.serialization
 }
 
 android {
@@ -12,7 +13,7 @@ android {
 
     defaultConfig {
         // applicationId PROVISOIRE : le vrai id (com.localstream.app) sera repris en
-        // Phase 10 pour h\u00e9riter des installations de l'app Capacitor existante.
+        // Phase 10 pour hériter des installations de l'app Capacitor existante.
         applicationId = "com.localstream.app.native"
         minSdk = 24
         targetSdk = 36
@@ -48,7 +49,7 @@ android {
 
 detekt {
     // Analyse statique du code Kotlin. La config de base est enrichie par les
-    // r\u00e9glages adapt\u00e9s \u00e0 Compose dans config/detekt/detekt.yml.
+    // réglages adaptés à Compose dans config/detekt/detekt.yml.
     buildUponDefaultConfig = true
     config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
 }
@@ -80,9 +81,18 @@ dependencies {
     // Phase 4 — Coroutines
     implementation(libs.kotlinx.coroutines.android)
 
+    // Phase 5 — API TMDB, Retrofit, Serialization, OkHttp, Coil
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.kotlinx.serialization)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging.interceptor)
+    implementation(libs.coil.compose)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.json)
+    testImplementation(libs.mockwebserver)
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

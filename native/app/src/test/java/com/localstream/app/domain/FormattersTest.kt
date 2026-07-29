@@ -47,10 +47,9 @@ class FormattersTest {
 
     @Test
     fun tmdbUrls_buildsCorrectImageUrls() {
-        assertEquals("https://image.tmdb.org/t/p/w342/abc.jpg", TmdbUrls.posterUrl("/abc.jpg"))
+        assertEquals("https://image.tmdb.org/t/p/w500/abc.jpg", TmdbUrls.posterUrl("/abc.jpg"))
         assertEquals("https://image.tmdb.org/t/p/w1280/abc.jpg", TmdbUrls.backdropUrl("/abc.jpg"))
         assertEquals("https://image.tmdb.org/t/p/w300/abc.jpg", TmdbUrls.stillUrl("/abc.jpg"))
         assertNull(TmdbUrls.posterUrl(null))
     }
 }
-

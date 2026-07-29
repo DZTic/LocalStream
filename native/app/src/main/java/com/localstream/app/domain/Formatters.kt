@@ -82,8 +82,13 @@ object Formatters {
 }
 
 object TmdbUrls {
-    fun posterUrl(path: String?): String? = path?.let { "https://image.tmdb.org/t/p/w342$it" }
-    fun backdropUrl(path: String?): String? = path?.let { "https://image.tmdb.org/t/p/w1280$it" }
-    fun stillUrl(path: String?): String? = path?.let { "https://image.tmdb.org/t/p/w300$it" }
+    fun posterUrl(path: String?): String? = path?.let {
+        if (it.startsWith("http")) it else "https://image.tmdb.org/t/p/w500$it"
+    }
+    fun backdropUrl(path: String?): String? = path?.let {
+        if (it.startsWith("http")) it else "https://image.tmdb.org/t/p/w1280$it"
+    }
+    fun stillUrl(path: String?): String? = path?.let {
+        if (it.startsWith("http")) it else "https://image.tmdb.org/t/p/w300$it"
+    }
 }
-

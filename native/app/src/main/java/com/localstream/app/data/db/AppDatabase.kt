@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data.db
+package com.localstream.app.data.db
 
 import android.content.Context
 import androidx.room.Database
@@ -6,17 +6,19 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.localstream.app.data.db.dao.PlaybackStateDao
 import com.localstream.app.data.db.dao.PlaylistDao
+import com.localstream.app.data.db.dao.TmdbMetadataDao
 import com.localstream.app.data.db.dao.WatchedItemDao
 import com.localstream.app.data.db.entity.PlaybackStateEntity
 import com.localstream.app.data.db.entity.PlaylistEntity
 import com.localstream.app.data.db.entity.PlaylistItemEntity
+import com.localstream.app.data.db.entity.TmdbMetadataEntity
 import com.localstream.app.data.db.entity.WatchedItemEntity
 
 /**
- * Base de donn\u00e9es Room principale de LocalStream (Phase 4).
+ * Base de données Room principale de LocalStream (Phase 4, Phase 5).
  *
  * Version 1 : tables watched_items, playback_state, playlist, playlist_item.
- * Les migrations futures incr\u00e9menteront [version].
+ * Version 2 : ajout de la table tmdb_metadata (Phase 5).
  */
 @Database(
     entities = [
@@ -24,8 +26,9 @@ import com.localstream.app.data.db.entity.WatchedItemEntity
         PlaybackStateEntity::class,
         PlaylistEntity::class,
         PlaylistItemEntity::class,
+        TmdbMetadataEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -33,6 +36,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun watchedItemDao(): WatchedItemDao
     abstract fun playbackStateDao(): PlaybackStateDao
     abstract fun playlistDao(): PlaylistDao
+    abstract fun tmdbMetadataDao(): TmdbMetadataDao
 
     companion object {
         private const val DB_NAME = "localstream.db"
@@ -53,7 +57,7 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        /** Uniquement pour les tests instrumentaux : base en m\u00e9moire sans passer par le singleton. */
+        /** Uniquement pour les tests instrumentaux : base en mémoire sans passer par le singleton. */
         fun createInMemory(context: Context): AppDatabase =
             Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
                 .allowMainThreadQueries()
