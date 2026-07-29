@@ -11,11 +11,12 @@ import kotlinx.coroutines.flow.map
 private const val RECENTLY_WATCHED_LIMIT = 30
 
 /**
- * Repository de l'\u00e9tat de visionnage : "vu/non vu" et progression de lecture.
+ * Repository de l'état de visionnage : "vu/non vu" et progression de lecture.
  *
- * Toutes les \u00e9critures sont suspendues (coroutine-friendly).
+ * Toutes les écritures sont suspendues (coroutine-friendly).
  * Les lectures observables retournent des [Flow] pour l'UI Compose.
  */
+@Suppress("TooManyFunctions")
 class WatchStateRepository(
     private val watchedItemDao: WatchedItemDao,
     private val playbackStateDao: PlaybackStateDao,
@@ -23,14 +24,22 @@ class WatchStateRepository(
 
     // -------- Watched --------
 
-    /** Flow des items marqu\u00e9s "vu". */
+    /** Flow des items marqués "vu". */
     val watchedItems: Flow<Map<String, Boolean>> =
         watchedItemDao.observeWatchedItems().map { list ->
             list.associate { it.name to it.watched }
         }
 
+    val observeWatched: Flow<Set<String>> =
+        watchedItemDao.observeWatchedItems().map { list ->
+            list.filter { it.watched }.map { it.name }.toSet()
+        }
+
     suspend fun getWatchedMap(): Map<String, Boolean> =
         watchedItemDao.getAllWatchedItems().associate { it.name to it.watched }
+
+    suspend fun getWatched(name: String): Boolean =
+        watchedItemDao.findByName(name)?.watched ?: false
 
     suspend fun setWatched(videoName: String, watched: Boolean, mediaStoreId: Long? = null) {
         if (watched) {
@@ -49,7 +58,7 @@ class WatchStateRepository(
         return next
     }
 
-    /** Marque tous les \u00e9pisodes d'une s\u00e9rie comme vus / non vus. */
+    /** Marque tous les épisodes d'une série comme vus / non vus. */
     suspend fun markSeriesWatched(series: VideoItem, watched: Boolean) {
         val episodes = series.episodes.orEmpty()
         if (watched) {
@@ -71,11 +80,46 @@ class WatchStateRepository(
             list.associate { it.name to it.progressPct }
         }
 
+    val observePlaybackStates: Flow<Map<String, PlaybackStateEntity>> =
+        playbackStateDao.observeActivePlaybackStates().map { list ->
+            list.associateBy { it.name }
+        }
+
     suspend fun getProgressMap(): Map<String, Double> =
         playbackStateDao.getAll().associate { it.name to it.progressPct }
 
     suspend fun getPositionsMap(): Map<String, Long> =
         playbackStateDao.getAll().associate { it.name to it.positionMs }
+
+    suspend fun getPlaybackState(name: String): PlaybackStateEntity? =
+        playbackStateDao.findByName(name)
+
+    suspend fun savePlaybackState(
+        videoName: String,
+        positionMs: Long,
+        durationMs: Long = 0L,
+        progressPercent: Int = 0,
+    ) {
+        if (positionMs <= 0L && progressPercent <= 0) {
+            playbackStateDao.deleteByName(videoName)
+            return
+        }
+        val existing = playbackStateDao.findByName(videoName)
+        val calculatedPct = if (durationMs > 0L) {
+            (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
+        } else {
+            progressPercent.toDouble()
+        }
+        playbackStateDao.upsert(
+            PlaybackStateEntity(
+                name = videoName,
+                progressPct = calculatedPct,
+                positionMs = positionMs,
+                lastPlayedAt = System.currentTimeMillis(),
+                mediaStoreId = existing?.mediaStoreId,
+            )
+        )
+    }
 
     suspend fun updateProgress(
         videoName: String,
@@ -103,7 +147,12 @@ class WatchStateRepository(
         playbackStateDao.deleteByName(videoName)
     }
 
-    /** Retourne les 30 derniers fichiers lus, tri\u00e9s par date d\u00e9croissante. */
+    suspend fun clearHistory() {
+        watchedItemDao.deleteAll()
+        playbackStateDao.deleteAll()
+    }
+
+    /** Retourne les 30 derniers fichiers lus, triés par date décroissante. */
     suspend fun getRecentlyWatched(): List<String> =
         playbackStateDao.getRecentlyPlayed(RECENTLY_WATCHED_LIMIT).map { it.name }
 }
