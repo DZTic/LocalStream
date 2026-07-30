@@ -5,210 +5,63 @@
 </p>
 
 <p align="center">
-  <strong>Votre médiathèque personnelle, style Netflix — sur téléphone Android.</strong>
+  <strong>Votre médiathèque personnelle, style Netflix — application native Android (Kotlin & Jetpack Compose).</strong>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react" />
-  <img src="https://img.shields.io/badge/Capacitor-8-119EFF?logo=capacitor" />
-  <img src="https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript" />
-  <img src="https://img.shields.io/badge/Vite-6-646CFF?logo=vite" />
+  <img src="https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin" />
+  <img src="https://img.shields.io/badge/Jetpack_Compose-1.7-4285F4?logo=android" />
+  <img src="https://img.shields.io/badge/Room-2.6-3DDC84?logo=sqlite" />
   <img src="https://img.shields.io/badge/Android-APK-3DDC84?logo=android" />
   <img src="https://img.shields.io/badge/Licence-MIT-green" />
 </p>
 
 ---
 
-**LocalStream** est une application de streaming multimédia locale moderne, conçue pour transformer vos dossiers de vidéos (films et séries) en une bibliothèque interactive inspirée des plus grandes plateformes de streaming. Elle fonctionne **sans serveur** : tout tourne directement sur votre téléphone Android.
+**LocalStream** est une application Android native de streaming multimédia locale, conçue pour transformer vos dossiers de vidéos (films et séries) en une bibliothèque interactive inspirée des plus grandes plateformes de streaming. Elle fonctionne **sans serveur** : tout tourne directement et de manière autonome sur votre téléphone Android.
 
 ---
 
 ## ✨ Fonctionnalités
 
-### 📱 Interface & Expérience Utilisateur
-- **Design Glassmorphism** : interface sombre, translucide et premium avec effets de transparence
-- **Fullscreen adaptatif** : prise en charge des encoches et safe areas Android (status bar, navigation bar)
-- **Header intelligent** : disparaît en dessous d'un seuil de scroll, fondu transparent au-dessus
-- **Vue Hero cinématique** : grande bannière avec backdrop, titre, genres, date de sortie, synopsis cliquable
+### 📱 Interface Natifs Jetpack Compose
+- **Design Material 3 & Dark Theme** : interface réactive avec animations fluides, scroll adaptatif et navigation moderne.
+- **Barre de navigation basse** (Accueil, Bibliothèque, Listes, Historique) et recherche en temps réel.
+- **Section Hero rotative** avec visuels HD, résumés et bouton de lecture rapide.
 
-### 📂 Scan & Détection Automatique (Android)
-- **Scan multi-dossiers** : analyse automatique de `Movies`, `Download`, `Downloads`, et `Documents`
-- **Détection de séries** : reconnaissance des patterns `S01E01`, `1x01`, `SeriesName - S01 E01`
-- **Regroupement en saisons** : les épisodes sont organisés par saison/épisode dans une vue dédiée
-- **Filtrage des vidéos personnelles** : exclusion automatique des vidéos de caméra (DCIM, WhatsApp, GoPro, DJI, etc.) avec possibilité de les réintégrer manuellement (whitelist)
-- **Sous-titres auto-détectés** : recherche automatique de fichiers `.srt`/`.vtt` voisins du fichier vidéo
+### 📂 Scan MediaStore & Regroupements
+- **Analyse automatique des médias** via MediaStore pour détecter les films, séries et épisodes locaux.
+- **Détection des séries et épisodes** (`S01E01`, `1x01`, etc.) regroupés par saison.
+- **Regroupement automatique des films en sagas / collections TMDB**.
+- **Filtrage des vidéos système/personnelles** (caméra, enregistrements, réseaux sociaux).
 
-### 🎬 Sagas & Collections TMDB
-- **Regroupement automatique des films en sagas** : les films appartenant à la même collection TMDB (ex : Harry Potter, The Dark Knight) sont automatiquement regroupés en une saga
-- **Affiche et synopsis de la collection** récupérés depuis TMDB
-
-### 🖼️ Métadonnées TMDB
-- Récupération automatique des **affiches officielles**, **arrière-plans (backdrop)**, **descriptions**, **genres** et **dates de sortie**
-- Pour les séries : récupération des **titres, descriptions et visuels** de chaque épisode par saison
-- Persistance des métadonnées en cache local (localStorage) pour un chargement instantané
-
-### 💬 Sous-titres
-- **OpenSubtitles** : connexion via API Key, Username et Password pour chercher et télécharger des sous-titres en français ou anglais
-- **Sous-titres locaux (Web)** : import manuel de fichiers `.srt` ou `.vtt` depuis le navigateur
-- **Sous-titres natifs (Android)** : sélection d'un fichier de sous-titre depuis le stockage Android via le plugin natif, transmis directement au lecteur externe
-- **Conversion SRT → VTT** automatique pour le lecteur interne
-
-### ▶️ Lecture Vidéo
-- **Lecteur interne** : lecteur HTML5 avec contrôles tactiles (double-tap ±10s, tap pour pause, barre de progression)
-- **Lecteur externe (Android)** : ouverture dans n'importe quel lecteur installé (VLC, MX Player, etc.) avec liste des lecteurs disponibles
-- **Reprise automatique** : sauvegarde de la position de lecture, reprise exacte à la seconde près
-- **Barre de progression** sur chaque vignette (% avancement)
-- **Réinitialisation de la progression** d'un film
-
-### 📋 "Continue à regarder"
-- Section dédiée en haut de l'accueil avec les vidéos en cours
-- Affichage de l'avancement en pourcentage
-- Pour les séries : ouverture automatique sur le **dernier épisode non terminé**
-
-### ✅ Suivi "Vu / Non vu"
-- Marquage manuel d'un film ou d'une série comme **visionné** (icône ✓ verte)
-- Propagation automatique : si tous les épisodes d'une série sont vus, la série entière est marquée comme vue
-- Les contenus vus sont **atténués visuellement** (opacité réduite + désaturation) et **placés en fin de liste**
-
-### 🔍 Recherche & Filtres
-- **Recherche textuelle** en temps réel par titre
-- **Tri** : alphabétique, par date, par taille, par durée
-- **Filtre par genre** TMDB (Action, Horreur, Comédie, etc.)
-- **Filtre par résolution** : 4K, 1080p, 720p, SD
-
-### 📋 Playlists Personnalisées
-- Création et gestion de **playlists** personnalisées
-- Ajout de n'importe quel film ou épisode à une playlist
-- Vue dédiée avec l'onglet **"Mes Listes"**
-
-### ⚙️ Paramètres
-- Configuration des clés API (TMDB, OpenSubtitles)
-- Sélection du lecteur externe préféré parmi ceux installés sur l'appareil
-- Bouton de rechargement des métadonnées depuis TMDB
+### 🖼️ Métadonnées TMDB & Sous-titres OpenSubtitles
+- **Enrichissement TMDB** : affiches officielles, arrière-plans, synopsis, genres et dates de sortie.
+- **OpenSubtitles API** : recherche et téléchargement de sous-titres directement depuis l'application.
 
 ---
 
-## 🚀 Installation & Lancement
+## 🛠️ Compilation & Tests
 
-### Prérequis
-- [Node.js](https://nodejs.org/) (v18+)
-- [Android Studio](https://developer.android.com/studio) (pour la version APK)
+Le projet natif Android se situe dans le dossier `native/`.
 
-### Installation
 ```bash
-git clone https://github.com/DZTic/localstream.git
-cd localstream
-npm install
+cd native
+
+# Exécuter les tests unitaires
+./gradlew testDebugUnitTest
+
+# Vérification du code avec Detekt
+./gradlew detekt
+
+# Compiler l'APK Debug
+./gradlew assembleDebug
 ```
 
-### Lancer en version Web (navigateur)
-```bash
-npm run dev
-```
-> Ouvre http://localhost:3000 — fonctionne en mode "sélection de fichiers" depuis le navigateur.
-
-### Vérifications (lint & tests)
-```bash
-npm run lint   # vérification des types (tsc --noEmit)
-npm test       # tests unitaires (Vitest)
-```
-> Ces vérifications sont aussi exécutées automatiquement en CI (GitHub Actions) sur chaque push et pull request.
-
-### Compiler l'APK Android
-
-**1. Construire le bundle web et synchroniser Capacitor**
-```bash
-npm run build
-npx cap sync android
-```
-
-**2a. Via Android Studio**
-```bash
-npx cap open android
-```
-Puis : `Build > Build Bundle(s) / APK(s) > Build APK(s)`
-
-**2b. En ligne de commande (Gradle)**
-```bash
-cd android
-./gradlew assembleRelease   # APK release   → app/build/outputs/apk/release/
-./gradlew assembleDebug     # APK debug      → app/build/outputs/apk/debug/
-```
-> Sous Windows, utiliser `gradlew.bat` à la place de `./gradlew`.
-
----
-
-## ⚙️ Configuration des APIs
-
-Dans l'onglet **Paramètres** ⚙️ de l'application :
-
-| Clé | Description |
-|---|---|
-| **TMDB API Key** | Pour récupérer les affiches, descriptions, genres, épisodes. Gratuit sur [themoviedb.org](https://www.themoviedb.org/settings/api) |
-| **OpenSubtitles API Key** | Pour la recherche de sous-titres. Compte sur [opensubtitles.com](https://www.opensubtitles.com) |
-| **OpenSubtitles Username** | Nom d'utilisateur OpenSubtitles |
-| **OpenSubtitles Password** | Mot de passe OpenSubtitles |
-
----
-
-## 🛠️ Stack Technique
-
-| Technologie | Rôle |
-|---|---|
-| [React 19](https://react.dev/) | Interface utilisateur |
-| [Vite 6](https://vitejs.dev/) | Bundler & dev server |
-| [TypeScript 5.8](https://www.typescriptlang.org/) | Typage statique |
-| [Capacitor 8](https://capacitorjs.com/) | Bridge web ↔ natif Android |
-| [TailwindCSS 4](https://tailwindcss.com/) | Styles utilitaires |
-| [Vitest](https://vitest.dev/) | Tests unitaires |
-| [Lucide React](https://lucide.dev/) | Icônes |
-| [TMDB API](https://www.themoviedb.org/documentation/api) | Métadonnées films & séries |
-| [OpenSubtitles API](https://www.opensubtitles.com/) | Sous-titres multilingues |
-
----
-
-## 📁 Structure du Projet
-
-```
-localstream/
-├── src/
-│   ├── App.tsx              # Composant racine : état & orchestration des écrans
-│   ├── main.tsx             # Point d'entrée React
-│   ├── index.css            # Styles globaux
-│   ├── lib/                 # Logique pure (sans React), testable
-│   │   ├── types.ts         #   types & constantes partagés (VideoFile, Playlist…)
-│   │   ├── utils.ts         #   helpers (getCleanTitle, formatSize, srt2vtt, isPersonalVideo…)
-│   │   ├── grouping.ts      #   regroupement séries & sagas (groupVideos)
-│   │   ├── sorting.ts       #   filtres & tri (filterAndSortVideos)
-│   │   ├── http.ts          #   proxy HTTP / fetch
-│   │   ├── tmdb.ts          #   service API TMDB (recherche, détails, URLs d'images)
-│   │   ├── opensubtitles.ts #   service API OpenSubtitles
-│   │   └── __tests__/       #   tests unitaires (vitest)
-│   ├── hooks/
-│   │   └── useTmdbMetadata.ts  # couche métadonnées TMDB (état + récupération)
-│   └── components/
-│       ├── VideoRow.tsx     # carrousel d'affiches (ligne d'accueil)
-│       └── BottomNav.tsx    # barre de navigation mobile
-├── public/
-│   └── logo.png             # Logo de l'application
-├── android/                 # Projet Android (Capacitor)
-│   └── app/src/main/java/com/localstream/app/
-│       ├── MainActivity.java        # Activité principale Capacitor
-│       ├── PlayerActivity.java      # Lecteur vidéo natif Android
-│       └── VideoLauncherPlugin.java # Pont natif (lecteurs externes, sous-titres)
-├── server.ts                # Serveur dev/preview (Express + proxy OpenSubtitles)
-├── index.html               # Point d'entrée HTML
-├── capacitor.config.ts      # Configuration Capacitor
-├── vite.config.ts           # Configuration Vite & Vitest
-└── package.json
-```
+L'APK compilé se trouve dans `native/app/build/outputs/apk/debug/app-debug.apk`.
 
 ---
 
 ## 📄 Licence
 
 Distribué sous la licence **MIT**. Voir [LICENSE](LICENSE) pour plus d'informations.
-
----
-
-<p align="center">Made with ❤️ — <em>Regardez vos fichiers locaux comme sur Netflix.</em></p>
