@@ -369,7 +369,7 @@ fun DetailsScreen(
                 items(uiState.episodes, key = { it.video.name }) { ep ->
                     EpisodeItemRow(
                         ep = ep,
-                        onPlay = { onPlayVideo(ep.video.name) },
+                                                onPlay = { onPlayVideo(ep.video.name) },
                         onToggleWatched = { detailsViewModel.toggleEpisodeWatched(ep.video.name) },
                         onToggleExpanded = { detailsViewModel.toggleEpisodeExpanded(ep.video.name) },
                         onResetProgress = { detailsViewModel.resetProgress(ep.video.name) },
@@ -408,7 +408,7 @@ private fun EpisodeItemRow(
                         .background(Zinc800)
                         .clickable(onClick = onPlay),
                 ) {
-                    val image = ep.tmdbEpisode?.stillUrl()
+                    val image = ep.tmdbEpisode?.stillUrl() ?: ep.fallbackImageUrl
                     if (image != null) {
                         AsyncImage(
                             model = image,
