@@ -65,7 +65,7 @@ class HomeRowsDeriverTest {
     fun `les contenus déjà vus sont déplacés à la fin de la liste`() {
         val watched = mapOf(filmA.name to true)
         val rows = HomeRowsDeriver.derive(grouped, grouped, watched, emptyMap())
-        assertEquals(listOf(filmB, filmC, filmA), rows.movies)
+        assertEquals(listOf(filmB, filmC), rows.movies)
     }
 
     @Test

@@ -186,7 +186,7 @@ fun DetailsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         val badgeText = when {
-                            videoGroup?.isTvSeries == true -> "SÉRIE ORIGINALE"
+                            videoGroup?.isTvSeries == true -> "S�RIE ORIGINALE"
                             videoGroup?.isSeriesGroup == true -> "SAGA / COLLECTION"
                             else -> "FILM"
                         }
@@ -197,7 +197,7 @@ fun DetailsScreen(
                             fontWeight = FontWeight.Bold,
                         )
                         meta?.releaseDate?.take(4)?.let { year ->
-                            Text(text = "• $year", color = Zinc300, style = MaterialTheme.typography.labelMedium)
+                            Text(text = "� $year", color = Zinc300, style = MaterialTheme.typography.labelMedium)
                         }
                     }
 
@@ -216,13 +216,25 @@ fun DetailsScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        val playLabel = if (uiState.watchPositionMs > 0L) {
-                            "REPRENDRE À ${Formatters.formatDuration(uiState.watchPositionMs / 1000L)}"
-                        } else {
-                            "LECTURE"
+                        val playVideoTarget = uiState.activeEpisodeName ?: videoGroup?.name ?: id
+                        val playLabel = when {
+                            videoGroup?.isSeriesGroup == true || videoGroup?.isTvSeries == true -> {
+                                val epNum = uiState.activeEpisodeNumber ?: 1
+                                if (uiState.watchPositionMs > 0L) {
+                                    "REPRENDRE �P. $epNum (${Formatters.formatDuration(uiState.watchPositionMs / 1000L)})"
+                                } else {
+                                    "LECTURE �P. $epNum"
+                                }
+                            }
+                            uiState.watchPositionMs > 0L -> {
+                                "REPRENDRE � ${Formatters.formatDuration(uiState.watchPositionMs / 1000L)}"
+                            }
+                            else -> {
+                                "LECTURE"
+                            }
                         }
                         Button(
-                            onClick = { onPlayVideo(videoGroup?.name ?: id) },
+                            onClick = { onPlayVideo(playVideoTarget) },
                             colors = ButtonDefaults.buttonColors(containerColor = White, contentColor = Color.Black),
                             shape = RoundedCornerShape(4.dp),
                         ) {
@@ -277,7 +289,7 @@ fun DetailsScreen(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = if (isSynopsisExpanded) "RÉDUIRE" else "LIRE LA SUITE",
+                                text = if (isSynopsisExpanded) "R�DUIRE" else "LIRE LA SUITE",
                                 color = Red600,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
@@ -305,7 +317,7 @@ fun DetailsScreen(
                                 )
                             }
                             val ext = item.name.substringAfterLast('.', "").uppercase()
-                            if (ext.isNotBlank()) {
+                            if (ext.isNotBlank() && ext != item.name.uppercase()) {
                                 Text(
                                     text = ext,
                                     color = White,
@@ -315,14 +327,16 @@ fun DetailsScreen(
                                         .padding(horizontal = 6.dp, vertical = 2.dp),
                                 )
                             }
-                            Text(
-                                text = Formatters.formatSize(item.size),
-                                color = Zinc300,
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier
-                                    .background(Zinc800, RoundedCornerShape(2.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
+                            if (item.size > 0L) {
+                                Text(
+                                    text = Formatters.formatSize(item.size),
+                                    color = Zinc300,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier
+                                        .background(Zinc800, RoundedCornerShape(2.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                            }
                         }
                     }
 
@@ -335,7 +349,7 @@ fun DetailsScreen(
                 item {
                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                         Text(
-                            text = "ÉPISODES",
+                            text = "�PISODES",
                             color = White,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
@@ -445,18 +459,27 @@ private fun EpisodeItemRow(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Ép. ${ep.video.episode ?: ep.tmdbEpisode?.episodeNumber ?: ""} - ${ep.tmdbEpisode?.name ?: TitleCleaner.getCleanTitle(ep.video.name)}",
+                        text = "�p. ${ep.video.episode ?: ep.tmdbEpisode?.episodeNumber ?: ""} - ${ep.tmdbEpisode?.name ?: TitleCleaner.getCleanTitle(ep.video.name)}",
                         color = White,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text(
-                        text = Formatters.formatDuration(ep.durationMs / 1000L),
-                        color = Zinc300,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    if (ep.positionMs > 0L && !ep.isWatched) {
+                        Text(
+                            text = "En cours � ${Formatters.formatDuration(ep.positionMs / 1000L)}",
+                            color = Red600,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    } else {
+                        Text(
+                            text = Formatters.formatDuration(ep.durationMs / 1000L),
+                            color = Zinc300,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
 
                 IconButton(onClick = onToggleWatched) {
@@ -470,7 +493,7 @@ private fun EpisodeItemRow(
                 IconButton(onClick = onToggleExpanded) {
                     Icon(
                         if (ep.isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = "D?tails de l'?pisode",
+                        contentDescription = "D�tails de l'�pisode",
                         tint = White,
                     )
                 }
@@ -482,10 +505,9 @@ private fun EpisodeItemRow(
                         .fillMaxWidth()
                         .padding(top = 8.dp),
                 ) {
-                    ep.tmdbEpisode?.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                        Text(text = overview, color = Zinc300, style = MaterialTheme.typography.bodySmall)
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
+                    val overviewText = ep.tmdbEpisode?.overview?.takeIf { it.isNotBlank() } ?: "Aucun r�sum� disponible."
+                    Text(text = overviewText, color = Zinc300, style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = onPlay,
                         colors = ButtonDefaults.buttonColors(containerColor = Red600),
@@ -496,16 +518,6 @@ private fun EpisodeItemRow(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Lecture", color = White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     }
-                    Text(
-                        text = "Fichier : ${ep.video.name}",
-                        color = Zinc300.copy(alpha = 0.7f),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    Text(
-                        text = "Taille : ${Formatters.formatSize(ep.video.size)}",
-                        color = Zinc300.copy(alpha = 0.7f),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
                     if (ep.progressPercent > 0f) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Button(
@@ -513,7 +525,7 @@ private fun EpisodeItemRow(
                             colors = ButtonDefaults.buttonColors(containerColor = Zinc800),
                             shape = RoundedCornerShape(4.dp),
                         ) {
-                            Text("Réinitialiser la progression", color = Red600, style = MaterialTheme.typography.labelSmall)
+                            Text("R�initialiser la progression", color = Red600, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }

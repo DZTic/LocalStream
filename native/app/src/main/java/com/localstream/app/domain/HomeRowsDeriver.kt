@@ -33,8 +33,8 @@ object HomeRowsDeriver {
         val heroCandidates = HeroSelector.getHeroCandidates(grouped, watched, progress)
             .ifEmpty { listOfNotNull(filteredSorted.firstOrNull() ?: grouped.firstOrNull()) }
 
-        val unwatchedFirst = { items: List<VideoItem> ->
-            items.sortedBy { if (VideoUiSelectors.isWatched(it, watched)) 1 else 0 }
+        val unwatchedOnly = { items: List<VideoItem> ->
+            items.filter { !VideoUiSelectors.isWatched(it, watched) }
         }
 
         return HomeRows(
@@ -43,11 +43,11 @@ object HomeRowsDeriver {
                 val p = progress[v.name] ?: 0.0
                 p > 0.0 && p < CONTINUE_MAX_PROGRESS
             },
-            recentAdditions = unwatchedFirst(grouped.asReversed().take(ROW_LIMIT)),
-            recommendations = unwatchedFirst(grouped.take(ROW_LIMIT)),
-            series = unwatchedFirst(grouped.filter { it.isSeriesGroup }),
-            movies = unwatchedFirst(grouped.filter { !it.isSeriesGroup }),
-            alphabetical = unwatchedFirst(filteredSorted.sortedWith(
+            recentAdditions = unwatchedOnly(grouped.asReversed().take(ROW_LIMIT)),
+            recommendations = unwatchedOnly(grouped.take(ROW_LIMIT)),
+            series = unwatchedOnly(grouped.filter { it.isSeriesGroup }),
+            movies = unwatchedOnly(grouped.filter { !it.isSeriesGroup }),
+            alphabetical = unwatchedOnly(filteredSorted.sortedWith(
                 compareBy<VideoItem, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
                     .thenBy { it.name },
             )),
