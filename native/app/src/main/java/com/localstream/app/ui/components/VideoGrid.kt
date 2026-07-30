@@ -38,10 +38,9 @@ fun VideoGrid(
             items = videos,
             key = { it.nativeUri?.takeIf(String::isNotEmpty) ?: it.path.ifEmpty { it.name } },
         ) { video ->
-            val meta = metadata[VideoUiSelectors.metadataKey(video)]
             VideoCard(
                 video = video,
-                posterUrl = meta?.posterUrl(),
+                posterUrl = VideoUiSelectors.posterUrl(video, metadata),
                 isWatched = VideoUiSelectors.isWatched(video, watched),
                 progress = VideoUiSelectors.progressOf(video, progress),
                 showResetProgress = false,

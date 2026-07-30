@@ -19,32 +19,32 @@ const BottomNavComponent: React.FC<BottomNavProps> = ({
       onClick={onHome}
       className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'home' && !isLibraryViewActive ? 'text-red-500' : 'text-zinc-500 hover:text-zinc-300'}`}
     >
-      <Home className="w-6 h-6 mb-1" />
-      <span className="text-[10px] font-bold">Accueil</span>
+      <Home className="w-6 h-6 mb-1 shrink-0" />
+      <span className="text-[10px] font-bold whitespace-nowrap">Accueil</span>
     </button>
 
     <button
       onClick={onLibrary}
       className={`flex flex-col items-center p-2 transition-colors ${isLibraryViewActive ? 'text-red-500' : 'text-zinc-500 hover:text-zinc-300'}`}
     >
-      <Film className="w-6 h-6 mb-1" />
-      <span className="text-[10px] font-bold">Bibliothèque</span>
+      <Film className="w-6 h-6 mb-1 shrink-0" />
+      <span className="text-[10px] font-bold whitespace-nowrap">Bibliothèque</span>
     </button>
 
     <button
       onClick={onPlaylists}
       className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'playlists' ? 'text-red-500' : 'text-zinc-500 hover:text-zinc-300'}`}
     >
-      <ListVideo className="w-6 h-6 mb-1" />
-      <span className="text-[10px] font-bold">Listes</span>
+      <ListVideo className="w-6 h-6 mb-1 shrink-0" />
+      <span className="text-[10px] font-bold whitespace-nowrap">Listes</span>
     </button>
 
     <button
       onClick={onHistory}
       className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'history' ? 'text-red-500' : 'text-zinc-500 hover:text-zinc-300'}`}
     >
-      <History className="w-6 h-6 mb-1" />
-      <span className="text-[10px] font-bold">Déjà vu</span>
+      <History className="w-6 h-6 mb-1 shrink-0" />
+      <span className="text-[10px] font-bold whitespace-nowrap">Historique</span>
     </button>
   </nav>
 );

@@ -62,6 +62,13 @@ class HomeRowsDeriverTest {
     }
 
     @Test
+    fun `les contenus déjà vus sont déplacés à la fin de la liste`() {
+        val watched = mapOf(filmA.name to true)
+        val rows = HomeRowsDeriver.derive(grouped, grouped, watched, emptyMap())
+        assertEquals(listOf(filmB, filmC, filmA), rows.movies)
+    }
+
+    @Test
     fun `continuer la lecture = progression entre 0 et 95 exclus, sur la liste filtrée`() {
         val progress = mapOf(
             filmA.name to 50.0,
@@ -71,16 +78,6 @@ class HomeRowsDeriverTest {
         )
         val rows = HomeRowsDeriver.derive(grouped, grouped, emptyMap(), progress)
         assertEquals(listOf(filmA, show), rows.continueWatching)
-    }
-
-    @Test
-    fun `rows par dossier = basename, dossiers système exclus, tri alphabétique`() {
-        val rows = HomeRowsDeriver.derive(grouped, grouped, emptyMap(), emptyMap())
-        // DCIM/Camera exclu (dossier système) ; Movies et Download conservés ; Series (série) conservé
-        assertEquals(listOf("Dossier : Download", "Dossier : Movies", "Dossier : Series"), rows.folderRows.map { it.title })
-        assertEquals(listOf(filmB), rows.folderRows[0].items)
-        assertEquals(listOf(filmA), rows.folderRows[1].items)
-        assertEquals(listOf(show), rows.folderRows[2].items)
     }
 
     @Test

@@ -130,6 +130,45 @@ class TmdbRepository(
             return Result.failure(IllegalStateException("Clé API TMDB manquante"))
         }
 
+        // Cas spécial : groupe saga de films (isSeriesGroup == true && isTvSeries == false)
+        if (video.isSeriesGroup && !video.isTvSeries && !video.episodes.isNullOrEmpty()) {
+            val firstEpWithCollection = video.episodes.mapNotNull { ep ->
+                val meta = getCachedMetadata(ep.name)
+                meta?.collectionId
+            }.firstOrNull()
+
+            if (firstEpWithCollection != null) {
+                try {
+                    val colDetails = executeWithRetryAndThrottling {
+                        tmdbApi.getCollection(firstEpWithCollection, apiKey)
+                    }
+                    val sagaMetadata = TmdbMetadata(
+                        queryKey = lookupName,
+                        tmdbId = colDetails.id,
+                        title = colDetails.name,
+                        overview = colDetails.overview,
+                        posterPath = colDetails.posterPath ?: video.episodes.firstOrNull()?.let { ep -> getCachedMetadata(ep.name)?.posterPath },
+                        backdropPath = colDetails.backdropPath ?: video.episodes.firstOrNull()?.let { ep -> getCachedMetadata(ep.name)?.backdropPath },
+                        genreIds = emptyList(),
+                        releaseDate = null,
+                        mediaType = "collection",
+                        collectionId = colDetails.id,
+                        collectionName = colDetails.name,
+                    )
+                    val jsonStr = json.encodeToString(sagaMetadata)
+                    tmdbMetadataDao.insertMetadata(
+                        TmdbMetadataEntity(
+                            queryKey = lookupName,
+                            json = jsonStr,
+                            fetchedAt = now,
+                        )
+                    )
+                    return Result.success(sagaMetadata)
+                } catch (_: Exception) {
+                }
+            }
+        }
+
         return try {
             val metadata = fetchFromRemote(apiKey, lookupName, cleanTitle, video)
             val jsonStr = json.encodeToString(metadata)

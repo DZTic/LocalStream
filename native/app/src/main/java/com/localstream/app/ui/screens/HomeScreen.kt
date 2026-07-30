@@ -48,7 +48,7 @@ private const val TOPBAR_SOLID_OFFSET_PX = 80
 /**
  * Écran d'accueil (Phase 7, réf. `HomeScreen.tsx`) : hero rotatif puis rows
  * "Continuer la lecture", "Nouveautés", "Recommandations", "Séries", "Films",
- * une row par dossier non-système, "De A à Z".
+ * "De A à Z".
  */
 @Composable
 fun HomeScreen(
@@ -110,9 +110,6 @@ fun HomeScreen(
                         HomeRow("Recommandations", uiState.recommendations, uiState, false, onOpenDetails, onResetProgress)
                         HomeRow("Séries", uiState.series, uiState, false, onOpenDetails, onResetProgress)
                         HomeRow("Films", uiState.movies, uiState, false, onOpenDetails, onResetProgress)
-                        uiState.folderRows.forEach { folder ->
-                            HomeRow(folder.title, folder.items, uiState, false, onOpenDetails, onResetProgress)
-                        }
                         HomeRow("De A à Z", uiState.alphabetical, uiState, false, onOpenDetails, onResetProgress)
                         Spacer(modifier = Modifier.height(24.dp))
                     }

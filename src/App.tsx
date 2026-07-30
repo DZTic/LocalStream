@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { FolderOpen, Search, RefreshCw, Info } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
@@ -598,12 +598,25 @@ export default function App() {
     if (isSearchOpen) searchInputRef.current?.focus();
   }, [isSearchOpen]);
 
-  const recentAdditions = useMemo(() => [...groupedVideos].reverse().slice(0, 15), [groupedVideos]);
-  const recommendations = useMemo(() => groupedVideos.slice(0, 15), [groupedVideos]);
-  const tvShows = useMemo(() => groupedVideos.filter(v => v.isSeriesGroup), [groupedVideos]);
-  const movies = useMemo(() => groupedVideos.filter(v => !v.isSeriesGroup), [groupedVideos]);
+
+  const isItemWatched = useCallback((v: VideoFile) => {
+    if (v.isSeriesGroup) {
+      return !!(v.episodes && v.episodes.length > 0 && v.episodes.every(ep => watchedVideos[ep.name]));
+    }
+    return !!watchedVideos[v.name];
+  }, [watchedVideos]);
+
+  const unwatchedFirst = useCallback((items: VideoFile[]) => {
+    return [...items].sort((a, b) => (isItemWatched(a) ? 1 : 0) - (isItemWatched(b) ? 1 : 0));
+  }, [isItemWatched]);
+
+  const recentAdditions = useMemo(() => unwatchedFirst([...groupedVideos].reverse().slice(0, 15)), [groupedVideos, unwatchedFirst]);
+  const recommendations = useMemo(() => unwatchedFirst(groupedVideos.slice(0, 15)), [groupedVideos, unwatchedFirst]);
+  const tvShows = useMemo(() => unwatchedFirst(groupedVideos.filter(v => v.isSeriesGroup)), [groupedVideos, unwatchedFirst]);
+  const movies = useMemo(() => unwatchedFirst(groupedVideos.filter(v => !v.isSeriesGroup)), [groupedVideos, unwatchedFirst]);
   
-  const alphabetical = useMemo(() => [...filteredAndSortedVideos].sort((a, b) => a.name.localeCompare(b.name)), [filteredAndSortedVideos]);
+  const alphabetical = useMemo(() => unwatchedFirst([...filteredAndSortedVideos].sort((a, b) => a.name.localeCompare(b.name))), [filteredAndSortedVideos, unwatchedFirst]);
+
 
   return (
     <div className="min-h-screen bg-black text-zinc-100 font-sans selection:bg-red-600/30">

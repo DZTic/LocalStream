@@ -19,7 +19,7 @@ describe('BottomNav', () => {
     expect(screen.getByText('Accueil')).toBeTruthy();
     expect(screen.getByText('Bibliothèque')).toBeTruthy();
     expect(screen.getByText('Listes')).toBeTruthy();
-    expect(screen.getByText('Déjà vu')).toBeTruthy();
+    expect(screen.getByText('Historique')).toBeTruthy();
   });
 
   it('déclenche le bon callback au clic', () => {
