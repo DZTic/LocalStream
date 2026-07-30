@@ -25,6 +25,7 @@ data class EpisodeUiState(
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val isExpanded: Boolean = false,
+    val fallbackImageUrl: String? = null,
 )
 
 data class DetailsUiState(
@@ -52,6 +53,7 @@ class DetailsViewModel(
     private val isLoadingTmdbFlow = MutableStateFlow(false)
     private val tmdbErrorFlow = MutableStateFlow<String?>(null)
     private val cachedMetadataFlow = MutableStateFlow<TmdbMetadata?>(null)
+    private val cachedEpisodesFlow = MutableStateFlow<Map<String, TmdbEpisode>>(emptyMap())
 
     init {
         loadMetadata()
@@ -63,7 +65,48 @@ class DetailsViewModel(
             if (meta != null) {
                 cachedMetadataFlow.value = meta
             }
+
+            container.videoRepository.observeVideos.collect { videos ->
+                val group = videos.find { it.name == id || it.seriesName == id }
+                    ?: videos.find { it.name.lowercase() == id.lowercase() }
+                    ?: return@collect
+
+                val lookupName = if (group.isSeriesGroup && !group.seriesName.isNullOrEmpty()) {
+                    group.seriesName
+                } else {
+                    group.name
+                }
+
+                group.episodes?.let { eps ->
+                    loadEpisodesFromCache(lookupName, eps)
+                }
+
+                if (cachedMetadataFlow.value == null && !isLoadingTmdbFlow.value) {
+                    isLoadingTmdbFlow.value = true
+                    val result = container.tmdbRepository.fetchMetadataForVideo(group)
+                    if (result.isSuccess) {
+                        cachedMetadataFlow.value = result.getOrNull()
+                        group.episodes?.let { eps ->
+                            loadEpisodesFromCache(lookupName, eps)
+                        }
+                    }
+                    isLoadingTmdbFlow.value = false
+                }
+            }
         }
+    }
+
+    private suspend fun loadEpisodesFromCache(lookupName: String, episodes: List<VideoItem>) {
+        val map = mutableMapOf<String, TmdbEpisode>()
+        episodes.forEachIndexed { index, ep ->
+            val s = ep.season ?: 1
+            val e = ep.episode ?: (index + 1)
+            val cachedEp = container.tmdbRepository.getCachedEpisode(lookupName, s, e)
+            if (cachedEp != null) {
+                map[ep.name] = cachedEp
+            }
+        }
+        cachedEpisodesFlow.value = map
     }
 
     val uiState: StateFlow<DetailsUiState> = combine(
@@ -77,6 +120,7 @@ class DetailsViewModel(
             isLoadingTmdbFlow,
             tmdbErrorFlow,
             cachedMetadataFlow,
+            cachedEpisodesFlow,
         )
     ) { args: Array<Any?> ->
         val videos = args[0] as List<VideoItem>
@@ -88,6 +132,7 @@ class DetailsViewModel(
         val isLoading = args[6] as Boolean
         val tmdbErr = args[7] as String?
         val meta = args[8] as TmdbMetadata?
+        val cachedEpisodes = args[9] as Map<String, TmdbEpisode>
 
         val group = videos.find { it.name == id || it.seriesName == id }
             ?: videos.find { it.name.lowercase() == id.lowercase() }
@@ -112,14 +157,17 @@ class DetailsViewModel(
             val epDur = ep.duration * 1000L
             val epProgress = if (epDur > 0L) (epPos.toFloat() / epDur.toFloat()).coerceIn(0f, 1f) else 0f
 
+            val tmdbEp = cachedEpisodes[ep.name]
+
             EpisodeUiState(
                 video = ep,
-                tmdbEpisode = null,
+                tmdbEpisode = tmdbEp,
                 isWatched = epWatched,
                 progressPercent = epProgress,
                 positionMs = epPos,
                 durationMs = epDur,
                 isExpanded = expandedSet.contains(ep.name),
+                fallbackImageUrl = meta?.backdropUrl() ?: meta?.posterUrl(),
             )
         }
 

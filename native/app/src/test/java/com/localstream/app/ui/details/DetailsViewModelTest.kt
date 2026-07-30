@@ -112,6 +112,46 @@ class DetailsViewModelTest {
         assertTrue(watchedDao.items.value.any { it.name == "Breaking.Bad.S01E01.mkv" })
     }
 
+    @Test
+    fun `episodes ont les metadonnees tmdb lorsqu'elles sont en cache`() = runTest(testDispatcher) {
+        val tmdbEpisode = com.localstream.app.domain.model.TmdbEpisode(
+            epKey = "Breaking Bad_s1_e1",
+            name = "Pilot",
+            overview = "Un professeur de chimie...",
+            stillPath = "/still1.jpg",
+            seasonNumber = 1,
+            episodeNumber = 1,
+        )
+        val metaDao = FakeTmdbMetadataDao()
+        metaDao.insertMetadata(
+            TmdbMetadataEntity(
+                queryKey = "Breaking Bad_s1_e1",
+                json = kotlinx.serialization.json.Json.encodeToString(com.localstream.app.domain.model.TmdbEpisode.serializer(), tmdbEpisode),
+                fetchedAt = System.currentTimeMillis(),
+            )
+        )
+
+        val videoRepo = VideoRepository(FakeScanner(listOf(seriesGroup), listOf(seriesGroup)))
+        val watchRepo = WatchStateRepository(watchedDao, playbackDao)
+        val playlistRepo = PlaylistRepository(playlistDao)
+        val settingsRepo = SettingsRepository(dataStore = null)
+        val tmdbRepo = TmdbRepository(UnusedTmdbApi(), metaDao, settingsRepo)
+        val osRepo = OpenSubtitlesRepository(UnusedOsApi(), settingsRepo, SubtitleCache(File("/tmp")))
+
+        videoRepo.scanAndLoad()
+
+        val dummyContainer = DummyContainer(videoRepo, watchRepo, playlistRepo, tmdbRepo, settingsRepo, osRepo)
+        val viewModel = DetailsViewModel("Breaking Bad", dummyContainer)
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        val epState = viewModel.uiState.value.episodes.find { it.video.name == ep1.name }
+        org.junit.Assert.assertNotNull(epState)
+        org.junit.Assert.assertEquals("Pilot", epState?.tmdbEpisode?.name)
+        org.junit.Assert.assertEquals("/still1.jpg", epState?.tmdbEpisode?.stillPath)
+    }
+
     private class DummyContainer(
         videoRepo: VideoRepository,
         watchRepo: WatchStateRepository,
