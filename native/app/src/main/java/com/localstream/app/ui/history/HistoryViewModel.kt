@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.history
+package com.localstream.app.ui.history
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider

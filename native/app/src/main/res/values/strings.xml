@@ -7,4 +7,27 @@
     <string name="tab_library">Bibliothèque</string>
     <string name="tab_playlists">Listes</string>
     <string name="tab_history">Historique</string>
+
+    <!-- Écran Paramètres -->
+    <string name="settings_title">Paramètres</string>
+    <string name="settings_tmdb_title">TMDB (The Movie Database)</string>
+    <string name="settings_tmdb_api_key_label">Clé API TMDB</string>
+    <string name="settings_tmdb_test_key_button">Tester la clé</string>
+    <string name="settings_opensubtitles_title">OpenSubtitles</string>
+    <string name="settings_opensubtitles_api_key_label">Clé API OpenSubtitles</string>
+    <string name="settings_opensubtitles_username_label">Nom d'utilisateur</string>
+    <string name="settings_opensubtitles_password_label">Mot de passe</string>
+    <string name="settings_opensubtitles_login_button">Se connecter</string>
+    <string name="settings_opensubtitles_status">Statut : %1$s</string>
+    <string name="settings_player_title">Lecteur Vidéo</string>
+    <string name="settings_player_mode_internal">Interne (Media3)</string>
+    <string name="settings_player_mode_external">Lecteur Externe</string>
+    <string name="settings_player_choose_app">Choisir une application</string>
+    <string name="settings_player_external_app_label">Application de lecture</string>
+    <string name="settings_system_apps_settings">Réglages système de l'application</string>
+    <string name="settings_status_connected">Connecté</string>
+    <string name="settings_status_not_connected">Non connecté</string>
+    <string name="settings_tmdb_key_valid">Clé API valide !</string>
+    <string name="settings_tmdb_key_invalid">Clé API TMDB invalide</string>
+    <string name="settings_login_failed">Échec de connexion</string>
 </resources>

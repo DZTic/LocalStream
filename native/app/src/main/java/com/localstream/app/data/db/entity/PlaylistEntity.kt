@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data.db.entity
+package com.localstream.app.data.db.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity

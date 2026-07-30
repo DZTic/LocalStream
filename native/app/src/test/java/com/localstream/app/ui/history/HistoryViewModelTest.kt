@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.history
+package com.localstream.app.ui.history
 
 import com.localstream.app.data.db.dao.PlaybackStateDao
 import com.localstream.app.data.db.dao.WatchedItemDao

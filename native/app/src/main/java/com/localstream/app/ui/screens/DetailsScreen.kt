@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.screens
+package com.localstream.app.ui.screens
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility

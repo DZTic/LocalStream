@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data
+package com.localstream.app.data
 
 import com.localstream.app.data.repository.VideoRepository
 import com.localstream.app.data.scanner.MediaScanner

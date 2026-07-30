@@ -29,7 +29,7 @@ data class SettingsUiState(
     val osApiKey: String = "",
     val osUsername: String = "",
     val osPassword: String = "",
-    val osLoginStatus: String = "Non connecté",
+    val osLoginStatus: String = "Non connectÃ©",
     val isLoggingInOs: Boolean = false,
     val playerMode: String = "internal",
     val selectedExternalPlayer: String = "",
@@ -44,7 +44,7 @@ class SettingsViewModel(
     private val isTestingTmdbFlow = MutableStateFlow(false)
     private val tmdbTestResultFlow = MutableStateFlow<String?>(null)
     private val isLoggingInOsFlow = MutableStateFlow(false)
-    private val osLoginStatusFlow = MutableStateFlow("Non connecté")
+    private val osLoginStatusFlow = MutableStateFlow("Non connectÃ©")
     private val installedPlayersFlow = MutableStateFlow<List<ExternalPlayerInfo>>(emptyList())
 
     val uiState: StateFlow<SettingsUiState> = combine(
@@ -66,13 +66,13 @@ class SettingsViewModel(
         val osStatus = args[5] as String
         val installed = args[6] as List<ExternalPlayerInfo>
 
-        val tmdbKey = runCatching { container.settingsRepository.getTmdbApiKey() }.getOrDefault("")
-        val osKey = runCatching { container.settingsRepository.getOpenSubtitlesApiKey() }.getOrDefault("")
-        val osUser = runCatching { container.settingsRepository.getOpenSubtitlesUsername() }.getOrDefault("")
-        val osPass = runCatching { container.settingsRepository.getOpenSubtitlesPassword() }.getOrDefault("")
-        val osToken = runCatching { container.settingsRepository.getOpenSubtitlesToken() }.getOrDefault("")
+        val tmdbKey = container.settingsRepository.getTmdbApiKey()
+        val osKey = container.settingsRepository.getOpenSubtitlesApiKey()
+        val osUser = container.settingsRepository.getOpenSubtitlesUsername()
+        val osPass = container.settingsRepository.getOpenSubtitlesPassword()
+        val osToken = container.settingsRepository.getOpenSubtitlesToken()
 
-        val currentOsStatus = if (osToken.isNotBlank()) "Connecté" else osStatus
+        val currentOsStatus = if (osToken.isNotBlank()) "ConnectÃ©" else osStatus
 
         SettingsUiState(
             tmdbApiKey = tmdbKey,
@@ -105,9 +105,9 @@ class SettingsViewModel(
             tmdbTestResultFlow.value = null
             val result = container.tmdbRepository.testApiKey(apiKeyOverride)
             if (result.isSuccess && result.getOrDefault(false)) {
-                tmdbTestResultFlow.value = "Clé API valide !"
+                tmdbTestResultFlow.value = "ClÃ© API valide !"
             } else {
-                tmdbTestResultFlow.value = result.exceptionOrNull()?.message ?: "Clé API TMDB invalide"
+                tmdbTestResultFlow.value = result.exceptionOrNull()?.message ?: "ClÃ© API TMDB invalide"
             }
             isTestingTmdbFlow.value = false
         }
@@ -127,9 +127,9 @@ class SettingsViewModel(
             osLoginStatusFlow.value = "Connexion..."
             val result = container.openSubtitlesRepository.login()
             if (result.isSuccess) {
-                osLoginStatusFlow.value = "Connecté"
+                osLoginStatusFlow.value = "ConnectÃ©"
             } else {
-                osLoginStatusFlow.value = result.exceptionOrNull()?.message ?: "Échec de connexion"
+                osLoginStatusFlow.value = result.exceptionOrNull()?.message ?: "Ã‰chec de connexion"
             }
             isLoggingInOsFlow.value = false
         }
