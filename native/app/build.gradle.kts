@@ -12,9 +12,8 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        // applicationId PROVISOIRE : le vrai id (com.localstream.app) sera repris en
-        // Phase 10 pour hériter des installations de l'app Capacitor existante.
-        applicationId = "com.localstream.app.native"
+        // Phase 10 : applicationId final hérité de l'app Capacitor existante.
+        applicationId = "com.localstream.app"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -90,6 +89,11 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.coil.compose)
+
+    // Phase 9 — ExoPlayer (Media3)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
+    implementation(libs.media3.common)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
