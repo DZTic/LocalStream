@@ -189,7 +189,7 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
                 SettingsScreen(
                     onLogoClick = resetToHome,
                     onSearchClick = openSearch,
-                    onSettingsClick = openSettings,
+                    onSettingsClick = { /* deja sur les parametres, pas de navigation */ },
                 )
             }
             composable(
