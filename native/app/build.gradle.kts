@@ -91,6 +91,11 @@ dependencies {
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.coil.compose)
 
+    // Phase 9 — ExoPlayer (Media3)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
+    implementation(libs.media3.common)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.json)

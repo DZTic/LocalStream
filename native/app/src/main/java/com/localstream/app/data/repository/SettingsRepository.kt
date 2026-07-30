@@ -1,10 +1,11 @@
-﻿package com.localstream.app.data.repository
+package com.localstream.app.data.repository
 
 import com.localstream.app.data.local.EncryptedPreferencesManager
 import com.localstream.app.data.local.UserPreferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -55,25 +56,25 @@ open class SettingsRepository(
 
     // -------- Préférences DataStore --------
 
-    open val videoPlayerMode: Flow<String> get() = dataStore?.videoPlayerMode ?: emptyFlow()
+    open val videoPlayerMode: Flow<String> get() = dataStore?.videoPlayerMode ?: flowOf("internal")
     open val observePlayerMode: Flow<String> get() = videoPlayerMode
     open suspend fun saveVideoPlayerMode(mode: String) { dataStore?.saveVideoPlayerMode(mode) }
     open suspend fun setPlayerMode(mode: String) { saveVideoPlayerMode(mode) }
 
-    open val externalPlayerPackage: Flow<String> get() = dataStore?.externalPlayerPackage ?: emptyFlow()
+    open val externalPlayerPackage: Flow<String> get() = dataStore?.externalPlayerPackage ?: flowOf("")
     open val observeExternalPlayer: Flow<String> get() = externalPlayerPackage
     open suspend fun saveExternalPlayerPackage(pkg: String) { dataStore?.saveExternalPlayerPackage(pkg) }
     open suspend fun setSelectedExternalPlayer(pkg: String) { saveExternalPlayerPackage(pkg) }
 
-    open val whitelistedVideos: Flow<Set<String>> get() = dataStore?.whitelistedVideos ?: emptyFlow()
+    open val whitelistedVideos: Flow<Set<String>> get() = dataStore?.whitelistedVideos ?: flowOf(emptySet())
     open suspend fun saveWhitelistedVideos(whitelist: Set<String>) {
         dataStore?.saveWhitelistedVideos(whitelist)
     }
 
-    open val forceAvailableJson: Flow<String> get() = dataStore?.forceAvailableJson ?: emptyFlow()
+    open val forceAvailableJson: Flow<String> get() = dataStore?.forceAvailableJson ?: flowOf("[]")
     open val observeForceAvailable: Flow<Set<String>> get() = dataStore?.forceAvailableJson?.map { jsonStr ->
         runCatching { Json.decodeFromString<List<String>>(jsonStr).toSet() }.getOrDefault(emptySet())
-    } ?: emptyFlow()
+    } ?: flowOf(emptySet())
 
     open suspend fun saveForceAvailableJson(json: String) { dataStore?.saveForceAvailableJson(json) }
     open suspend fun toggleForceAvailable(videoName: String) {
@@ -85,9 +86,9 @@ open class SettingsRepository(
         }
     }
 
-    open val legacyImportDone: Flow<Boolean> get() = dataStore?.legacyImportDone ?: emptyFlow()
+    open val legacyImportDone: Flow<Boolean> get() = dataStore?.legacyImportDone ?: flowOf(false)
     open suspend fun markLegacyImportDone() { dataStore?.markLegacyImportDone() }
 
-    open val tmdbBannerDismissed: Flow<Boolean> get() = dataStore?.tmdbBannerDismissed ?: emptyFlow()
+    open val tmdbBannerDismissed: Flow<Boolean> get() = dataStore?.tmdbBannerDismissed ?: flowOf(false)
     open suspend fun dismissTmdbBanner() { dataStore?.dismissTmdbBanner() }
 }
