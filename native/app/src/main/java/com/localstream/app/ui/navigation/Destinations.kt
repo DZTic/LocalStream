@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 /**
  * Routes de navigation de l'application (Navigation Compose).
  * Reprend la cartographie de la Phase 0 : home, search, library, playlists,
- * history, details/{id}, settings.
+ * history, details/{id}, player/{id}, settings.
  */
 object Routes {
     const val HOME = "home"
@@ -19,12 +19,16 @@ object Routes {
     const val PLAYLISTS = "playlists"
     const val HISTORY = "history"
     const val DETAILS = "details/{id}"
+    const val PLAYER = "player/{id}"
     const val SETTINGS = "settings"
 
     /** Construit la route Détails pour un identifiant donné. */
     fun details(id: String): String = "details/$id"
 
-    /** Argument attendu par la route [DETAILS]. */
+    /** Construit la route Player pour un identifiant vidéo donné. */
+    fun player(id: String): String = "player/$id"
+
+    /** Argument attendu par les routes [DETAILS] et [PLAYER]. */
     const val ARG_ID = "id"
 }
 

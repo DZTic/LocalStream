@@ -15,8 +15,9 @@ qui reste le produit livré jusqu'à la Phase 10.
 | -------------- | ------------------------------------------------- |
 | Langage        | Kotlin 2.0                                         |
 | UI             | Jetpack Compose + Material 3, thème sombre unique  |
-| Architecture   | MVVM simple — `ui/` (screens, composables). `domain/` et `data/` viendront avec les écrans réels. |
-| DI             | Injection manuelle au départ (Hilt réévalué quand `data/` grossira) |
+| Lecteur Vidéo  | ExoPlayer (androidx.media3)                        |
+| Architecture   | MVVM simple — `ui/` (screens, composables), `domain/` et `data/` |
+| DI             | Injection manuelle via `AppContainer`              |
 | Navigation     | Navigation Compose                                 |
 | minSdk         | 24                                                 |
 | compileSdk / targetSdk | 36                                         |
@@ -43,44 +44,24 @@ L'APK est généré dans `app/build/outputs/apk/debug/`.
 
 Prérequis : JDK 17 et un Android SDK (via Android Studio ou `ANDROID_HOME`).
 
-## Conventions
-
-- **Style Kotlin** : officiel (`kotlin.code.style=official`), vérifié par detekt.
-- **Couleurs** : palette Tailwind transposée dans `ui/theme/Color.kt`
-  (`bg-black` → `Black`, `zinc-900` → `Zinc900`, `red-600` → `Red600`).
-  Ne pas coder de couleurs en dur dans les écrans ; passer par `MaterialTheme.colorScheme`.
-- **Typographie** : titres en `FontWeight.Black` (équivalent `font-black` du web).
-- **Versions** : centralisées dans `gradle/libs.versions.toml` (version catalog).
-- **Écrans** : un composable racine par écran dans `ui/screens/`, sans logique métier
-  (celle-ci ira dans `domain/`).
-
 ## Navigation
 
 `NavHost` (voir `ui/navigation/`) avec les routes : `home`, `search`, `library`,
-`playlists`, `history`, `details/{id}`, `settings`.
+`playlists`, `history`, `details/{id}`, `player/{id}`, `settings`.
 
 La barre basse (`LocalStreamBottomBar`) reproduit `src/components/BottomNav.tsx`
-avec 4 onglets de premier niveau.
+avec 4 onglets de premier niveau (masquée pendant la lecture vidéo).
 
-## Cartographie des écrans (Phase 0)
+## Cartographie des écrans
 
-Correspondance entre l'UI web actuelle (`../src/`) et les écrans natifs cibles.
-
-| Écran natif (route)      | Source web (`src/`)                         | Onglet       | Statut socle |
+| Écran natif (route)      | Source web (`src/`)                         | Onglet       | Statut       |
 | ------------------------ | ------------------------------------------- | ------------ | ------------ |
 | `home`                   | `components/screens/HomeScreen.tsx`         | Accueil      | Phase 7 ✅   |
 | `library`                | `components/screens/LibraryScreen.tsx`      | Bibliothèque | Phase 7 ✅   |
-| `playlists`              | `components/screens/PlaylistsScreen.tsx`    | Listes       | Placeholder  |
-| `history`                | `components/screens/HistoryScreen.tsx`      | Historique   | Placeholder  |
+| `playlists`              | `components/screens/PlaylistsScreen.tsx`    | Listes       | Phase 8 ✅   |
+| `history`                | `components/screens/HistoryScreen.tsx`      | Historique   | Phase 8 ✅   |
 | `search`                 | `components/screens/SearchScreen.tsx`       | —            | Phase 7 ✅   |
-| `settings`               | `components/SettingsModal.tsx`              | —            | Placeholder  |
-| `details/{id}`           | vue Héro / détails (`HomeScreen` + modales) | —            | Placeholder  |
+| `settings`               | `components/SettingsModal.tsx`              | —            | Phase 8 ✅   |
+| `details/{id}`           | vue Héro / détails                          | —            | Phase 8 ✅   |
+| `player/{id}`            | `components/WebPlayer.tsx` / `PlayerActivity`| —            | Phase 9 ✅   |
 
-Composants transverses à porter plus tard : `AppHeader`, `VideoCard`, `VideoRow`,
-`FilterBar`, `SubtitlesModal`, `WebPlayer` (→ lecteur natif), `PermissionGate`, `Toasts`.
-
-## Feuille de route
-
-Ce module est le **socle** (Phase 1). Les écrans sont des placeholders ; les couches
-`data/` (MediaStore, TMDB, OpenSubtitles, préférences) et `domain/` arriveront avec
-les phases suivantes. L'app Capacitor (`../android/`) reste livrée jusqu'à la Phase 10.

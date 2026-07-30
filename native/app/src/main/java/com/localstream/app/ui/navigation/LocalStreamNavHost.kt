@@ -1,6 +1,5 @@
-﻿package com.localstream.app.ui.navigation
+package com.localstream.app.ui.navigation
 
-import android.net.Uri
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -37,13 +36,14 @@ import com.localstream.app.ui.screens.HistoryScreen
 import com.localstream.app.ui.screens.HomeScreen
 import com.localstream.app.ui.screens.LibraryScreen
 import com.localstream.app.ui.screens.PermissionScreen
+import com.localstream.app.ui.screens.PlayerScreen
 import com.localstream.app.ui.screens.PlaylistsScreen
 import com.localstream.app.ui.screens.SearchScreen
 import com.localstream.app.ui.screens.SettingsScreen
 import com.localstream.app.ui.theme.Black
 
 /**
- * Point d'entrée de l'UI (Phase 8) : gate de permission stockage (Phase 3),
+ * Point d'entrée de l'UI (Phase 9) : gate de permission stockage (Phase 3),
  * [Scaffold] avec barre de navigation basse, et [NavHost] reliant les écrans.
  */
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
@@ -56,8 +56,7 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
     val libraryViewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.factory(container))
     val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModel.factory(libraryViewModel))
 
-    // Permission stockage : re-vérifiée à chaque retour au premier plan
-    // (comme le listener "focus" de l'app web).
+    // Permission stockage : re-vérifiée à chaque retour au premier plan.
     var storageGranted by remember { mutableStateOf(StoragePermissions.hasStoragePermission(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         storageGranted = StoragePermissions.hasStoragePermission(context)
@@ -80,7 +79,7 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
-    /** Clic logo : retour accueil + réinitialisation filtres/recherche (resetHomeView du web). */
+    /** Clic logo : retour accueil + réinitialisation filtres/recherche. */
     val resetToHome: () -> Unit = {
         libraryViewModel.resetFilters()
         navController.navigate(Routes.HOME) {
@@ -91,23 +90,28 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
     val openSearch: () -> Unit = { navController.navigate(Routes.SEARCH) }
     val openSettings: () -> Unit = { navController.navigate(Routes.SETTINGS) }
     val openDetails: (VideoItem) -> Unit = { video ->
-        navController.navigate(Routes.details(Uri.encode(video.name)))
+        navController.navigate(Routes.details(video.name))
     }
     val openDetailsByName: (String) -> Unit = { name ->
-        navController.navigate(Routes.details(Uri.encode(name)))
+        navController.navigate(Routes.details(name))
+    }
+    val openPlayer: (VideoItem) -> Unit = { video ->
+        navController.navigate(Routes.player(video.name))
+    }
+    val openPlayerByName: (String) -> Unit = { name ->
+        navController.navigate(Routes.player(name))
     }
 
     Scaffold(
         containerColor = Black,
         bottomBar = {
-            // La barre basse n'apparaît que sur les destinations de premier niveau.
+            // La barre basse n'apparaît que sur les destinations de premier niveau (masquée pendant la lecture).
             val isTopLevel = TopLevelDestination.entries.any { it.route == currentRoute }
             if (isTopLevel) {
                 LocalStreamBottomBar(
                     currentRoute = currentRoute,
                     onNavigate = { destination ->
                         navController.navigate(destination.route) {
-                            // Onglets : un seul écran par onglet dans la pile, état restauré.
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
                             }
@@ -122,15 +126,13 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
         NavHost(
             navController = navController,
             startDestination = Routes.HOME,
-            // Seule la barre basse est consommée ici : le hero de l'accueil passe
-            // sous la barre de statut (edge-to-edge), chaque écran gère ses insets.
             modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
         ) {
             composable(Routes.HOME) {
                 val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
                 HomeScreen(
                     uiState = uiState,
-                    onPlay = openDetails,
+                    onPlay = openPlayer,
                     onOpenDetails = openDetails,
                     onResetProgress = libraryViewModel::resetProgress,
                     onDismissTmdbBanner = libraryViewModel::dismissTmdbBanner,
@@ -197,7 +199,16 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
                 DetailsScreen(
                     id = entry.arguments?.getString(Routes.ARG_ID).orEmpty(),
                     onBack = { navController.popBackStack() },
-                    onPlayVideo = openDetailsByName,
+                    onPlayVideo = openPlayerByName,
+                )
+            }
+            composable(
+                route = Routes.PLAYER,
+                arguments = listOf(navArgument(Routes.ARG_ID) { type = NavType.StringType }),
+            ) { entry ->
+                PlayerScreen(
+                    videoName = entry.arguments?.getString(Routes.ARG_ID).orEmpty(),
+                    onBack = { navController.popBackStack() },
                 )
             }
         }
