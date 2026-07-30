@@ -1,4 +1,4 @@
-﻿package com.localstream.app.domain.model
+package com.localstream.app.domain.model
 
 data class VideoItem(
     val url: String = "",

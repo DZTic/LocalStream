@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.screens
+package com.localstream.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data
+package com.localstream.app.data
 
 import com.localstream.app.data.db.dao.WatchedItemDao
 import com.localstream.app.data.db.entity.WatchedItemEntity

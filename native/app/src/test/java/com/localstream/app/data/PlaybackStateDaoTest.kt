@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data
+package com.localstream.app.data
 
 import com.localstream.app.data.db.dao.PlaybackStateDao
 import com.localstream.app.data.db.entity.PlaybackStateEntity

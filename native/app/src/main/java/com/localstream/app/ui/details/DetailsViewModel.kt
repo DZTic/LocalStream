@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.details
+package com.localstream.app.ui.details
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider

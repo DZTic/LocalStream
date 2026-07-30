@@ -1,4 +1,4 @@
-﻿# Configuration detekt du module natif.
+# Configuration detekt du module natif.
 # S'ajoute à la config par défaut (buildUponDefaultConfig = true).
 # Les règles inadaptées à Jetpack Compose y sont assouplies.
 
