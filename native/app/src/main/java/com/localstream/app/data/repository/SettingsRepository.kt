@@ -3,7 +3,6 @@ package com.localstream.app.data.repository
 import com.localstream.app.data.local.EncryptedPreferencesManager
 import com.localstream.app.data.local.UserPreferencesDataStore
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map

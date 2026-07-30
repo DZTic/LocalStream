@@ -1,6 +1,5 @@
 package com.localstream.app.ui.navigation
 
-import android.net.Uri
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
