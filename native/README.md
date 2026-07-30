@@ -3,11 +3,9 @@
 Réécriture **100 % native** (Kotlin + Jetpack Compose) de LocalStream, menée en
 parallèle de l'app Capacitor existante (`../android/`). Ce dossier est un projet
 Gradle **indépendant** : il ne partage ni configuration ni build avec l'app Capacitor,
-qui reste le produit livré jusqu'à la Phase 10.
+qui est remplacée par le module natif en Phase 10.
 
-> ⚠️ `applicationId` **provisoire** : `com.localstream.app.native`.
-> Le vrai identifiant (`com.localstream.app`) sera repris en Phase 10 afin d'hériter
-> des installations existantes.
+> ✅ `applicationId` **final** : `com.localstream.app` (Phase 10 — reprise de l'identifiant afin d'hériter des installations existantes).
 
 ## Stack
 

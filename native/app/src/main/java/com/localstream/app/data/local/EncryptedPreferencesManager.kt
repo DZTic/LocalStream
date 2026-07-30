@@ -12,7 +12,7 @@ import androidx.security.crypto.MasterKey
  *   - OpenSubtitles API key, username, password
  *
  * Les valeurs sont chiffr\u00e9es avec AES-256-GCM via Jetpack Security (AndroidKeyStore).
- * V\u00e9rification : `adb shell run-as com.localstream.app.native cat shared_prefs/localstream_secure_prefs.xml`
+ * V\u00e9rification : `adb shell run-as com.localstream.app cat shared_prefs/localstream_secure_prefs.xml`
  * — le contenu doit \u00eatre illisible (valeurs chiffr\u00e9es).
  */
 class EncryptedPreferencesManager(context: Context) {
