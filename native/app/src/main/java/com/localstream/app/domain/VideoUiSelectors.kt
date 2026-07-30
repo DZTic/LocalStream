@@ -46,14 +46,14 @@ object VideoUiSelectors {
      */
     fun posterUrl(video: VideoItem, metadata: Map<String, TmdbMetadata>): String? {
         val primary = metadata[metadataKey(video)]?.posterUrl()
-        if (!primary.isNullOrBlank()) return primary
-        if (video.isSeriesGroup && !video.episodes.isNullOrEmpty()) {
-            for (ep in video.episodes) {
-                val epPoster = metadata[ep.name]?.posterUrl()
-                if (!epPoster.isNullOrBlank()) return epPoster
+        val fallback = if (primary.isNullOrBlank() && video.isSeriesGroup) {
+            video.episodes?.firstNotNullOfOrNull { ep ->
+                metadata[ep.name]?.posterUrl()?.takeIf { it.isNotBlank() }
             }
+        } else {
+            null
         }
-        return null
+        return primary.takeIf { !it.isNullOrBlank() } ?: fallback
     }
 
     /** Titre affiché sous la vignette (équivalent du `title` de VideoCard.tsx). */
