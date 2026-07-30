@@ -7,6 +7,8 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import com.localstream.app.ui.navigation.TopLevelDestination
 import com.localstream.app.ui.theme.Red500
 import com.localstream.app.ui.theme.Zinc500
@@ -28,7 +30,15 @@ fun LocalStreamBottomBar(
                 selected = selected,
                 onClick = { onNavigate(destination) },
                 icon = { Icon(destination.icon, contentDescription = label) },
-                label = { Text(label) },
+                label = {
+                    Text(
+                        text = label,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        fontSize = 11.sp,
+                    )
+                },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Red500,
                     selectedTextColor = Red500,

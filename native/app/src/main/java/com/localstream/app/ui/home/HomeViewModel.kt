@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.localstream.app.domain.FolderRow
 import com.localstream.app.domain.HomeRowsDeriver
 import com.localstream.app.domain.model.TmdbMetadata
 import com.localstream.app.domain.model.VideoItem
@@ -30,7 +29,6 @@ data class HomeUiState(
     val recommendations: List<VideoItem> = emptyList(),
     val series: List<VideoItem> = emptyList(),
     val movies: List<VideoItem> = emptyList(),
-    val folderRows: List<FolderRow> = emptyList(),
     val alphabetical: List<VideoItem> = emptyList(),
     val metadata: Map<String, TmdbMetadata> = emptyMap(),
     val watched: Map<String, Boolean> = emptyMap(),
@@ -76,7 +74,6 @@ class HomeViewModel(
                 recommendations = rows.recommendations,
                 series = rows.series,
                 movies = rows.movies,
-                folderRows = rows.folderRows,
                 alphabetical = rows.alphabetical,
                 metadata = state.metadata,
                 watched = state.watched,

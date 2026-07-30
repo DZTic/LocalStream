@@ -1,5 +1,6 @@
 package com.localstream.app.domain
 
+import com.localstream.app.domain.model.TmdbMetadata
 import com.localstream.app.domain.model.VideoItem
 
 /**
@@ -38,6 +39,22 @@ object VideoUiSelectors {
      * (équivalent du `posterKey` web).
      */
     fun metadataKey(video: VideoItem): String = video.seriesName ?: video.name
+
+    /**
+     * URL d'affiche avec fallback automatique pour les sagas/groupes si l'affiche
+     * dédiée au groupe n'est pas encore disponible.
+     */
+    fun posterUrl(video: VideoItem, metadata: Map<String, TmdbMetadata>): String? {
+        val primary = metadata[metadataKey(video)]?.posterUrl()
+        val fallback = if (primary.isNullOrBlank() && video.isSeriesGroup) {
+            video.episodes?.firstNotNullOfOrNull { ep ->
+                metadata[ep.name]?.posterUrl()?.takeIf { it.isNotBlank() }
+            }
+        } else {
+            null
+        }
+        return primary.takeIf { !it.isNullOrBlank() } ?: fallback
+    }
 
     /** Titre affiché sous la vignette (équivalent du `title` de VideoCard.tsx). */
     fun displayTitle(video: VideoItem): String =

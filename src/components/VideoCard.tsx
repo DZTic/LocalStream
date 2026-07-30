@@ -4,6 +4,7 @@ import { VideoFile } from '../lib/types';
 import { getCleanTitle, getResolution } from '../lib/utils';
 
 interface VideoCardProps {
+  posters?: Record<string, string>;
   video: VideoFile;
   posterUrl?: string;
   isWatched: boolean;
@@ -19,6 +20,7 @@ interface VideoCardProps {
 export const VideoCard: React.FC<VideoCardProps> = ({
   video,
   posterUrl,
+  posters,
   isWatched,
   progress = 0,
   onOpenInfo,
@@ -28,6 +30,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   imgClassName = '',
 }) => {
   const resolution = getResolution(video.name);
+  const effectivePosterUrl = posterUrl || (video.isSeriesGroup && video.episodes && video.episodes.length > 0 ? (posters && posters[video.episodes[0].name]) : undefined);
   const title = video.isSeriesGroup ? video.seriesName : (video.seriesName || getCleanTitle(video.name));
 
   return (
@@ -58,9 +61,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         )}
 
         {/* Poster Image */}
-        {posterUrl ? (
+        {effectivePosterUrl ? (
           <img
-            src={posterUrl}
+            src={effectivePosterUrl}
             alt={title}
             className={`w-full h-full object-cover ${imgClassName}`}
             loading="lazy"

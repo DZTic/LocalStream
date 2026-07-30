@@ -17,10 +17,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   sortBy, onSortBy, filterGenre, onFilterGenre, filterResolution, onFilterResolution,
 }) => (
   <div
-    className="px-4 md:px-12 pt-28 pb-6 flex flex-col md:flex-row items-center gap-3 z-30 w-full animate-in fade-in slide-in-from-top-4 duration-500"
+    className="px-4 md:px-12 pt-20 pb-3 flex flex-col md:flex-row items-center gap-3 z-30 w-full animate-in fade-in slide-in-from-top-4 duration-500"
     style={{ marginTop: 'max(env(safe-area-inset-top), 0px)' }}
   >
-    <div className="flex flex-row flex-wrap pb-2 md:pb-0 w-full gap-2 md:gap-4">
+    <div className="flex flex-row items-center overflow-x-auto no-scrollbar w-full gap-2 md:gap-4 pb-1">
 
       <div className="flex items-center gap-2 bg-zinc-900/80 backdrop-blur-md border border-zinc-700/50 rounded-full px-4 py-2 flex-shrink-0 shadow-lg">
         <span className="text-zinc-400 font-medium text-xs uppercase tracking-wider hidden sm:inline">Trier par:</span>
