@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data.scanner
+package com.localstream.app.data.scanner
 
 import com.localstream.app.domain.model.MovieCollection
 import com.localstream.app.domain.model.SubtitleEntry

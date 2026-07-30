@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data.scanner
+package com.localstream.app.data.scanner
 
 import android.content.Context
 import android.database.Cursor

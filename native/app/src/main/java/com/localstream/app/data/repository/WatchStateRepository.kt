@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data.repository
+package com.localstream.app.data.repository
 
 import com.localstream.app.data.db.dao.PlaybackStateDao
 import com.localstream.app.data.db.dao.WatchedItemDao

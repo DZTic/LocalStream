@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.settings
+package com.localstream.app.ui.settings
 
 import com.localstream.app.data.local.SubtitleCache
 import com.localstream.app.data.remote.opensubtitles.OpenSubtitlesApi

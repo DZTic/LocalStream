@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.subtitles
+package com.localstream.app.ui.subtitles
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider

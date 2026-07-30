@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.screens
+package com.localstream.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -42,12 +42,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.localstream.app.LocalStreamApplication
+import com.localstream.app.R
 import com.localstream.app.ui.components.TopBar
 import com.localstream.app.ui.settings.SettingsViewModel
 import com.localstream.app.ui.theme.Black
@@ -101,7 +103,7 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
         ) {
             Text(
-                text = "Paramètres",
+                text = stringResource(R.string.settings_title),
                 color = White,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
@@ -113,7 +115,7 @@ fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.VpnKey, contentDescription = null, tint = Red600)
                         Text(
-                            text = "TMDB (The Movie Database)",
+                            text = stringResource(R.string.settings_tmdb_title),
                             color = White,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
@@ -128,7 +130,7 @@ fun SettingsScreen(
                             tmdbKeyInput = it
                             viewModel.saveTmdbApiKey(it)
                         },
-                        label = { Text("Clé API TMDB", color = White.copy(alpha = 0.6f)) },
+                        label = { Text(stringResource(R.string.settings_tmdb_api_key_label), color = White.copy(alpha = 0.6f)) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = White,
                             unfocusedTextColor = White,
@@ -153,7 +155,7 @@ fun SettingsScreen(
                             if (uiState.isTestingTmdbKey) {
                                 CircularProgressIndicator(color = White, modifier = Modifier.height(16.dp))
                             } else {
-                                Text("Tester la clé", color = White)
+                                Text(stringResource(R.string.settings_tmdb_test_key_button), color = White)
                             }
                         }
 
@@ -176,7 +178,7 @@ fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Subtitles, contentDescription = null, tint = Red600)
                         Text(
-                            text = "OpenSubtitles",
+                            text = stringResource(R.string.settings_opensubtitles_title),
                             color = White,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
@@ -191,7 +193,7 @@ fun SettingsScreen(
                             osKeyInput = it
                             viewModel.saveOsCredentials(it, osUserInput, osPassInput)
                         },
-                        label = { Text("Clé API OpenSubtitles", color = White.copy(alpha = 0.6f)) },
+                        label = { Text(stringResource(R.string.settings_opensubtitles_api_key_label), color = White.copy(alpha = 0.6f)) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = White,
                             unfocusedTextColor = White,
@@ -208,7 +210,7 @@ fun SettingsScreen(
                             osUserInput = it
                             viewModel.saveOsCredentials(osKeyInput, it, osPassInput)
                         },
-                        label = { Text("Nom d'utilisateur", color = White.copy(alpha = 0.6f)) },
+                        label = { Text(stringResource(R.string.settings_opensubtitles_username_label), color = White.copy(alpha = 0.6f)) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = White,
                             unfocusedTextColor = White,
@@ -225,7 +227,7 @@ fun SettingsScreen(
                             osPassInput = it
                             viewModel.saveOsCredentials(osKeyInput, osUserInput, it)
                         },
-                        label = { Text("Mot de passe", color = White.copy(alpha = 0.6f)) },
+                        label = { Text(stringResource(R.string.settings_opensubtitles_password_label), color = White.copy(alpha = 0.6f)) },
                         visualTransformation = PasswordVisualTransformation(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = White,
@@ -251,13 +253,14 @@ fun SettingsScreen(
                             if (uiState.isLoggingInOs) {
                                 CircularProgressIndicator(color = White, modifier = Modifier.height(16.dp))
                             } else {
-                                Text("Se connecter", color = White)
+                                Text(stringResource(R.string.settings_opensubtitles_login_button), color = White)
                             }
                         }
 
+                        val isConnected = uiState.osLoginStatus == "Connecté" || uiState.osLoginStatus == "Connect?"
                         Text(
-                            text = "Statut : ${uiState.osLoginStatus}",
-                            color = if (uiState.osLoginStatus == "Connecté") White else Red600,
+                            text = stringResource(R.string.settings_opensubtitles_status, uiState.osLoginStatus),
+                            color = if (isConnected) White else Red600,
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                         )
@@ -265,13 +268,13 @@ fun SettingsScreen(
                 }
             }
 
-            // Section Lecteur Vidéo
+            // Section Lecteur Vid?o
             Card(colors = CardDefaults.cardColors(containerColor = Zinc900), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Movie, contentDescription = null, tint = Red600)
                         Text(
-                            text = "Lecteur Vidéo",
+                            text = stringResource(R.string.settings_player_title),
                             color = White,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
@@ -284,7 +287,7 @@ fun SettingsScreen(
                         FilterChip(
                             selected = uiState.playerMode == "internal",
                             onClick = { viewModel.setPlayerMode("internal") },
-                            label = { Text("Interne (Media3)") },
+                            label = { Text(stringResource(R.string.settings_player_mode_internal)) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Red600,
                                 selectedLabelColor = White,
@@ -295,7 +298,7 @@ fun SettingsScreen(
                         FilterChip(
                             selected = uiState.playerMode == "external",
                             onClick = { viewModel.setPlayerMode("external") },
-                            label = { Text("Lecteur Externe") },
+                            label = { Text(stringResource(R.string.settings_player_mode_external)) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Red600,
                                 selectedLabelColor = White,
@@ -311,15 +314,16 @@ fun SettingsScreen(
                             expanded = dropdownExpanded,
                             onExpandedChange = { dropdownExpanded = it },
                         ) {
+                            val defaultChoice = stringResource(R.string.settings_player_choose_app)
                             val selectedText = uiState.installedPlayers.find {
                                 it.packageName == uiState.selectedExternalPlayer
-                            }?.appName ?: "Choisir une application"
+                            }?.appName ?: defaultChoice
 
                             OutlinedTextField(
                                 value = selectedText,
                                 onValueChange = {},
                                 readOnly = true,
-                                label = { Text("Application de lecture", color = White.copy(alpha = 0.6f)) },
+                                label = { Text(stringResource(R.string.settings_player_external_app_label), color = White.copy(alpha = 0.6f)) },
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = White,
@@ -350,7 +354,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Section Système
+            // Section Syst?me
             Button(
                 onClick = { viewModel.openSystemAppSettings(context) },
                 colors = ButtonDefaults.buttonColors(containerColor = Zinc800),
@@ -358,7 +362,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             ) {
                 Icon(Icons.Filled.OpenInNew, contentDescription = null, tint = White)
-                Text("Réglages système de l'application", color = White, modifier = Modifier.padding(start = 8.dp))
+                Text(stringResource(R.string.settings_system_apps_settings), color = White, modifier = Modifier.padding(start = 8.dp))
             }
         }
     }

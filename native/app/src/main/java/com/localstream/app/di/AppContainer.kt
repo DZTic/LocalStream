@@ -1,4 +1,4 @@
-﻿package com.localstream.app.di
+package com.localstream.app.di
 
 import android.content.Context
 import com.localstream.app.data.db.AppDatabase

@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.details
+package com.localstream.app.ui.details
 
 import com.localstream.app.data.db.dao.PlaybackStateDao
 import com.localstream.app.data.db.dao.PlaylistDao

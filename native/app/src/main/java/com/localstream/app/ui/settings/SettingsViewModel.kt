@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.settings
+package com.localstream.app.ui.settings
 
 import android.content.Context
 import android.content.Intent

@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.screens
+package com.localstream.app.ui.screens
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -369,7 +369,7 @@ fun DetailsScreen(
                 items(uiState.episodes, key = { it.video.name }) { ep ->
                     EpisodeItemRow(
                         ep = ep,
-                                                onPlay = { onPlayVideo(ep.video.name) },
+                        onPlay = { onPlayVideo(ep.video.name) },
                         onToggleWatched = { detailsViewModel.toggleEpisodeWatched(ep.video.name) },
                         onToggleExpanded = { detailsViewModel.toggleEpisodeExpanded(ep.video.name) },
                         onResetProgress = { detailsViewModel.resetProgress(ep.video.name) },
@@ -393,7 +393,8 @@ private fun EpisodeItemRow(
         colors = CardDefaults.cardColors(containerColor = Zinc900),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clickable(onClick = onToggleExpanded),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -417,6 +418,16 @@ private fun EpisodeItemRow(
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = "Lecture",
+                        tint = White.copy(alpha = 0.9f),
+                        modifier = Modifier
+                            .size(24.dp)
+                            .align(Alignment.Center)
+                            .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .padding(2.dp),
+                    )
                     if (ep.progressPercent > 0f) {
                         LinearProgressIndicator(
                             progress = { ep.progressPercent },
@@ -432,7 +443,7 @@ private fun EpisodeItemRow(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                Column(modifier = Modifier.weight(1f).clickable(onClick = onPlay)) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Ép. ${ep.video.episode ?: ep.tmdbEpisode?.episodeNumber ?: ""} - ${ep.tmdbEpisode?.name ?: TitleCleaner.getCleanTitle(ep.video.name)}",
                         color = White,
@@ -459,7 +470,7 @@ private fun EpisodeItemRow(
                 IconButton(onClick = onToggleExpanded) {
                     Icon(
                         if (ep.isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = "Plus d'infos",
+                        contentDescription = "D?tails de l'?pisode",
                         tint = White,
                     )
                 }
@@ -473,7 +484,17 @@ private fun EpisodeItemRow(
                 ) {
                     ep.tmdbEpisode?.overview?.takeIf { it.isNotBlank() }?.let { overview ->
                         Text(text = overview, color = Zinc300, style = MaterialTheme.typography.bodySmall)
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    Button(
+                        onClick = onPlay,
+                        colors = ButtonDefaults.buttonColors(containerColor = Red600),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = "Lecture", tint = White)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Lecture", color = White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     }
                     Text(
                         text = "Fichier : ${ep.video.name}",

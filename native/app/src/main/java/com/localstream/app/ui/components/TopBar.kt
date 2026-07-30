@@ -27,20 +27,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.localstream.app.R
 import com.localstream.app.ui.theme.Red600
 import com.localstream.app.ui.theme.White
 
 /**
- * Barre supérieure (équivalent Compose de `AppHeader.tsx`) : logo "LOCALSTREAM"
+ * Barre sup?rieure (?quivalent Compose de `AppHeader.tsx`) : logo "LOCALSTREAM"
  * rouge (retour accueil + reset des filtres), indicateur de chargement TMDB,
- * recherche, réglages.
+ * recherche, r?glages.
  *
- * [solid] : fond noir opaque (écrans Recherche/Bibliothèque) ; sinon dégradé
- * noir → transparent au-dessus du hero, qui devient opaque au scroll (géré par
- * l'appelant via [solid] dérivé du LazyListState).
+ * [solid] : fond noir opaque (?crans Recherche/Biblioth?que) ; sinon d?grad?
+ * noir ? transparent au-dessus du hero, qui devient opaque au scroll (g?r? par
+ * l'appelant via [solid] d?riv? du LazyListState).
  */
 @Composable
 fun TopBar(
@@ -96,7 +98,7 @@ fun TopBar(
             IconButton(onClick = onSettingsClick) {
                 Icon(
                     imageVector = Icons.Filled.Settings,
-                    contentDescription = "Paramètres",
+                    contentDescription = stringResource(R.string.settings_title),
                     tint = White,
                 )
             }
@@ -104,7 +106,7 @@ fun TopBar(
     }
 }
 
-/** Indicateur de récupération TMDB en cours (RefreshCw animé du web). */
+/** Indicateur de r?cup?ration TMDB en cours (RefreshCw anim? du web). */
 @Composable
 private fun SpinningRefreshIcon() {
     val transition = rememberInfiniteTransition(label = "tmdb-refresh")
@@ -117,7 +119,7 @@ private fun SpinningRefreshIcon() {
     Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
         Icon(
             imageVector = Icons.Filled.Refresh,
-            contentDescription = "Récupération des métadonnées TMDB en cours",
+            contentDescription = "R?cup?ration des m?tadonn?es TMDB en cours",
             tint = Red600,
             modifier = Modifier
                 .size(18.dp)

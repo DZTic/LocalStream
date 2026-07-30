@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data.repository
+package com.localstream.app.data.repository
 
 import com.localstream.app.data.db.dao.PlaylistDao
 import com.localstream.app.data.db.entity.PlaylistEntity

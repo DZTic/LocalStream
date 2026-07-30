@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data.db.dao
+package com.localstream.app.data.db.dao
 
 import androidx.room.Dao
 import androidx.room.Insert

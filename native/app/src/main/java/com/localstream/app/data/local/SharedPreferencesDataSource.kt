@@ -1,4 +1,4 @@
-﻿package com.localstream.app.data.local
+package com.localstream.app.data.local
 
 import android.content.Context
 import android.content.SharedPreferences

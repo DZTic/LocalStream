@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.playlists
+package com.localstream.app.ui.playlists
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider

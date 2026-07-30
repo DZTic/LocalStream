@@ -1,4 +1,4 @@
-﻿// Fichier de build racine — d\u00e9clare les plugins partag\u00e9s sans les appliquer ici.
+// Fichier de build racine — d\u00e9clare les plugins partag\u00e9s sans les appliquer ici.
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.android) apply false
