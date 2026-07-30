@@ -1,4 +1,4 @@
-ï»¿package com.localstream.app.ui.screens
+package com.localstream.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -96,12 +96,12 @@ fun SettingsScreen(
         Column(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
             Text(
-                text = "ParamÃ¨tres",
+                text = "Paramètres",
                 color = White,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
@@ -128,7 +128,7 @@ fun SettingsScreen(
                             tmdbKeyInput = it
                             viewModel.saveTmdbApiKey(it)
                         },
-                        label = { Text("ClÃ© API TMDB", color = White.copy(alpha = 0.6f)) },
+                        label = { Text("Clé API TMDB", color = White.copy(alpha = 0.6f)) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = White,
                             unfocusedTextColor = White,
@@ -153,7 +153,7 @@ fun SettingsScreen(
                             if (uiState.isTestingTmdbKey) {
                                 CircularProgressIndicator(color = White, modifier = Modifier.height(16.dp))
                             } else {
-                                Text("Tester la clÃ©", color = White)
+                                Text("Tester la clé", color = White)
                             }
                         }
 
@@ -191,7 +191,7 @@ fun SettingsScreen(
                             osKeyInput = it
                             viewModel.saveOsCredentials(it, osUserInput, osPassInput)
                         },
-                        label = { Text("ClÃ© API OpenSubtitles", color = White.copy(alpha = 0.6f)) },
+                        label = { Text("Clé API OpenSubtitles", color = White.copy(alpha = 0.6f)) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = White,
                             unfocusedTextColor = White,
@@ -257,7 +257,7 @@ fun SettingsScreen(
 
                         Text(
                             text = "Statut : ${uiState.osLoginStatus}",
-                            color = if (uiState.osLoginStatus == "ConnectÃ©") White else Red600,
+                            color = if (uiState.osLoginStatus == "Connecté") White else Red600,
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                         )
@@ -265,13 +265,13 @@ fun SettingsScreen(
                 }
             }
 
-            // Section Lecteur VidÃ©o
+            // Section Lecteur Vidéo
             Card(colors = CardDefaults.cardColors(containerColor = Zinc900), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Movie, contentDescription = null, tint = Red600)
                         Text(
-                            text = "Lecteur VidÃ©o",
+                            text = "Lecteur Vidéo",
                             color = White,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
@@ -350,7 +350,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Section SystÃ¨me
+            // Section Système
             Button(
                 onClick = { viewModel.openSystemAppSettings(context) },
                 colors = ButtonDefaults.buttonColors(containerColor = Zinc800),
@@ -358,7 +358,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             ) {
                 Icon(Icons.Filled.OpenInNew, contentDescription = null, tint = White)
-                Text("RÃ©glages systÃ¨me de l'application", color = White, modifier = Modifier.padding(start = 8.dp))
+                Text("Réglages système de l'application", color = White, modifier = Modifier.padding(start = 8.dp))
             }
         }
     }
