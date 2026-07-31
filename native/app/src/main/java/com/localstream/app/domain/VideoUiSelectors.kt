@@ -1,4 +1,4 @@
-package com.localstream.app.domain
+﻿package com.localstream.app.domain
 
 import com.localstream.app.domain.model.TmdbMetadata
 import com.localstream.app.domain.model.VideoItem
@@ -32,6 +32,55 @@ object VideoUiSelectors {
         } else {
             progress[video.name] ?: 0.0
         }
+
+    /**
+     * Identifie l'épisode actif (en cours de lecture, ou le prochain non vu) d'une série.
+     */
+    @Suppress("ReturnCount")
+    fun getActiveEpisode(
+        video: VideoItem,
+        progress: Map<String, Double>,
+        watched: Map<String, Boolean>,
+    ): VideoItem? {
+        if (!video.isSeriesGroup || video.episodes.isNullOrEmpty()) return null
+        val inProgress = video.episodes.firstOrNull { ep ->
+            val p = progress[ep.name] ?: 0.0
+            p > 0.0 && watched[ep.name] != true
+        }
+        val nextUnwatched = video.episodes.firstOrNull { ep -> watched[ep.name] != true }
+        return inProgress ?: nextUnwatched ?: video.episodes.firstOrNull()
+    }
+
+    /**
+     * Formate le numéro de saison et d'épisode (ex: "S1:E2").
+     */
+    fun formatEpisodeLabel(video: VideoItem, episode: VideoItem): String {
+        val idx = video.episodes?.indexOfFirst { it.name == episode.name } ?: -1
+        val epNum = episode.episode ?: (if (idx >= 0) idx + 1 else 1)
+        val seasonNum = episode.season ?: 1
+        return "S${seasonNum}:E${epNum}"
+    }
+
+    /**
+     * Retourne le libellé de l'épisode actif pour l'affichage sur la carte.
+     */
+    @Suppress("ReturnCount")
+    fun activeEpisodeLabel(
+        video: VideoItem,
+        progress: Map<String, Double>,
+        watched: Map<String, Boolean>,
+    ): String? {
+        if (!video.isSeriesGroup || video.episodes.isNullOrEmpty()) return null
+        val activeEp = getActiveEpisode(video, progress, watched) ?: return null
+        val label = formatEpisodeLabel(video, activeEp)
+        val p = progress[activeEp.name] ?: 0.0
+        val epWatched = watched[activeEp.name] == true
+        return when {
+            p > 0.0 && !epWatched -> "En cours : $label"
+            video.episodes.any { watched[it.name] == true } -> "Prochain : $label"
+            else -> label
+        }
+    }
 
     /**
      * Clé de recherche des métadonnées TMDB (affiche, backdrop, synopsis) :

@@ -1,8 +1,9 @@
-package com.localstream.app.domain
+﻿package com.localstream.app.domain
 
 import com.localstream.app.domain.model.VideoItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -12,9 +13,9 @@ import org.junit.Test
  */
 class VideoUiSelectorsTest {
 
-    private val ep1 = VideoItem(url = "u1", name = "Show S01E01.mkv")
-    private val ep2 = VideoItem(url = "u2", name = "Show S01E02.mkv")
-    private val ep3 = VideoItem(url = "u3", name = "Show S01E03.mkv")
+    private val ep1 = VideoItem(url = "u1", name = "Show S01E01.mkv", season = 1, episode = 1)
+    private val ep2 = VideoItem(url = "u2", name = "Show S01E02.mkv", season = 1, episode = 2)
+    private val ep3 = VideoItem(url = "u3", name = "Show S01E03.mkv", season = 1, episode = 3)
     private val show = VideoItem(
         url = "u1",
         name = "Show",
@@ -48,6 +49,20 @@ class VideoUiSelectorsTest {
         assertEquals(42.0, VideoUiSelectors.progressOf(show, progress), 0.001)
         assertEquals(0.0, VideoUiSelectors.progressOf(show, emptyMap()), 0.001)
         assertEquals(12.5, VideoUiSelectors.progressOf(film, mapOf("Film.2024.1080p.mkv" to 12.5)), 0.001)
+    }
+
+    @Test
+    fun `épisode actif et libellé d'épisode`() {
+        assertEquals("S1:E1", VideoUiSelectors.activeEpisodeLabel(show, emptyMap(), emptyMap()))
+
+        val inProgress = mapOf("Show S01E02.mkv" to 30.0)
+        val watchedFirst = mapOf("Show S01E01.mkv" to true)
+        assertEquals("En cours : S1:E2", VideoUiSelectors.activeEpisodeLabel(show, inProgress, watchedFirst))
+
+        val watchedTwo = mapOf("Show S01E01.mkv" to true, "Show S01E02.mkv" to true)
+        assertEquals("Prochain : S1:E3", VideoUiSelectors.activeEpisodeLabel(show, emptyMap(), watchedTwo))
+
+        assertNull(VideoUiSelectors.activeEpisodeLabel(film, emptyMap(), emptyMap()))
     }
 
     @Test

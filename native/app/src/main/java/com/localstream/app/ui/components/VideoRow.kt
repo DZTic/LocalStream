@@ -1,4 +1,4 @@
-package com.localstream.app.ui.components
+﻿package com.localstream.app.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +22,7 @@ import com.localstream.app.ui.theme.White
  * Carrousel horizontal d'affiches (équivalent Compose de `VideoRow.tsx`).
  * Clés stables pour éviter les recompositions inutiles au fil des mises à jour.
  */
+@Suppress("LongParameterList", "FunctionNaming")
 @Composable
 fun VideoRow(
     title: String,
@@ -57,6 +58,7 @@ fun VideoRow(
                     posterUrl = VideoUiSelectors.posterUrl(video, metadata),
                     isWatched = VideoUiSelectors.isWatched(video, watched),
                     progress = VideoUiSelectors.progressOf(video, progress),
+                    episodeLabel = VideoUiSelectors.activeEpisodeLabel(video, progress, watched),
                     showResetProgress = showResetProgress,
                     onClick = { onOpenDetails(video) },
                     onResetProgress = { onResetProgress(video.name) },

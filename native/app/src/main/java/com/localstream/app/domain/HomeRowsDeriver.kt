@@ -1,4 +1,4 @@
-package com.localstream.app.domain
+﻿package com.localstream.app.domain
 
 import com.localstream.app.domain.model.VideoItem
 
@@ -30,17 +30,20 @@ object HomeRowsDeriver {
         watched: Map<String, Boolean>,
         progress: Map<String, Double>,
     ): HomeRows {
-        val heroCandidates = HeroSelector.getHeroCandidates(grouped, watched, progress)
-            .ifEmpty { listOfNotNull(filteredSorted.firstOrNull() ?: grouped.firstOrNull()) }
-
         val unwatchedOnly = { items: List<VideoItem> ->
             items.filter { !VideoUiSelectors.isWatched(it, watched) }
         }
 
+        val unwatchedGrouped = unwatchedOnly(grouped)
+        val unwatchedFilteredSorted = unwatchedOnly(filteredSorted)
+
+        val heroCandidates = HeroSelector.getHeroCandidates(grouped, watched, progress)
+            .ifEmpty { listOfNotNull(unwatchedFilteredSorted.firstOrNull() ?: unwatchedGrouped.firstOrNull() ?: grouped.firstOrNull()) }
+
         return HomeRows(
             heroCandidates = heroCandidates,
-            continueWatching = filteredSorted.filter { v ->
-                val p = progress[v.name] ?: 0.0
+            continueWatching = unwatchedFilteredSorted.filter { v ->
+                val p = VideoUiSelectors.progressOf(v, progress)
                 p > 0.0 && p < CONTINUE_MAX_PROGRESS
             },
             recentAdditions = unwatchedOnly(grouped.asReversed().take(ROW_LIMIT)),

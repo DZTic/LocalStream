@@ -1,8 +1,7 @@
-package com.localstream.app.ui.components
+﻿package com.localstream.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
@@ -51,6 +50,7 @@ private val ProgressTrack = Color(0xFF52525B) // zinc-600 Tailwind
  *
  * Les contenus vus sont atténués (opacité + désaturation), comme sur le web.
  */
+@Suppress("LongParameterList", "LongMethod", "FunctionNaming")
 @Composable
 fun VideoCard(
     video: VideoItem,
@@ -61,10 +61,9 @@ fun VideoCard(
     onClick: () -> Unit,
     onResetProgress: () -> Unit,
     modifier: Modifier = Modifier,
+    episodeLabel: String? = null,
 ) {
     val title = VideoUiSelectors.displayTitle(video)
-    // Comme le web (VideoCard.tsx) : la résolution est déduite du nom de l'item
-    // affiché — pas de badge sur un groupe dont le nom est un titre de série.
     val resolution = Formatters.getResolution(video.name)
 
     Column(modifier = modifier) {
@@ -84,8 +83,10 @@ fun VideoCard(
 
             // Badge type (Série / Saga) — coin haut gauche.
             if (video.isSeriesGroup) {
+                val shortEp = episodeLabel?.substringAfter(" : ")?.takeIf { it.isNotBlank() }
+                val badgeText = if (shortEp != null) "Série • $shortEp" else (if (video.isTvSeries) "Série" else "Saga")
                 Badge(
-                    text = if (video.isTvSeries) "Série" else "Saga",
+                    text = badgeText,
                     background = Red600,
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -172,10 +173,23 @@ fun VideoCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 4.dp, top = 6.dp),
         )
+
+        if (video.isSeriesGroup && !episodeLabel.isNullOrEmpty()) {
+            Text(
+                text = episodeLabel,
+                color = if (episodeLabel.startsWith("En cours")) Red600 else Zinc500,
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 4.dp, top = 2.dp),
+            )
+        }
     }
 }
 
 /** Affiche Coil, ou placeholder zinc-800 avec le titre nettoyé (comme le web). */
+@Suppress("FunctionNaming")
 @Composable
 private fun PosterImage(
     posterUrl: String?,
@@ -218,6 +232,7 @@ private fun PosterImage(
     }
 }
 
+@Suppress("FunctionNaming")
 @Composable
 private fun Badge(
     text: String,

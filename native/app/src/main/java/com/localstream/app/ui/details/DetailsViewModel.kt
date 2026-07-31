@@ -1,10 +1,11 @@
-package com.localstream.app.ui.details
+﻿package com.localstream.app.ui.details
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.localstream.app.data.db.entity.PlaybackStateEntity
 import com.localstream.app.di.AppContainer
+import com.localstream.app.domain.VideoUiSelectors
 import com.localstream.app.domain.model.PlaylistInfo
 import com.localstream.app.domain.model.TmdbEpisode
 import com.localstream.app.domain.model.TmdbMetadata
@@ -14,7 +15,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -37,19 +37,13 @@ data class DetailsUiState(
     val watchDurationMs: Long = 0L,
     val activeEpisodeName: String? = null,
     val activeEpisodeNumber: Int? = null,
+    val activeEpisodeLabel: String? = null,
     val userPlaylists: List<PlaylistInfo> = emptyList(),
     val selectedSeason: Int = 1,
     val availableSeasons: List<Int> = listOf(1),
     val episodes: List<EpisodeUiState> = emptyList(),
     val isLoadingTmdb: Boolean = false,
     val tmdbError: String? = null,
-)
-
-private data class ActiveEpisodeState(
-    val posMs: Long,
-    val durMs: Long,
-    val name: String,
-    val number: Int?,
 )
 
 @Suppress("TooManyFunctions", "LongMethod", "UNCHECKED_CAST", "CyclomaticComplexMethod")
@@ -151,6 +145,23 @@ class DetailsViewModel(
         val isGroupWatched = watchedSet.contains(group.name) ||
             (group.episodes?.isNotEmpty() == true && group.episodes.all { watchedSet.contains(it.name) })
 
+        val watchedMap = watchedSet.associateWith { true }
+        val progressMap = playbackMap.mapValues { it.value.progressPct }
+        val activeEp = VideoUiSelectors.getActiveEpisode(group, progressMap, watchedMap)
+        val activeEpPb = activeEp?.let { playbackMap[it.name] }
+        val posMs = activeEpPb?.positionMs ?: playbackMap[group.name]?.positionMs ?: 0L
+        val durMs = if (activeEp != null && activeEp.duration > 0) {
+            activeEp.duration * 1000L
+        } else if (group.duration > 0) {
+            group.duration * 1000L
+        } else {
+            val pct = activeEpPb?.progressPct ?: playbackMap[group.name]?.progressPct ?: 0.0
+            if (pct > 0.0) (posMs / (pct / 100.0)).toLong() else 0L
+        }
+        val activeName = activeEp?.name ?: group.name
+        val activeLabel = activeEp?.let { VideoUiSelectors.formatEpisodeLabel(group, it) }
+        val activeNum = activeEp?.episode ?: group.episodes?.indexOfFirst { it.name == activeEp?.name }?.takeIf { it >= 0 }?.plus(1)
+
         val seasons = group.episodes?.mapNotNull { it.season }?.distinct()?.sorted()?.ifEmpty { listOf(1) } ?: listOf(1)
         val currentSeason = if (seasons.contains(season)) season else seasons.firstOrNull() ?: 1
 
@@ -182,41 +193,15 @@ class DetailsViewModel(
             )
         }
 
-        // Active episode & header watch position computation
-        val activeState = if (group.isSeriesGroup && !group.episodes.isNullOrEmpty()) {
-            val inProgressEp = group.episodes.firstOrNull { ep ->
-                val pos = playbackMap[ep.name]?.positionMs ?: 0L
-                pos > 0L && !watchedSet.contains(ep.name)
-            }
-            val targetEp = inProgressEp
-                ?: group.episodes.firstOrNull { !watchedSet.contains(it.name) }
-                ?: group.episodes.first()
-
-            val targetPb = playbackMap[targetEp.name]
-            val targetPos = targetPb?.positionMs ?: 0L
-            val targetDur = if (targetEp.duration > 0) {
-                targetEp.duration * 1000L
-            } else {
-                val pct = targetPb?.progressPct ?: 0.0
-                if (pct > 0.0) (targetPos / (pct / 100.0)).toLong() else 0L
-            }
-            val targetNum = targetEp.episode ?: (group.episodes.indexOf(targetEp) + 1)
-            ActiveEpisodeState(targetPos, targetDur, targetEp.name, targetNum)
-        } else {
-            val playback = playbackMap[group.name]
-            val posMs = playback?.positionMs ?: 0L
-            val durMs = group.duration * 1000L
-            ActiveEpisodeState(posMs, durMs, group.name, null)
-        }
-
         DetailsUiState(
             videoGroup = group,
             metadata = meta,
             isWatched = isGroupWatched,
-            watchPositionMs = activeState.posMs,
-            watchDurationMs = activeState.durMs,
-            activeEpisodeName = activeState.name,
-            activeEpisodeNumber = activeState.number,
+            watchPositionMs = posMs,
+            watchDurationMs = durMs,
+            activeEpisodeName = activeName,
+            activeEpisodeNumber = activeNum,
+            activeEpisodeLabel = activeLabel,
             userPlaylists = playlists,
             selectedSeason = currentSeason,
             availableSeasons = seasons,
@@ -302,7 +287,7 @@ class DetailsViewModel(
                     loadEpisodesFromCache(lookupName, eps)
                 }
             } else {
-                tmdbErrorFlow.value = result.exceptionOrNull()?.message ?: "Erreur de r�cup�ration TMDB"
+                tmdbErrorFlow.value = result.exceptionOrNull()?.message ?: "Erreur de récupération TMDB"
             }
             isLoadingTmdbFlow.value = false
         }
