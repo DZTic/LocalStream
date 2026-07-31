@@ -83,8 +83,7 @@ fun VideoCard(
 
             // Badge type (Série / Saga) — coin haut gauche.
             if (video.isSeriesGroup) {
-                val shortEp = episodeLabel?.substringAfter(" : ")?.takeIf { it.isNotBlank() }
-                val badgeText = if (shortEp != null) "Série • $shortEp" else (if (video.isTvSeries) "Série" else "Saga")
+                val badgeText = if (video.isTvSeries) "Série" else "Saga"
                 Badge(
                     text = badgeText,
                     background = Red600,
