@@ -330,23 +330,31 @@ class PlayerViewModel(
     }
 
     fun adjustVolume(deltaPercent: Int) {
-        val newVol = (volumePercentFlow.value + deltaPercent).coerceIn(0, 100)
-        volumePercentFlow.value = newVol
+        setVolumePercent(volumePercentFlow.value + deltaPercent)
+    }
+
+    fun setVolumePercent(newVol: Int) {
+        val coerced = newVol.coerceIn(0, 100)
+        volumePercentFlow.value = coerced
         gestureFeedbackFlow.value = GestureFeedback(
             type = FeedbackType.VOLUME,
-            valuePercent = newVol,
-            text = "Volume: $newVol%",
+            valuePercent = coerced,
+            text = "Volume: $coerced%",
         )
     }
 
     fun adjustBrightness(deltaPercent: Float) {
-        val newBright = (brightnessPercentFlow.value + deltaPercent).coerceIn(0.05f, 1.0f)
-        brightnessPercentFlow.value = newBright
-        val pct = (newBright * 100).toInt()
+        setBrightnessPercent(brightnessPercentFlow.value + deltaPercent)
+    }
+
+    fun setBrightnessPercent(newBright: Float) {
+        val coerced = newBright.coerceIn(0.05f, 1.0f)
+        brightnessPercentFlow.value = coerced
+        val pct = (coerced * 100).toInt()
         gestureFeedbackFlow.value = GestureFeedback(
             type = FeedbackType.BRIGHTNESS,
             valuePercent = pct,
-            text = "Luminosité: $pct%",
+            text = "Luminosit?: $pct%",
         )
     }
 

@@ -9,6 +9,7 @@ import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.util.Rational
@@ -111,6 +112,7 @@ import com.localstream.app.ui.theme.Zinc800
 import com.localstream.app.ui.theme.Zinc900
 import java.io.File
 import java.util.Locale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 private const val CONTROLS_TIMEOUT_MS = 3500L
@@ -129,6 +131,20 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val audioManager = remember(context) {
+        context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    }
+
+    // Synchronisation du volume avec AudioManager syst?me
+    LaunchedEffect(uiState.volumePercent) {
+        audioManager?.let { am ->
+            val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            if (maxVol > 0) {
+                val targetVol = ((uiState.volumePercent / 100f) * maxVol).roundToInt().coerceIn(0, maxVol)
+                am.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+            }
+        }
+    }
 
     // Mode externe : lancement direct de l'application vidéo choisie
     LaunchedEffect(uiState.playerMode, uiState.currentVideo) {
@@ -302,25 +318,40 @@ fun PlayerScreen(
                     }
                     launch {
                         var isLeftSide = false
-                        var accumVolume = 0f
+                        var startY = 0f
+                        var startVolume = 0
+                        var startBrightness = 1.0f
+
                         detectVerticalDragGestures(
                             onDragStart = { offset ->
                                 isLeftSide = offset.x < size.width / 2
-                                accumVolume = 0f
+                                startY = offset.y
+                                audioManager?.let { am ->
+                                    val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                                    if (maxVol > 0) {
+                                        val curVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                                        val curPct = ((curVol.toFloat() / maxVol) * 100).toInt()
+                                        startVolume = curPct
+                                    } else {
+                                        startVolume = uiState.volumePercent
+                                    }
+                                } ?: run {
+                                    startVolume = uiState.volumePercent
+                                }
+                                startBrightness = uiState.brightnessPercent
                             },
-                            onVerticalDrag = { change, dragAmount ->
+                            onVerticalDrag = { change, _ ->
                                 change.consume()
                                 val height = size.height.toFloat().coerceAtLeast(1f)
-                                val deltaRatio = -dragAmount / height
+                                val totalDeltaY = startY - change.position.y
+                                val swipeRatio = totalDeltaY / (height * 0.45f)
+
                                 if (isLeftSide) {
-                                    viewModel.adjustBrightness(deltaRatio)
+                                    val newBrightness = (startBrightness + swipeRatio).coerceIn(0.05f, 1.0f)
+                                    viewModel.setBrightnessPercent(newBrightness)
                                 } else {
-                                    accumVolume += deltaRatio * 100f
-                                    val deltaInt = accumVolume.toInt()
-                                    if (deltaInt != 0) {
-                                        viewModel.adjustVolume(deltaInt)
-                                        accumVolume -= deltaInt
-                                    }
+                                    val newVolume = (startVolume + (swipeRatio * 100f)).roundToInt().coerceIn(0, 100)
+                                    viewModel.setVolumePercent(newVolume)
                                 }
                             },
                         )

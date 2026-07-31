@@ -217,6 +217,23 @@ class PlayerViewModelTest {
     }
 
     @Test
+    fun `setVolumePercent and setBrightnessPercent update state`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.setVolumePercent(50)
+        advanceUntilIdle()
+        assertEquals(50, viewModel.uiState.value.volumePercent)
+        assertEquals(FeedbackType.VOLUME, viewModel.uiState.value.gestureFeedback?.type)
+
+        viewModel.setBrightnessPercent(0.4f)
+        advanceUntilIdle()
+        assertEquals(0.4f, viewModel.uiState.value.brightnessPercent, 0.01f)
+        assertEquals(FeedbackType.BRIGHTNESS, viewModel.uiState.value.gestureFeedback?.type)
+    }
+
+    @Test
     fun `adjustVolume and adjustBrightness emit gesture feedback`() = runTest {
         val viewModel = PlayerViewModel(video1.name, container)
         backgroundScope.launch { viewModel.uiState.collect {} }
