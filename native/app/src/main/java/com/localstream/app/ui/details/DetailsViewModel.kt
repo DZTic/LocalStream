@@ -36,6 +36,7 @@ data class DetailsUiState(
     val watchPositionMs: Long = 0L,
     val watchDurationMs: Long = 0L,
     val activeEpisodeName: String? = null,
+    val activeEpisodeNumber: Int? = null,
     val activeEpisodeLabel: String? = null,
     val userPlaylists: List<PlaylistInfo> = emptyList(),
     val selectedSeason: Int = 1,
@@ -45,7 +46,7 @@ data class DetailsUiState(
     val tmdbError: String? = null,
 )
 
-@Suppress("TooManyFunctions", "LongMethod", "UNCHECKED_CAST")
+@Suppress("TooManyFunctions", "LongMethod", "UNCHECKED_CAST", "CyclomaticComplexMethod")
 class DetailsViewModel(
     val id: String,
     private val container: AppContainer,
@@ -149,9 +150,17 @@ class DetailsViewModel(
         val activeEp = VideoUiSelectors.getActiveEpisode(group, progressMap, watchedMap)
         val activeEpPb = activeEp?.let { playbackMap[it.name] }
         val posMs = activeEpPb?.positionMs ?: playbackMap[group.name]?.positionMs ?: 0L
-        val durMs = (activeEp?.duration ?: group.duration) * 1000L
+        val durMs = if (activeEp != null && activeEp.duration > 0) {
+            activeEp.duration * 1000L
+        } else if (group.duration > 0) {
+            group.duration * 1000L
+        } else {
+            val pct = activeEpPb?.progressPct ?: playbackMap[group.name]?.progressPct ?: 0.0
+            if (pct > 0.0) (posMs / (pct / 100.0)).toLong() else 0L
+        }
         val activeName = activeEp?.name ?: group.name
         val activeLabel = activeEp?.let { VideoUiSelectors.formatEpisodeLabel(group, it) }
+        val activeNum = activeEp?.episode ?: group.episodes?.indexOfFirst { it.name == activeEp?.name }?.takeIf { it >= 0 }?.plus(1)
 
         val seasons = group.episodes?.mapNotNull { it.season }?.distinct()?.sorted()?.ifEmpty { listOf(1) } ?: listOf(1)
         val currentSeason = if (seasons.contains(season)) season else seasons.firstOrNull() ?: 1
@@ -162,7 +171,12 @@ class DetailsViewModel(
             val epWatched = watchedSet.contains(ep.name)
             val epPb = playbackMap[ep.name]
             val epPos = epPb?.positionMs ?: 0L
-            val epDur = ep.duration * 1000L
+            val epDur = if (ep.duration > 0) {
+                ep.duration * 1000L
+            } else {
+                val pct = epPb?.progressPct ?: 0.0
+                if (pct > 0.0) (epPos / (pct / 100.0)).toLong() else 0L
+            }
             val epProgress = if (epDur > 0L) (epPos.toFloat() / epDur.toFloat()).coerceIn(0f, 1f) else 0f
 
             val tmdbEp = cachedEpisodes[ep.name]
@@ -186,6 +200,7 @@ class DetailsViewModel(
             watchPositionMs = posMs,
             watchDurationMs = durMs,
             activeEpisodeName = activeName,
+            activeEpisodeNumber = activeNum,
             activeEpisodeLabel = activeLabel,
             userPlaylists = playlists,
             selectedSeason = currentSeason,
@@ -263,6 +278,14 @@ class DetailsViewModel(
             val result = container.tmdbRepository.fetchMetadataForVideo(group, forceRefresh = true)
             if (result.isSuccess) {
                 cachedMetadataFlow.value = result.getOrNull()
+                group.episodes?.let { eps ->
+                    val lookupName = if (group.isSeriesGroup && !group.seriesName.isNullOrEmpty()) {
+                        group.seriesName
+                    } else {
+                        group.name
+                    }
+                    loadEpisodesFromCache(lookupName, eps)
+                }
             } else {
                 tmdbErrorFlow.value = result.exceptionOrNull()?.message ?: "Erreur de récupération TMDB"
             }

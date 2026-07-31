@@ -30,8 +30,12 @@ object HomeRowsDeriver {
         watched: Map<String, Boolean>,
         progress: Map<String, Double>,
     ): HomeRows {
-        val unwatchedGrouped = grouped.filter { !VideoUiSelectors.isWatched(it, watched) }
-        val unwatchedFilteredSorted = filteredSorted.filter { !VideoUiSelectors.isWatched(it, watched) }
+        val unwatchedOnly = { items: List<VideoItem> ->
+            items.filter { !VideoUiSelectors.isWatched(it, watched) }
+        }
+
+        val unwatchedGrouped = unwatchedOnly(grouped)
+        val unwatchedFilteredSorted = unwatchedOnly(filteredSorted)
 
         val heroCandidates = HeroSelector.getHeroCandidates(grouped, watched, progress)
             .ifEmpty { listOfNotNull(unwatchedFilteredSorted.firstOrNull() ?: unwatchedGrouped.firstOrNull() ?: grouped.firstOrNull()) }
@@ -42,14 +46,14 @@ object HomeRowsDeriver {
                 val p = VideoUiSelectors.progressOf(v, progress)
                 p > 0.0 && p < CONTINUE_MAX_PROGRESS
             },
-            recentAdditions = unwatchedGrouped.asReversed().take(ROW_LIMIT),
-            recommendations = unwatchedGrouped.take(ROW_LIMIT),
-            series = unwatchedGrouped.filter { it.isSeriesGroup },
-            movies = unwatchedGrouped.filter { !it.isSeriesGroup },
-            alphabetical = unwatchedFilteredSorted.sortedWith(
+            recentAdditions = unwatchedOnly(grouped.asReversed().take(ROW_LIMIT)),
+            recommendations = unwatchedOnly(grouped.take(ROW_LIMIT)),
+            series = unwatchedOnly(grouped.filter { it.isSeriesGroup }),
+            movies = unwatchedOnly(grouped.filter { !it.isSeriesGroup }),
+            alphabetical = unwatchedOnly(filteredSorted.sortedWith(
                 compareBy<VideoItem, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
                     .thenBy { it.name },
-            ),
+            )),
         )
     }
 }

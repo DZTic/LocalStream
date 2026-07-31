@@ -220,18 +220,25 @@ fun DetailsScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
+                        val playVideoTarget = uiState.activeEpisodeName ?: videoGroup?.name ?: id
                         val playLabel = when {
+                            videoGroup?.isSeriesGroup == true || videoGroup?.isTvSeries == true -> {
+                                val epLabel = uiState.activeEpisodeLabel ?: "Ép. ${uiState.activeEpisodeNumber ?: 1}"
+                                if (uiState.watchPositionMs > 0L) {
+                                    "REPRENDRE $epLabel (${Formatters.formatDuration(uiState.watchPositionMs / 1000L)})"
+                                } else {
+                                    "LECTURE $epLabel"
+                                }
+                            }
                             uiState.watchPositionMs > 0L -> {
-                                val labelPart = uiState.activeEpisodeLabel?.let { "$it " } ?: ""
-                                "REPRENDRE ${labelPart}À ${Formatters.formatDuration(uiState.watchPositionMs / 1000L)}"
+                                "REPRENDRE À ${Formatters.formatDuration(uiState.watchPositionMs / 1000L)}"
                             }
-                            !uiState.activeEpisodeLabel.isNullOrEmpty() -> {
-                                "LECTURE ${uiState.activeEpisodeLabel}"
+                            else -> {
+                                "LECTURE"
                             }
-                            else -> "LECTURE"
                         }
                         Button(
-                            onClick = { onPlayVideo(uiState.activeEpisodeName ?: videoGroup?.name ?: id) },
+                            onClick = { onPlayVideo(playVideoTarget) },
                             colors = ButtonDefaults.buttonColors(containerColor = White, contentColor = Color.Black),
                             shape = RoundedCornerShape(4.dp),
                         ) {
@@ -314,7 +321,7 @@ fun DetailsScreen(
                                 )
                             }
                             val ext = item.name.substringAfterLast('.', "").uppercase()
-                            if (ext.isNotBlank()) {
+                            if (ext.isNotBlank() && ext != item.name.uppercase()) {
                                 Text(
                                     text = ext,
                                     color = White,
@@ -324,14 +331,16 @@ fun DetailsScreen(
                                         .padding(horizontal = 6.dp, vertical = 2.dp),
                                 )
                             }
-                            Text(
-                                text = Formatters.formatSize(item.size),
-                                color = Zinc300,
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier
-                                    .background(Zinc800, RoundedCornerShape(2.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
+                            if (item.size > 0L) {
+                                Text(
+                                    text = Formatters.formatSize(item.size),
+                                    color = Zinc300,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier
+                                        .background(Zinc800, RoundedCornerShape(2.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                            }
                         }
                     }
 
@@ -532,10 +541,10 @@ private fun EpisodeItemRow(
                         .fillMaxWidth()
                         .padding(top = 8.dp),
                 ) {
-                    ep.tmdbEpisode?.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                        Text(text = overview, color = Zinc300, style = MaterialTheme.typography.bodySmall)
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
+                    val overviewText = ep.tmdbEpisode?.overview?.takeIf { it.isNotBlank() } ?: "Aucun résumé disponible."
+                    Text(text = overviewText, color = Zinc300, style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     Button(
                         onClick = onPlay,
                         colors = ButtonDefaults.buttonColors(containerColor = Red600),
