@@ -1,10 +1,11 @@
-package com.localstream.app.ui.details
+﻿package com.localstream.app.ui.details
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.localstream.app.data.db.entity.PlaybackStateEntity
 import com.localstream.app.di.AppContainer
+import com.localstream.app.domain.VideoUiSelectors
 import com.localstream.app.domain.model.PlaylistInfo
 import com.localstream.app.domain.model.TmdbEpisode
 import com.localstream.app.domain.model.TmdbMetadata
@@ -34,6 +35,8 @@ data class DetailsUiState(
     val isWatched: Boolean = false,
     val watchPositionMs: Long = 0L,
     val watchDurationMs: Long = 0L,
+    val activeEpisodeName: String? = null,
+    val activeEpisodeLabel: String? = null,
     val userPlaylists: List<PlaylistInfo> = emptyList(),
     val selectedSeason: Int = 1,
     val availableSeasons: List<Int> = listOf(1),
@@ -141,9 +144,14 @@ class DetailsViewModel(
         val isGroupWatched = watchedSet.contains(group.name) ||
             (group.episodes?.isNotEmpty() == true && group.episodes.all { watchedSet.contains(it.name) })
 
-        val playback = playbackMap[group.name]
-        val posMs = playback?.positionMs ?: 0L
-        val durMs = group.duration * 1000L
+        val watchedMap = watchedSet.associateWith { true }
+        val progressMap = playbackMap.mapValues { it.value.progressPct }
+        val activeEp = VideoUiSelectors.getActiveEpisode(group, progressMap, watchedMap)
+        val activeEpPb = activeEp?.let { playbackMap[it.name] }
+        val posMs = activeEpPb?.positionMs ?: playbackMap[group.name]?.positionMs ?: 0L
+        val durMs = (activeEp?.duration ?: group.duration) * 1000L
+        val activeName = activeEp?.name ?: group.name
+        val activeLabel = activeEp?.let { VideoUiSelectors.formatEpisodeLabel(group, it) }
 
         val seasons = group.episodes?.mapNotNull { it.season }?.distinct()?.sorted()?.ifEmpty { listOf(1) } ?: listOf(1)
         val currentSeason = if (seasons.contains(season)) season else seasons.firstOrNull() ?: 1
@@ -177,6 +185,8 @@ class DetailsViewModel(
             isWatched = isGroupWatched,
             watchPositionMs = posMs,
             watchDurationMs = durMs,
+            activeEpisodeName = activeName,
+            activeEpisodeLabel = activeLabel,
             userPlaylists = playlists,
             selectedSeason = currentSeason,
             availableSeasons = seasons,

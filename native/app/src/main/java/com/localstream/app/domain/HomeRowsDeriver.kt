@@ -1,4 +1,4 @@
-package com.localstream.app.domain
+﻿package com.localstream.app.domain
 
 import com.localstream.app.domain.model.VideoItem
 
@@ -30,27 +30,26 @@ object HomeRowsDeriver {
         watched: Map<String, Boolean>,
         progress: Map<String, Double>,
     ): HomeRows {
-        val heroCandidates = HeroSelector.getHeroCandidates(grouped, watched, progress)
-            .ifEmpty { listOfNotNull(filteredSorted.firstOrNull() ?: grouped.firstOrNull()) }
+        val unwatchedGrouped = grouped.filter { !VideoUiSelectors.isWatched(it, watched) }
+        val unwatchedFilteredSorted = filteredSorted.filter { !VideoUiSelectors.isWatched(it, watched) }
 
-        val unwatchedFirst = { items: List<VideoItem> ->
-            items.sortedBy { if (VideoUiSelectors.isWatched(it, watched)) 1 else 0 }
-        }
+        val heroCandidates = HeroSelector.getHeroCandidates(grouped, watched, progress)
+            .ifEmpty { listOfNotNull(unwatchedFilteredSorted.firstOrNull() ?: unwatchedGrouped.firstOrNull() ?: grouped.firstOrNull()) }
 
         return HomeRows(
             heroCandidates = heroCandidates,
-            continueWatching = filteredSorted.filter { v ->
-                val p = progress[v.name] ?: 0.0
+            continueWatching = unwatchedFilteredSorted.filter { v ->
+                val p = VideoUiSelectors.progressOf(v, progress)
                 p > 0.0 && p < CONTINUE_MAX_PROGRESS
             },
-            recentAdditions = unwatchedFirst(grouped.asReversed().take(ROW_LIMIT)),
-            recommendations = unwatchedFirst(grouped.take(ROW_LIMIT)),
-            series = unwatchedFirst(grouped.filter { it.isSeriesGroup }),
-            movies = unwatchedFirst(grouped.filter { !it.isSeriesGroup }),
-            alphabetical = unwatchedFirst(filteredSorted.sortedWith(
+            recentAdditions = unwatchedGrouped.asReversed().take(ROW_LIMIT),
+            recommendations = unwatchedGrouped.take(ROW_LIMIT),
+            series = unwatchedGrouped.filter { it.isSeriesGroup },
+            movies = unwatchedGrouped.filter { !it.isSeriesGroup },
+            alphabetical = unwatchedFilteredSorted.sortedWith(
                 compareBy<VideoItem, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
                     .thenBy { it.name },
-            )),
+            ),
         )
     }
 }

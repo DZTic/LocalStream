@@ -1,4 +1,4 @@
-package com.localstream.app.ui.components
+﻿package com.localstream.app.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,6 +18,7 @@ import com.localstream.app.domain.model.VideoItem
  * `LibraryScreen.tsx` : 2 à 6 colonnes selon la largeur, minSize ~110 dp).
  * Clés stables pour limiter les recompositions.
  */
+@Suppress("LongParameterList", "FunctionNaming")
 @Composable
 fun VideoGrid(
     videos: List<VideoItem>,
@@ -43,6 +44,7 @@ fun VideoGrid(
                 posterUrl = VideoUiSelectors.posterUrl(video, metadata),
                 isWatched = VideoUiSelectors.isWatched(video, watched),
                 progress = VideoUiSelectors.progressOf(video, progress),
+                episodeLabel = VideoUiSelectors.activeEpisodeLabel(video, progress, watched),
                 showResetProgress = false,
                 onClick = { onOpenDetails(video) },
                 onResetProgress = {},

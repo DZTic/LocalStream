@@ -1,4 +1,4 @@
-package com.localstream.app.domain
+﻿package com.localstream.app.domain
 
 import com.localstream.app.domain.model.VideoItem
 import org.junit.Assert.assertEquals
@@ -6,8 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Tests de [HomeRowsDeriver] : ordre et contenu des rows de l'accueil,
- * parité avec la logique web (`App.tsx` / `HomeScreen.tsx`).
+ * Tests de [HomeRowsDeriver] : ordre et contenu des rows de l'accueil.
  */
 class HomeRowsDeriverTest {
 
@@ -62,10 +61,10 @@ class HomeRowsDeriverTest {
     }
 
     @Test
-    fun `les contenus déjà vus sont déplacés à la fin de la liste`() {
+    fun `les contenus déjà vus sont masqués de l'accueil`() {
         val watched = mapOf(filmA.name to true)
         val rows = HomeRowsDeriver.derive(grouped, grouped, watched, emptyMap())
-        assertEquals(listOf(filmB, filmC, filmA), rows.movies)
+        assertEquals(listOf(filmB, filmC), rows.movies)
     }
 
     @Test
@@ -74,7 +73,7 @@ class HomeRowsDeriverTest {
             filmA.name to 50.0,
             filmB.name to 95.0,   // exclu : >= 95
             filmC.name to 0.0,    // exclu : 0
-            show.name to 10.0,
+            ep1.name to 10.0,
         )
         val rows = HomeRowsDeriver.derive(grouped, grouped, emptyMap(), progress)
         assertEquals(listOf(filmA, show), rows.continueWatching)

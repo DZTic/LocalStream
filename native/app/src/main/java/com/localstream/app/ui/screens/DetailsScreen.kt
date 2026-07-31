@@ -1,4 +1,4 @@
-package com.localstream.app.ui.screens
+﻿package com.localstream.app.ui.screens
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -72,8 +73,11 @@ import com.localstream.app.ui.theme.Black
 import com.localstream.app.ui.theme.Red600
 import com.localstream.app.ui.theme.White
 import com.localstream.app.ui.theme.Zinc300
+import com.localstream.app.ui.theme.Zinc500
 import com.localstream.app.ui.theme.Zinc800
 import com.localstream.app.ui.theme.Zinc900
+
+private val WatchedGreen = Color(0xFF16A34A)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
@@ -216,13 +220,18 @@ fun DetailsScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        val playLabel = if (uiState.watchPositionMs > 0L) {
-                            "REPRENDRE À ${Formatters.formatDuration(uiState.watchPositionMs / 1000L)}"
-                        } else {
-                            "LECTURE"
+                        val playLabel = when {
+                            uiState.watchPositionMs > 0L -> {
+                                val labelPart = uiState.activeEpisodeLabel?.let { "$it " } ?: ""
+                                "REPRENDRE ${labelPart}À ${Formatters.formatDuration(uiState.watchPositionMs / 1000L)}"
+                            }
+                            !uiState.activeEpisodeLabel.isNullOrEmpty() -> {
+                                "LECTURE ${uiState.activeEpisodeLabel}"
+                            }
+                            else -> "LECTURE"
                         }
                         Button(
-                            onClick = { onPlayVideo(videoGroup?.name ?: id) },
+                            onClick = { onPlayVideo(uiState.activeEpisodeName ?: videoGroup?.name ?: id) },
                             colors = ButtonDefaults.buttonColors(containerColor = White, contentColor = Color.Black),
                             shape = RoundedCornerShape(4.dp),
                         ) {
@@ -366,9 +375,11 @@ fun DetailsScreen(
                     }
                 }
 
-                items(uiState.episodes, key = { it.video.name }) { ep ->
+                itemsIndexed(uiState.episodes, key = { _, ep -> ep.video.name }) { index, ep ->
                     EpisodeItemRow(
                         ep = ep,
+                        seasonNum = uiState.selectedSeason,
+                        epIndex = index,
                         onPlay = { onPlayVideo(ep.video.name) },
                         onToggleWatched = { detailsViewModel.toggleEpisodeWatched(ep.video.name) },
                         onToggleExpanded = { detailsViewModel.toggleEpisodeExpanded(ep.video.name) },
@@ -380,15 +391,22 @@ fun DetailsScreen(
     }
 }
 
-@Suppress("FunctionNaming", "LongMethod")
+@Suppress("FunctionNaming", "LongMethod", "LongParameterList", "CyclomaticComplexMethod")
 @Composable
 private fun EpisodeItemRow(
     ep: EpisodeUiState,
+    seasonNum: Int,
+    epIndex: Int,
     onPlay: () -> Unit,
     onToggleWatched: () -> Unit,
     onToggleExpanded: () -> Unit,
     onResetProgress: () -> Unit,
 ) {
+    val epNum = ep.video.episode ?: ep.tmdbEpisode?.episodeNumber ?: (epIndex + 1)
+    val epSeason = ep.video.season ?: seasonNum
+    val epLabel = "S$epSeason:E$epNum"
+    val epTitle = ep.tmdbEpisode?.name ?: TitleCleaner.getCleanTitle(ep.video.name)
+
     Card(
         colors = CardDefaults.cardColors(containerColor = Zinc900),
         modifier = Modifier
@@ -445,32 +463,64 @@ private fun EpisodeItemRow(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Ép. ${ep.video.episode ?: ep.tmdbEpisode?.episodeNumber ?: ""} - ${ep.tmdbEpisode?.name ?: TitleCleaner.getCleanTitle(ep.video.name)}",
+                        text = "$epLabel • $epTitle",
                         color = White,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text(
-                        text = Formatters.formatDuration(ep.durationMs / 1000L),
-                        color = Zinc300,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        when {
+                            ep.isWatched -> {
+                                Text(
+                                    text = "Vu",
+                                    color = WatchedGreen,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                            ep.progressPercent > 0f -> {
+                                Text(
+                                    text = "En cours (${(ep.progressPercent * 100).toInt()}%)",
+                                    color = Red600,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                            else -> {
+                                Text(
+                                    text = "Non commencé",
+                                    color = Zinc500,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                        if (ep.durationMs > 0L) {
+                            Text(
+                                text = "• ${Formatters.formatDuration(ep.durationMs / 1000L)}",
+                                color = Zinc300,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                 }
 
                 IconButton(onClick = onToggleWatched) {
                     Icon(
                         Icons.Filled.Check,
-                        contentDescription = "Vu",
-                        tint = if (ep.isWatched) Red600 else Zinc300.copy(alpha = 0.4f),
+                        contentDescription = if (ep.isWatched) "Marquer non vu" else "Marquer vu",
+                        tint = if (ep.isWatched) WatchedGreen else Zinc300.copy(alpha = 0.4f),
                     )
                 }
 
                 IconButton(onClick = onToggleExpanded) {
                     Icon(
                         if (ep.isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = "D?tails de l'?pisode",
+                        contentDescription = "Détails de l'épisode",
                         tint = White,
                     )
                 }
