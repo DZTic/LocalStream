@@ -22,6 +22,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -242,11 +245,13 @@ fun PlayerScreen(
         } ?: return@LaunchedEffect
 
         val mediaItem = MediaItem.fromUri(uri)
-        exoPlayer.setMediaItem(mediaItem)
-        exoPlayer.prepare()
-        if (uiState.initialPositionMs > 0L) {
-            exoPlayer.seekTo(uiState.initialPositionMs)
+        val startPos = uiState.initialPositionMs
+        if (startPos > 0L) {
+            exoPlayer.setMediaItem(mediaItem, startPos)
+        } else {
+            exoPlayer.setMediaItem(mediaItem)
         }
+        exoPlayer.prepare()
         exoPlayer.playWhenReady = true
     }
 
@@ -277,21 +282,50 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(Black)
             .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
-                        viewModel.toggleControlsVisibility()
-                    },
-                    onDoubleTap = { offset ->
-                        val screenWidth = size.width
-                        if (offset.x < screenWidth / 2) {
-                            viewModel.seekBy(-10000L)
-                            exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
-                        } else {
-                            viewModel.seekBy(10000L)
-                            exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
-                        }
-                    },
-                )
+                coroutineScope {
+                    launch {
+                        detectTapGestures(
+                            onTap = {
+                                viewModel.toggleControlsVisibility()
+                            },
+                            onDoubleTap = { offset ->
+                                val screenWidth = size.width
+                                if (offset.x < screenWidth / 2) {
+                                    viewModel.seekBy(-10000L)
+                                    exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
+                                } else {
+                                    viewModel.seekBy(10000L)
+                                    exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
+                                }
+                            },
+                        )
+                    }
+                    launch {
+                        var isLeftSide = false
+                        var accumVolume = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { offset ->
+                                isLeftSide = offset.x < size.width / 2
+                                accumVolume = 0f
+                            },
+                            onVerticalDrag = { change, dragAmount ->
+                                change.consume()
+                                val height = size.height.toFloat().coerceAtLeast(1f)
+                                val deltaRatio = -dragAmount / height
+                                if (isLeftSide) {
+                                    viewModel.adjustBrightness(deltaRatio)
+                                } else {
+                                    accumVolume += deltaRatio * 100f
+                                    val deltaInt = accumVolume.toInt()
+                                    if (deltaInt != 0) {
+                                        viewModel.adjustVolume(deltaInt)
+                                        accumVolume -= deltaInt
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
             },
     ) {
         // Vue vidéo ExoPlayer

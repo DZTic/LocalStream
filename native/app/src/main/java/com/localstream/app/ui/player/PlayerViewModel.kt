@@ -176,37 +176,46 @@ class PlayerViewModel(
             val allRaw = container.videoRepository.getRawVideos()
             val allGrouped = container.videoRepository.getGroupedVideos()
 
-            val rawVideo = allRaw.find { it.name == decodedName || it.name == videoName }
+            val targetVideo = resolveTargetVideo(decodedName, videoName, allGrouped, allRaw)
 
-            val foundGroup = allGrouped.find { group ->
-                group.name == decodedName || group.name == videoName
-            }
+            val state = container.watchStateRepository.getPlaybackState(targetVideo.name)
+            val rawPos = state?.positionMs ?: 0L
+            val pct = state?.progressPct ?: 0.0
+            val pos = if (pct >= 95.0) 0L else rawPos
 
-            val targetVideo = if (foundGroup != null && foundGroup.isSeriesGroup && !foundGroup.episodes.isNullOrEmpty()) {
+            initialPositionMsFlow.value = pos
+            positionMsFlow.value = pos
+            currentVideoFlow.value = targetVideo
+
+            resolveNextVideo(targetVideo, allGrouped, allRaw)
+        }
+    }
+
+    private suspend fun resolveTargetVideo(
+        decodedName: String,
+        rawName: String,
+        allGrouped: List<VideoItem>,
+        allRaw: List<VideoItem>,
+    ): VideoItem {
+        val rawVideo = allRaw.find { it.name == decodedName || it.name == rawName }
+        val foundGroup = allGrouped.find { group ->
+            group.name == decodedName || group.name == rawName
+        }
+
+        return when {
+            foundGroup != null && foundGroup.isSeriesGroup && !foundGroup.episodes.isNullOrEmpty() -> {
                 val watchedMap = container.watchStateRepository.getWatchedMap()
-                val activeEp = foundGroup.episodes.firstOrNull { ep ->
+                foundGroup.episodes.firstOrNull { ep ->
                     val state = container.watchStateRepository.getPlaybackState(ep.name)
                     (state?.positionMs ?: 0L) > 0L && watchedMap[ep.name] != true
                 } ?: foundGroup.episodes.firstOrNull { ep ->
                     watchedMap[ep.name] != true
                 } ?: foundGroup.episodes.first()
-                activeEp
-            } else if (rawVideo != null) {
-                rawVideo
-            } else {
-                allGrouped.firstNotNullOfOrNull { group ->
-                    group.episodes?.find { it.name == decodedName || it.name == videoName }
-                } ?: VideoItem(name = decodedName)
             }
-
-            currentVideoFlow.value = targetVideo
-
-            val state = container.watchStateRepository.getPlaybackState(targetVideo.name)
-            val pos = state?.positionMs ?: 0L
-            initialPositionMsFlow.value = pos
-            positionMsFlow.value = pos
-
-            resolveNextVideo(targetVideo, allGrouped, allRaw)
+            rawVideo != null -> rawVideo
+            else -> allGrouped.firstNotNullOfOrNull { group ->
+                group.episodes?.find { it.name == decodedName || it.name == rawName }
+            } ?: VideoItem(name = decodedName)
         }
     }
 
@@ -398,26 +407,34 @@ class PlayerViewModel(
     }
 
     private fun videoNameFlowOrLoad(newName: String) {
-        isEndedFlow.value = false
-        positionMsFlow.value = 0L
-        initialPositionMsFlow.value = 0L
-        val decodedName = decodeUri(newName)
-        val allRaw = container.videoRepository.getRawVideos()
-        val allGrouped = container.videoRepository.getGroupedVideos()
+        viewModelScope.launch {
+            isEndedFlow.value = false
+            val decodedName = decodeUri(newName)
+            val allRaw = container.videoRepository.getRawVideos()
+            val allGrouped = container.videoRepository.getGroupedVideos()
 
-        val foundInGrouped = allGrouped.firstNotNullOfOrNull { group ->
-            if (group.name == decodedName || group.name == newName) {
-                group
-            } else {
-                group.episodes?.find { it.name == decodedName || it.name == newName }
+            val foundInGrouped = allGrouped.firstNotNullOfOrNull { group ->
+                if (group.name == decodedName || group.name == newName) {
+                    group
+                } else {
+                    group.episodes?.find { it.name == decodedName || it.name == newName }
+                }
             }
-        }
-        val video = allRaw.find { it.name == decodedName || it.name == newName }
-            ?: foundInGrouped
-            ?: VideoItem(name = decodedName)
+            val video = allRaw.find { it.name == decodedName || it.name == newName }
+                ?: foundInGrouped
+                ?: VideoItem(name = decodedName)
 
-        currentVideoFlow.value = video
-        resolveNextVideo(video, allGrouped, allRaw)
+            val state = container.watchStateRepository.getPlaybackState(video.name)
+            val rawPos = state?.positionMs ?: 0L
+            val pct = state?.progressPct ?: 0.0
+            val pos = if (pct >= 95.0) 0L else rawPos
+
+            initialPositionMsFlow.value = pos
+            positionMsFlow.value = pos
+            currentVideoFlow.value = video
+
+            resolveNextVideo(video, allGrouped, allRaw)
+        }
     }
 
     companion object {
