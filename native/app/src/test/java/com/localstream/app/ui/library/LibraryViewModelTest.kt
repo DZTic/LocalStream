@@ -142,6 +142,35 @@ class LibraryViewModelTest {
         assertEquals(listOf("Blockbuster.2024.1080p.mkv"), viewModel.uiState.value.searchResults.map { it.name })
     }
 
+
+    @Test
+    fun `resetProgress sur une serie supprime la progression de tous ses episodes`() = runTest(testDispatcher) {
+        val ep1 = VideoItem(name = "Serie.S01E01.mkv", path = "/storage/Movies/Serie.S01E01.mkv")
+        val ep2 = VideoItem(name = "Serie.S01E02.mkv", path = "/storage/Movies/Serie.S01E02.mkv")
+        val serieGroup = VideoItem(
+            name = "Ma Serie",
+            isSeriesGroup = true,
+            episodes = listOf(ep1, ep2),
+        )
+        val customScanner = FakeScanner(listOf(ep1, ep2), listOf(serieGroup))
+        val watchRepo = WatchStateRepository(FakeWatchedItemDao(), playbackDao)
+        val customVm = LibraryViewModel(
+            videoRepository = VideoRepository(customScanner),
+            watchStateRepository = watchRepo,
+            tmdbRepository = TmdbRepository(UnusedTmdbApi(), FakeTmdbMetadataDao(), SettingsRepository()),
+            settingsRepository = SettingsRepository(),
+            ioDispatcher = testDispatcher,
+        )
+        customVm.refreshLibrary()
+        advanceUntilIdle()
+
+        customVm.resetProgress("Ma Serie")
+        advanceUntilIdle()
+
+        assertTrue(playbackDao.deletedNames.contains("Serie.S01E01.mkv"))
+        assertTrue(playbackDao.deletedNames.contains("Serie.S01E02.mkv"))
+        assertTrue(playbackDao.deletedNames.contains("Ma Serie"))
+    }
     @Test
     fun `resetProgress supprime la progression persistée`() = runTest(testDispatcher) {
         viewModel.resetProgress("Avatar.2009.2160p.mkv")
