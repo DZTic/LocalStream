@@ -246,6 +246,8 @@ fun PlayerScreen(
         exoPlayer.addListener(listener)
         onDispose {
             exoPlayer.removeListener(listener)
+            exoPlayer.stop()
+            exoPlayer.clearMediaItems()
             exoPlayer.release()
         }
     }
@@ -260,6 +262,8 @@ fun PlayerScreen(
             else -> null
         } ?: return@LaunchedEffect
 
+        exoPlayer.stop()
+        exoPlayer.clearMediaItems()
         val mediaItem = MediaItem.fromUri(uri)
         val startPos = uiState.initialPositionMs
         if (startPos > 0L) {
