@@ -110,6 +110,9 @@ import com.localstream.app.ui.theme.Red600
 import com.localstream.app.ui.theme.White
 import com.localstream.app.ui.theme.Zinc800
 import com.localstream.app.ui.theme.Zinc900
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import java.io.File
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -133,6 +136,23 @@ fun PlayerScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    }
+
+    // Masquer la barre de statut et la barre de navigation pendant la lecture video (mode immersif)
+    DisposableEffect(activity) {
+        val window = activity?.window
+        if (window != null) {
+            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+            insetsController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose {
+            if (window != null) {
+                val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+                insetsController.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
     }
 
     var isVolumeInitialized by remember { mutableStateOf(false) }
