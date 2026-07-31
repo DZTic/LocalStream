@@ -269,7 +269,17 @@ class LibraryViewModel(
     }
 
     fun resetProgress(videoName: String) {
-        viewModelScope.launch { watchStateRepository.clearProgress(videoName) }
+        viewModelScope.launch {
+            val group = _uiState.value.videos.find {
+                it.isSeriesGroup && (it.name == videoName || it.seriesName == videoName)
+            }
+            if (group != null && !group.episodes.isNullOrEmpty()) {
+                group.episodes.forEach { ep ->
+                    watchStateRepository.clearProgress(ep.name)
+                }
+            }
+            watchStateRepository.clearProgress(videoName)
+        }
     }
 
     fun dismissTmdbBanner() {
