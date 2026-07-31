@@ -135,8 +135,24 @@ fun PlayerScreen(
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     }
 
-    // Synchronisation du volume avec AudioManager syst?me
-    LaunchedEffect(uiState.volumePercent) {
+    var isVolumeInitialized by remember { mutableStateOf(false) }
+
+    // Initialisation du volume depuis l'AudioManager système au lancement
+    LaunchedEffect(Unit) {
+        audioManager?.let { am ->
+            val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            if (maxVol > 0) {
+                val curVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                val curPct = ((curVol.toFloat() / maxVol) * 100).roundToInt().coerceIn(0, 100)
+                viewModel.initVolumePercent(curPct)
+            }
+        }
+        isVolumeInitialized = true
+    }
+
+    // Synchronisation du volume avec AudioManager système
+    LaunchedEffect(uiState.volumePercent, isVolumeInitialized) {
+        if (!isVolumeInitialized) return@LaunchedEffect
         audioManager?.let { am ->
             val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             if (maxVol > 0) {
