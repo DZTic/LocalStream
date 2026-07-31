@@ -195,11 +195,17 @@ fun PlayerScreen(
         ExoPlayer.Builder(context).build()
     }
 
+    // Guard: don't report positions until ExoPlayer has completed its initial seek
+    var isPlayerReady by remember { mutableStateOf(false) }
+
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
                     viewModel.onVideoEnded()
+                }
+                if (state == Player.STATE_READY) {
+                    isPlayerReady = true
                 }
             }
 
@@ -264,6 +270,7 @@ fun PlayerScreen(
 
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
+        isPlayerReady = false
         val mediaItem = MediaItem.fromUri(uri)
         val startPos = uiState.initialPositionMs
         if (startPos > 0L) {
@@ -278,7 +285,7 @@ fun PlayerScreen(
     // Mise à jour continue de la position de lecture
     LaunchedEffect(exoPlayer) {
         while (true) {
-            if (exoPlayer.isPlaying) {
+            if (exoPlayer.isPlaying && isPlayerReady) {
                 viewModel.onPositionChanged(
                     positionMs = exoPlayer.currentPosition,
                     durationMs = exoPlayer.duration.coerceAtLeast(0L),
