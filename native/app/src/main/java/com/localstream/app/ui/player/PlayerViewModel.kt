@@ -335,9 +335,12 @@ class PlayerViewModel(
         setVolumePercent(volumePercentFlow.value + deltaPercent)
     }
 
+    fun setInitialVolumePercent(newVol: Int) {
+        volumePercentFlow.value = newVol.coerceIn(0, 100)
+    }
+
     fun initVolumePercent(newVol: Int) {
-        val coerced = newVol.coerceIn(0, 100)
-        volumePercentFlow.value = coerced
+        setInitialVolumePercent(newVol)
     }
 
     fun setVolumePercent(newVol: Int) {
