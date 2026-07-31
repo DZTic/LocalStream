@@ -257,7 +257,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        val isConnected = uiState.osLoginStatus == "Connecté" || uiState.osLoginStatus == "Connect?"
+                        val isConnected = uiState.osLoginStatus == "Connecté" 
                         Text(
                             text = stringResource(R.string.settings_opensubtitles_status, uiState.osLoginStatus),
                             color = if (isConnected) White else Red600,
