@@ -234,6 +234,19 @@ class PlayerViewModelTest {
     }
 
     @Test
+    fun `setInitialVolumePercent updates volumePercent without gesture feedback`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.setInitialVolumePercent(45)
+        advanceUntilIdle()
+
+        assertEquals(45, viewModel.uiState.value.volumePercent)
+        assertEquals(null, viewModel.uiState.value.gestureFeedback)
+    }
+
+    @Test
     fun `adjustVolume and adjustBrightness emit gesture feedback`() = runTest {
         val viewModel = PlayerViewModel(video1.name, container)
         backgroundScope.launch { viewModel.uiState.collect {} }
