@@ -90,6 +90,19 @@ class PlayerViewModelTest {
     }
 
     @Test
+    fun `loadVideoDetails resets position to 0 if finished past threshold`() = runTest {
+        playbackDao.upsert(PlaybackStateEntity(name = video1.name, progressPct = 96.0, positionMs = 8500000L))
+
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(0L, state.initialPositionMs)
+        assertEquals(0L, state.positionMs)
+    }
+
+    @Test
     fun `loadVideoDetails populates currentVideo and restores position`() = runTest {
         playbackDao.upsert(PlaybackStateEntity(name = video1.name, progressPct = 50.0, positionMs = 4400000L))
 
