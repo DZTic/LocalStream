@@ -178,10 +178,12 @@ class PlayerViewModel(
 
             val targetVideo = resolveTargetVideo(decodedName, videoName, allGrouped, allRaw)
 
+            val watchedMap = container.watchStateRepository.getWatchedMap()
+            val isWatched = watchedMap[targetVideo.name] == true
             val state = container.watchStateRepository.getPlaybackState(targetVideo.name)
             val rawPos = state?.positionMs ?: 0L
             val pct = state?.progressPct ?: 0.0
-            val pos = if (pct >= 95.0) 0L else rawPos
+            val pos = if (isFinished(isWatched, pct, rawPos, targetVideo.duration * 1000L)) 0L else rawPos
 
             initialPositionMsFlow.value = pos
             positionMsFlow.value = pos
@@ -330,23 +332,31 @@ class PlayerViewModel(
     }
 
     fun adjustVolume(deltaPercent: Int) {
-        val newVol = (volumePercentFlow.value + deltaPercent).coerceIn(0, 100)
-        volumePercentFlow.value = newVol
+        setVolumePercent(volumePercentFlow.value + deltaPercent)
+    }
+
+    fun setVolumePercent(newVol: Int) {
+        val coerced = newVol.coerceIn(0, 100)
+        volumePercentFlow.value = coerced
         gestureFeedbackFlow.value = GestureFeedback(
             type = FeedbackType.VOLUME,
-            valuePercent = newVol,
-            text = "Volume: $newVol%",
+            valuePercent = coerced,
+            text = "Volume: $coerced%",
         )
     }
 
     fun adjustBrightness(deltaPercent: Float) {
-        val newBright = (brightnessPercentFlow.value + deltaPercent).coerceIn(0.05f, 1.0f)
-        brightnessPercentFlow.value = newBright
-        val pct = (newBright * 100).toInt()
+        setBrightnessPercent(brightnessPercentFlow.value + deltaPercent)
+    }
+
+    fun setBrightnessPercent(newBright: Float) {
+        val coerced = newBright.coerceIn(0.05f, 1.0f)
+        brightnessPercentFlow.value = coerced
+        val pct = (coerced * 100).toInt()
         gestureFeedbackFlow.value = GestureFeedback(
             type = FeedbackType.BRIGHTNESS,
             valuePercent = pct,
-            text = "Luminosité: $pct%",
+            text = "Luminosit?: $pct%",
         )
     }
 
@@ -424,10 +434,12 @@ class PlayerViewModel(
                 ?: foundInGrouped
                 ?: VideoItem(name = decodedName)
 
+            val watchedMap = container.watchStateRepository.getWatchedMap()
+            val isWatched = watchedMap[video.name] == true
             val state = container.watchStateRepository.getPlaybackState(video.name)
             val rawPos = state?.positionMs ?: 0L
             val pct = state?.progressPct ?: 0.0
-            val pos = if (pct >= 95.0) 0L else rawPos
+            val pos = if (isFinished(isWatched, pct, rawPos, video.duration * 1000L)) 0L else rawPos
 
             initialPositionMsFlow.value = pos
             positionMsFlow.value = pos
@@ -448,6 +460,13 @@ class PlayerViewModel(
                 }
             }
     }
+}
+
+private fun isFinished(isWatched: Boolean, pct: Double, pos: Long, durMs: Long): Boolean {
+    if (isWatched || pct >= 90.0) {
+        return true
+    }
+    return durMs > 0L && pos >= durMs - 5000L
 }
 
 private fun decodeUri(value: String): String =
