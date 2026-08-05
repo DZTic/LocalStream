@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -33,3 +33,10 @@ jobs:
       - name: Assemble, test & analyse
         working-directory: native
         run: ./gradlew assembleDebug testDebugUnitTest detekt --no-daemon --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: localstream-debug-${{ github.run_number }}
+          path: native/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
