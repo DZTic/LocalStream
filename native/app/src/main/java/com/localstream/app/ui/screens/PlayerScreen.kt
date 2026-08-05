@@ -234,10 +234,20 @@ fun PlayerScreen(
         }
     }
 
-    // Ajustement de la luminosité de la fenêtre
+    // Ajustement de la luminosite de la fenetre : respecte la luminosite systeme par defaut (-1f)
     LaunchedEffect(uiState.brightnessPercent) {
-        activity?.window?.attributes = activity.window.attributes?.apply {
-            screenBrightness = uiState.brightnessPercent
+        val brightness = uiState.brightnessPercent
+        if (brightness >= 0f) {
+            activity?.window?.attributes = activity?.window?.attributes?.apply {
+                screenBrightness = brightness
+            }
+        }
+    }
+    DisposableEffect(activity) {
+        onDispose {
+            activity?.window?.attributes = activity?.window?.attributes?.apply {
+                screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            }
         }
     }
 
@@ -406,7 +416,18 @@ fun PlayerScreen(
                                 } ?: run {
                                     startVolume = uiState.volumePercent
                                 }
-                                startBrightness = uiState.brightnessPercent
+                                startBrightness = if (uiState.brightnessPercent >= 0f) {
+                                    uiState.brightnessPercent
+                                } else {
+                                    try {
+                                        android.provider.Settings.System.getInt(
+                                            context.contentResolver,
+                                            android.provider.Settings.System.SCREEN_BRIGHTNESS
+                                        ) / 255f
+                                    } catch (_: android.provider.Settings.SettingNotFoundException) {
+                                        1.0f
+                                    }
+                                }
                             },
                             onVerticalDrag = { change, _ ->
                                 change.consume()
