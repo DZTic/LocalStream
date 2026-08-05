@@ -15,6 +15,7 @@ import android.net.Uri
 import android.os.Build
 import android.util.Rational
 import android.view.ViewGroup
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -155,6 +156,17 @@ fun PlayerScreen(
                 val insetsController = WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
             }
+        }
+    }
+
+    // Garder l'ecran allume tant que la lecture video est en cours
+    DisposableEffect(activity, uiState.isPlaying) {
+        val window = activity?.window
+        if (window != null && uiState.isPlaying) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
