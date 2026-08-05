@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.player
+package com.localstream.app.ui.player
 
 import java.net.URLDecoder
 import androidx.lifecycle.ViewModel
@@ -59,7 +59,7 @@ data class PlayerUiState(
     val isControlsVisible: Boolean = true,
     val isLocked: Boolean = false,
     val volumePercent: Int = 100,
-    val brightnessPercent: Float = 1.0f,
+    val brightnessPercent: Float = -1f,
     val aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT,
     val playbackSpeed: Float = 1.0f,
     val audioTracks: List<AudioTrackUiState> = emptyList(),
@@ -87,7 +87,7 @@ class PlayerViewModel(
     private val isControlsVisibleFlow = MutableStateFlow(true)
     private val isLockedFlow = MutableStateFlow(false)
     private val volumePercentFlow = MutableStateFlow(100)
-    private val brightnessPercentFlow = MutableStateFlow(1.0f)
+    private val brightnessPercentFlow = MutableStateFlow(-1f)
     private val aspectRatioModeFlow = MutableStateFlow(AspectRatioMode.FIT)
     private val playbackSpeedFlow = MutableStateFlow(1.0f)
     private val audioTracksFlow = MutableStateFlow<List<AudioTrackUiState>>(emptyList())
@@ -354,7 +354,9 @@ class PlayerViewModel(
     }
 
     fun adjustBrightness(deltaPercent: Float) {
-        setBrightnessPercent(brightnessPercentFlow.value + deltaPercent)
+        val current = brightnessPercentFlow.value
+        val baseline = if (current < 0f) 1.0f else current
+        setBrightnessPercent(baseline + deltaPercent)
     }
 
     fun setBrightnessPercent(newBright: Float) {
