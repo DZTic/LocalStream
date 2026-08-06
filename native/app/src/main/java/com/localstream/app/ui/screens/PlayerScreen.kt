@@ -490,45 +490,44 @@ fun PlayerScreen(
             .background(Black)
             .pointerInput(Unit) {
                 detectPlayerGestures(
-                    onTap = {
-                        viewModel.toggleControlsVisibility()
-                    },
-                    onDoubleTapLeft = {
-                        if (!uiState.isLocked) {
-                            viewModel.seekBy(-10000L)
-                            exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
-                        }
-                    },
-                    onDoubleTapRight = {
-                        if (!uiState.isLocked) {
-                            viewModel.seekBy(10000L)
-                            exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
-                        }
-                    },
-                    onVerticalDragLeft = { deltaRatio ->
-                        if (!uiState.isLocked) {
-                            val current = if (uiState.brightnessPercent >= 0f) uiState.brightnessPercent else 0.8f
-                            viewModel.setBrightnessPercent(current + deltaRatio)
-                        }
-                    },
-                    onVerticalDragRight = { deltaRatio ->
-                        if (!uiState.isLocked) {
-                            val deltaVol = (deltaRatio * 100f).roundToInt()
-                            viewModel.setVolumePercent(uiState.volumePercent + deltaVol)
-                        }
-                    },
-                    onHorizontalDrag = { ratio ->
-                        if (!uiState.isLocked) {
-                            val dur = exoPlayer.duration.coerceAtLeast(1L)
-                            val seekOffset = (ratio * 60000L).toLong()
-                            val targetPos = (exoPlayer.currentPosition + seekOffset).coerceIn(0L, dur)
-                            viewModel.seekBy(seekOffset)
-                            exoPlayer.seekTo(targetPos)
-                        }
-                    },
-                    onDragEnd = {
-                        // Drag completed
-                    },
+                    PlayerGestureCallbacks(
+                        onTap = {
+                            viewModel.toggleControlsVisibility()
+                        },
+                        onDoubleTapLeft = {
+                            if (!uiState.isLocked) {
+                                viewModel.seekBy(-10000L)
+                                exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
+                            }
+                        },
+                        onDoubleTapRight = {
+                            if (!uiState.isLocked) {
+                                viewModel.seekBy(10000L)
+                                exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
+                            }
+                        },
+                        onVerticalDragLeft = { deltaRatio ->
+                            if (!uiState.isLocked) {
+                                val current = if (uiState.brightnessPercent >= 0f) uiState.brightnessPercent else 0.8f
+                                viewModel.setBrightnessPercent(current + deltaRatio)
+                            }
+                        },
+                        onVerticalDragRight = { deltaRatio ->
+                            if (!uiState.isLocked) {
+                                val deltaVol = (deltaRatio * 100f).roundToInt()
+                                viewModel.setVolumePercent(uiState.volumePercent + deltaVol)
+                            }
+                        },
+                        onHorizontalDrag = { ratio ->
+                            if (!uiState.isLocked) {
+                                val dur = exoPlayer.duration.coerceAtLeast(1L)
+                                val seekOffset = (ratio * 60000L).toLong()
+                                val targetPos = (exoPlayer.currentPosition + seekOffset).coerceIn(0L, dur)
+                                viewModel.seekBy(seekOffset)
+                                exoPlayer.seekTo(targetPos)
+                            }
+                        },
+                    )
                 )
             },
     ) {
@@ -727,14 +726,18 @@ fun PlayerScreen(
     }
 }
 
+private data class PlayerGestureCallbacks(
+    val onTap: () -> Unit,
+    val onDoubleTapLeft: () -> Unit,
+    val onDoubleTapRight: () -> Unit,
+    val onVerticalDragLeft: (Float) -> Unit,
+    val onVerticalDragRight: (Float) -> Unit,
+    val onHorizontalDrag: (Float) -> Unit,
+    val onDragEnd: () -> Unit = {},
+)
+
 private suspend fun PointerInputScope.detectPlayerGestures(
-    onTap: () -> Unit,
-    onDoubleTapLeft: () -> Unit,
-    onDoubleTapRight: () -> Unit,
-    onVerticalDragLeft: (Float) -> Unit,
-    onVerticalDragRight: (Float) -> Unit,
-    onHorizontalDrag: (Float) -> Unit,
-    onDragEnd: () -> Unit,
+    callbacks: PlayerGestureCallbacks,
 ) {
     var lastTapTime = 0L
     var lastTapX = 0f
@@ -742,75 +745,81 @@ private suspend fun PointerInputScope.detectPlayerGestures(
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         val startX = down.position.x
-        val startY = down.position.y
         val touchSlop = viewConfiguration.touchSlop
         val pointerId = down.id
-        var isDragDetected = false
-        var dragMode = 0 // 0: None, 1: Horizontal seek, 2: Vertical left (brightness), 3: Vertical right (volume)
+        var isDrag = false
+        var dragMode = 0
+        var pointerActive = true
 
-        while (true) {
+        while (pointerActive) {
             val event = awaitPointerEvent()
-            val change = event.changes.firstOrNull { it.id == pointerId } ?: break
-
-            if (!change.pressed) {
-                if (isDragDetected) {
-                    onDragEnd()
+            val change = event.changes.firstOrNull { it.id == pointerId }
+            if (change == null || !change.pressed) {
+                pointerActive = false
+                if (isDrag) {
+                    callbacks.onDragEnd()
                 } else {
-                    val currentTime = System.currentTimeMillis()
-                    if (currentTime - lastTapTime < 300L && abs(startX - lastTapX) < 150f) {
-                        if (startX < size.width * 0.4f) {
-                            onDoubleTapLeft()
-                        } else if (startX > size.width * 0.6f) {
-                            onDoubleTapRight()
-                        } else {
-                            onTap()
-                        }
-                        lastTapTime = 0L
-                    } else {
-                        lastTapTime = currentTime
-                        lastTapX = startX
-                        onTap()
-                    }
+                    lastTapTime = processTapRelease(startX, size.width.toFloat(), lastTapTime, lastTapX, callbacks)
+                    lastTapX = startX
                 }
-                break
-            }
-
-            val currentX = change.position.x
-            val currentY = change.position.y
-            val dx = currentX - startX
-            val dy = currentY - startY
-
-            if (!isDragDetected) {
-                if (abs(dx) > touchSlop || abs(dy) > touchSlop) {
-                    isDragDetected = true
-                    if (abs(dx) > abs(dy)) {
-                        dragMode = 1
-                    } else if (startX < size.width * 0.5f) {
-                        dragMode = 2
-                    } else {
-                        dragMode = 3
-                    }
+            } else {
+                val dx = change.position.x - startX
+                val dy = change.position.y - down.position.y
+                if (!isDrag && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
+                    isDrag = true
+                    dragMode = if (abs(dx) > abs(dy)) 1 else if (startX < size.width * 0.5f) 2 else 3
                 }
-            }
-
-            if (isDragDetected) {
-                change.consume()
-                when (dragMode) {
-                    1 -> {
-                        val ratio = dx / size.width.toFloat()
-                        onHorizontalDrag(ratio)
-                    }
-                    2 -> {
-                        val ratio = -dy / size.height.toFloat()
-                        onVerticalDragLeft(ratio)
-                    }
-                    3 -> {
-                        val ratio = -dy / size.height.toFloat()
-                        onVerticalDragRight(ratio)
-                    }
+                if (isDrag) {
+                    change.consume()
+                    dispatchDragEvent(dragMode, dx / size.width.toFloat(), dy / size.height.toFloat(), callbacks)
                 }
             }
         }
+    }
+}
+
+private fun processTapRelease(
+    startX: Float,
+    width: Float,
+    lastTapTime: Long,
+    lastTapX: Float,
+    callbacks: PlayerGestureCallbacks,
+): Long {
+    val currentTime = System.currentTimeMillis()
+    val isDoubleTap = currentTime - lastTapTime < 300L && abs(startX - lastTapX) < 150f
+    if (isDoubleTap) {
+        dispatchDoubleTap(startX, width, callbacks)
+        return 0L
+    } else {
+        callbacks.onTap()
+        return currentTime
+    }
+}
+
+private fun dispatchDoubleTap(
+    startX: Float,
+    width: Float,
+    callbacks: PlayerGestureCallbacks,
+) {
+    if (startX < width * 0.4f) {
+        callbacks.onDoubleTapLeft()
+    } else if (startX > width * 0.6f) {
+        callbacks.onDoubleTapRight()
+    } else {
+        callbacks.onTap()
+    }
+}
+
+private fun dispatchDragEvent(
+    dragMode: Int,
+    ratioX: Float,
+    ratioY: Float,
+    callbacks: PlayerGestureCallbacks,
+) {
+    when (dragMode) {
+        1 -> callbacks.onHorizontalDrag(ratioX)
+        2 -> callbacks.onVerticalDragLeft(-ratioY)
+        3 -> callbacks.onVerticalDragRight(-ratioY)
     }
 }
 

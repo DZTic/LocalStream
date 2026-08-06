@@ -269,7 +269,7 @@ class PlayerViewModel(
     fun onPlayingStateChanged(isPlaying: Boolean) {
         isPlayingFlow.value = isPlaying
         if (!isPlaying) {
-            saveCurrentPosition(force = true)
+            saveCurrentPosition()
         }
     }
 
@@ -285,7 +285,8 @@ class PlayerViewModel(
         val timeDelta = now - lastSavedTime
         val posDelta = kotlin.math.abs(positionMs - lastSavedPosMs)
 
-        if (lastSavedPosMs == 0L || isThresholdReached || timeDelta >= 3000L || posDelta >= 2000L) {
+        val isIntervalReached = timeDelta >= 3000L || posDelta >= 2000L
+        if (lastSavedPosMs == 0L || isThresholdReached || isIntervalReached) {
             lastSavedTime = now
             lastSavedPosMs = positionMs
             viewModelScope.launch {
@@ -307,7 +308,7 @@ class PlayerViewModel(
         }
     }
 
-    private fun saveCurrentPosition(force: Boolean = false) {
+    private fun saveCurrentPosition() {
         val video = currentVideoFlow.value ?: return
         val pos = positionMsFlow.value
         val dur = durationMsFlow.value
@@ -525,7 +526,7 @@ class PlayerViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        saveCurrentPosition(force = true)
+        saveCurrentPosition()
     }
 
     companion object {
