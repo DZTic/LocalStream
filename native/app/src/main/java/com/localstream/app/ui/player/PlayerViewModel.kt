@@ -72,6 +72,8 @@ data class PlayerUiState(
     val playerMode: String = "internal",
     val selectedExternalPlayer: String = "",
     val initialPositionMs: Long = 0L,
+    val isBuffering: Boolean = false,
+    val errorMessage: String? = null,
 )
 
 @Suppress("TooManyFunctions", "LongMethod", "UNCHECKED_CAST")
@@ -98,6 +100,11 @@ class PlayerViewModel(
     private val nextVideoFlow = MutableStateFlow<VideoItem?>(null)
     private val isEndedFlow = MutableStateFlow(false)
     private val initialPositionMsFlow = MutableStateFlow(0L)
+    private val isBufferingFlow = MutableStateFlow(false)
+    private val errorMessageFlow = MutableStateFlow<String?>(null)
+
+    private var lastSavedPosMs = 0L
+    private var lastSavedTime = 0L
 
     init {
         loadVideoDetails()
@@ -138,6 +145,8 @@ class PlayerViewModel(
                 container.settingsRepository.observePlayerMode,
                 container.settingsRepository.observeExternalPlayer,
                 initialPositionMsFlow,
+                isBufferingFlow,
+                errorMessageFlow,
             )
         ) { arr -> arr },
     ) { p1, p2, p3, p4 ->
@@ -163,6 +172,8 @@ class PlayerViewModel(
             playerMode = p4[2] as String,
             selectedExternalPlayer = p4[3] as String,
             initialPositionMs = p4[4] as Long,
+            isBuffering = p4[5] as Boolean,
+            errorMessage = p4[6] as String?,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -242,8 +253,24 @@ class PlayerViewModel(
         }
     }
 
+    fun setBuffering(isBuffering: Boolean) {
+        isBufferingFlow.value = isBuffering
+    }
+
+    fun setErrorMessage(msg: String?) {
+        errorMessageFlow.value = msg
+    }
+
+    fun retryPlayback() {
+        errorMessageFlow.value = null
+        isBufferingFlow.value = true
+    }
+
     fun onPlayingStateChanged(isPlaying: Boolean) {
         isPlayingFlow.value = isPlaying
+        if (!isPlaying) {
+            saveCurrentPosition(force = true)
+        }
     }
 
     fun onPositionChanged(positionMs: Long, durationMs: Long) {
@@ -253,19 +280,43 @@ class PlayerViewModel(
         }
         val video = currentVideoFlow.value ?: return
 
-        viewModelScope.launch {
-            if (positionMs > 0L) {
+        val now = System.currentTimeMillis()
+        val isThresholdReached = durationMs > 0L && positionMs >= (durationMs * WATCHED_THRESHOLD_RATIO)
+        val timeDelta = now - lastSavedTime
+        val posDelta = kotlin.math.abs(positionMs - lastSavedPosMs)
+
+        if (lastSavedPosMs == 0L || isThresholdReached || timeDelta >= 3000L || posDelta >= 2000L) {
+            lastSavedTime = now
+            lastSavedPosMs = positionMs
+            viewModelScope.launch {
+                if (positionMs > 0L) {
+                    container.watchStateRepository.savePlaybackState(
+                        videoName = video.name,
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                    )
+                }
+                if (isThresholdReached) {
+                    container.watchStateRepository.setWatched(
+                        videoName = video.name,
+                        watched = true,
+                        mediaStoreId = video.mediaStoreId,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun saveCurrentPosition(force: Boolean = false) {
+        val video = currentVideoFlow.value ?: return
+        val pos = positionMsFlow.value
+        val dur = durationMsFlow.value
+        if (pos > 0L) {
+            viewModelScope.launch {
                 container.watchStateRepository.savePlaybackState(
                     videoName = video.name,
-                    positionMs = positionMs,
-                    durationMs = durationMs,
-                )
-            }
-            if (durationMs > 0L && positionMs >= (durationMs * WATCHED_THRESHOLD_RATIO)) {
-                container.watchStateRepository.setWatched(
-                    videoName = video.name,
-                    watched = true,
-                    mediaStoreId = video.mediaStoreId,
+                    positionMs = pos,
+                    durationMs = dur,
                 )
             }
         }
@@ -391,6 +442,19 @@ class PlayerViewModel(
     ) {
         audioTracksFlow.value = audio
         subtitleTracksFlow.value = subtitles
+
+        if (selectedAudioTrackIdFlow.value == null) {
+            val selected = audio.firstOrNull { it.isSelected }?.id
+            if (selected != null) {
+                selectedAudioTrackIdFlow.value = selected
+            }
+        }
+        if (selectedSubtitleTrackIdFlow.value == null) {
+            val selected = subtitles.firstOrNull { it.isSelected }?.id
+            if (selected != null) {
+                selectedSubtitleTrackIdFlow.value = selected
+            }
+        }
     }
 
     fun selectAudioTrack(id: String) {
@@ -457,6 +521,11 @@ class PlayerViewModel(
 
             resolveNextVideo(video, allGrouped, allRaw)
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        saveCurrentPosition(force = true)
     }
 
     companion object {
