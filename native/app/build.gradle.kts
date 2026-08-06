@@ -11,6 +11,15 @@ android {
     namespace = "com.localstream.app"
     compileSdk = 36
 
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("${rootDir}/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         // Phase 10 : applicationId final hérité de l'app Capacitor existante.
         applicationId = "com.localstream.app"
