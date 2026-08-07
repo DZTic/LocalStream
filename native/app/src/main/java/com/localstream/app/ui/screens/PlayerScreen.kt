@@ -134,6 +134,9 @@ import java.io.File
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
 private const val CONTROLS_TIMEOUT_MS = 3500L
@@ -1389,54 +1392,51 @@ private fun YouTubePlayerView(
                 settings.mediaPlaybackRequiresUserGesture = false
                 webViewClient = object : WebViewClient() {}
                 webChromeClient = object : WebChromeClient() {}
-                addJavascriptInterface(object {
-                    @JavascriptInterface
-                    fun onPlayerReady() {
-                        isJsReady = true
-                    }
-
-                    @JavascriptInterface
-                    fun onStateChange(state: Int, currentTimeSec: Float, durationSec: Float) {
-                        when (state) {
-                            1 -> { // PLAYING
-                                onBuffering(false)
-                                onError(null)
-                                onPlayingStateChanged(true)
-                                val pos = (currentTimeSec * 1000).toLong()
-                                lastWebPositionMs = pos
-                                onPositionChanged(pos, (durationSec * 1000).toLong())
+                val mainScope = CoroutineScope(Dispatchers.Main)
+                addJavascriptInterface(
+                    YouTubeBridge(
+                        mainScope = mainScope,
+                        onReady = { isJsReady = true },
+                        onStateChange = { state, currentTimeSec, durationSec ->
+                            when (state) {
+                                1 -> { // PLAYING
+                                    onBuffering(false)
+                                    onError(null)
+                                    onPlayingStateChanged(true)
+                                    val pos = (currentTimeSec * 1000).toLong()
+                                    lastWebPositionMs = pos
+                                    onPositionChanged(pos, (durationSec * 1000).toLong())
+                                }
+                                2 -> { // PAUSED
+                                    onBuffering(false)
+                                    onPlayingStateChanged(false)
+                                    val pos = (currentTimeSec * 1000).toLong()
+                                    lastWebPositionMs = pos
+                                    onPositionChanged(pos, (durationSec * 1000).toLong())
+                                }
+                                3 -> { // BUFFERING
+                                    onBuffering(true)
+                                }
+                                0 -> { // ENDED
+                                    onBuffering(false)
+                                    onPlayingStateChanged(false)
+                                    onEnded()
+                                }
+                                else -> Unit
                             }
-                            2 -> { // PAUSED
-                                onBuffering(false)
-                                onPlayingStateChanged(false)
-                                val pos = (currentTimeSec * 1000).toLong()
-                                lastWebPositionMs = pos
-                                onPositionChanged(pos, (durationSec * 1000).toLong())
-                            }
-                            3 -> { // BUFFERING
-                                onBuffering(true)
-                            }
-                            0 -> { // ENDED
-                                onBuffering(false)
-                                onPlayingStateChanged(false)
-                                onEnded()
-                            }
-                        }
-                    }
-
-                    @JavascriptInterface
-                    fun onProgress(currentTimeSec: Float, durationSec: Float) {
-                        val pos = (currentTimeSec * 1000).toLong()
-                        lastWebPositionMs = pos
-                        onPositionChanged(pos, (durationSec * 1000).toLong())
-                    }
-
-                    @JavascriptInterface
-                    fun onError(errorCode: String) {
-                        onBuffering(false)
-                        onError("Erreur de lecture YouTube (code $errorCode)")
-                    }
-                }, "AndroidBridge")
+                        },
+                        onProgress = { currentTimeSec, durationSec ->
+                            val pos = (currentTimeSec * 1000).toLong()
+                            lastWebPositionMs = pos
+                            onPositionChanged(pos, (durationSec * 1000).toLong())
+                        },
+                        onError = { errorCode ->
+                            onBuffering(false)
+                            onError("Erreur de lecture YouTube (code $errorCode)")
+                        },
+                    ),
+                    "AndroidBridge",
+                )
 
                 loadDataWithBaseURL("https://www.youtube.com", htmlContent, "text/html", "UTF-8", null)
                 webViewRef = this
@@ -1444,4 +1444,32 @@ private fun YouTubePlayerView(
         },
         modifier = modifier.fillMaxSize()
     )
+}
+
+private class YouTubeBridge(
+    private val mainScope: CoroutineScope,
+    private val onReady: () -> Unit,
+    private val onStateChange: (state: Int, currentTimeSec: Float, durationSec: Float) -> Unit,
+    private val onProgress: (currentTimeSec: Float, durationSec: Float) -> Unit,
+    private val onError: (errorCode: String) -> Unit,
+) {
+    @JavascriptInterface
+    fun onPlayerReady() {
+        mainScope.launch { onReady() }
+    }
+
+    @JavascriptInterface
+    fun onStateChange(state: Int, currentTimeSec: Float, durationSec: Float) {
+        mainScope.launch { onStateChange(state, currentTimeSec, durationSec) }
+    }
+
+    @JavascriptInterface
+    fun onProgress(currentTimeSec: Float, durationSec: Float) {
+        mainScope.launch { onProgress(currentTimeSec, durationSec) }
+    }
+
+    @JavascriptInterface
+    fun onError(errorCode: String) {
+        mainScope.launch { onError(errorCode) }
+    }
 }
