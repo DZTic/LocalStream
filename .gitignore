@@ -25,3 +25,10 @@ android/local.properties
 android/app/build/
 android/app/src/main/assets/public/
 android/.kotlin/
+
+.gradle-home/
+.claude/
+add_import.py
+commitmsg.txt
+fix_posters.py
+fix_screens.py

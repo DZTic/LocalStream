@@ -29,6 +29,7 @@ import androidx.navigation.navArgument
 import com.localstream.app.LocalStreamApplication
 import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.components.LocalStreamBottomBar
+import com.localstream.app.ui.components.YouTubeUrlDialog
 import com.localstream.app.ui.home.HomeViewModel
 import com.localstream.app.ui.library.LibraryViewModel
 import com.localstream.app.ui.permission.StoragePermissions
@@ -58,6 +59,7 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
     val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModel.factory(libraryViewModel))
 
     // Permission stockage : re-vérifiée à chaque retour au premier plan.
+    var showYouTubeDialog by remember { mutableStateOf(false) }
     var storageGranted by remember { mutableStateOf(StoragePermissions.hasStoragePermission(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         storageGranted = StoragePermissions.hasStoragePermission(context)
@@ -103,6 +105,16 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
         navController.navigate(Routes.player(name))
     }
 
+    if (showYouTubeDialog) {
+        YouTubeUrlDialog(
+            onDismiss = { showYouTubeDialog = false },
+            onPlayYouTube = { url ->
+                showYouTubeDialog = false
+                openPlayerByName(url)
+            },
+        )
+    }
+
     Scaffold(
         containerColor = Black,
         bottomBar = {
@@ -141,6 +153,7 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
                     onLogoClick = resetToHome,
                     onSearchClick = openSearch,
                     onSettingsClick = openSettings,
+                    onYouTubeClick = { showYouTubeDialog = true },
                 )
             }
             composable(Routes.LIBRARY) {
@@ -154,6 +167,7 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
                     onLogoClick = resetToHome,
                     onSearchClick = openSearch,
                     onSettingsClick = openSettings,
+                    onYouTubeClick = { showYouTubeDialog = true },
                 )
             }
             composable(Routes.SEARCH) {
@@ -175,6 +189,7 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
                     onLogoClick = resetToHome,
                     onSearchClick = openSearch,
                     onSettingsClick = openSettings,
+                    onYouTubeClick = { showYouTubeDialog = true },
                     onOpenDetails = openDetailsByName,
                 )
             }
@@ -183,6 +198,7 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
                     onLogoClick = resetToHome,
                     onSearchClick = openSearch,
                     onSettingsClick = openSettings,
+                    onYouTubeClick = { showYouTubeDialog = true },
                     onOpenDetails = openDetailsByName,
                 )
             }
@@ -191,6 +207,7 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
                     onLogoClick = resetToHome,
                     onSearchClick = openSearch,
                     onSettingsClick = { /* deja sur les parametres, pas de navigation */ },
+                    onYouTubeClick = { showYouTubeDialog = true },
                 )
             }
             composable(

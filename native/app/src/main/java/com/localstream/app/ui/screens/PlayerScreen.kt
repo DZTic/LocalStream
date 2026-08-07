@@ -111,6 +111,12 @@ import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import android.annotation.SuppressLint
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import com.localstream.app.domain.YoutubeUtils
 import com.localstream.app.LocalStreamApplication
 import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.player.AspectRatioMode
@@ -128,10 +134,18 @@ import java.io.File
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
 private const val CONTROLS_TIMEOUT_MS = 3500L
 private const val FEEDBACK_TIMEOUT_MS = 1500L
+// A full-height vertical swipe spans 100% of the volume range (lower = more sensitive).
+private const val VOLUME_GESTURE_PERCENT = 100f
+// A full-height vertical swipe spans the whole 5%-100% brightness range (log scale).
+private val BRIGHTNESS_GESTURE_LOG_RANGE: Float =
+    Math.log((PlayerViewModel.MAX_BRIGHTNESS / PlayerViewModel.MIN_BRIGHTNESS).toDouble()).toFloat()
 
 
 @Suppress("LongMethod", "CyclomaticComplexMethod", "TooManyFunctions")
@@ -147,6 +161,15 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    val youtubeId = remember(uiState.currentVideo) {
+        val video = uiState.currentVideo
+        if (video != null) {
+            YoutubeUtils.extractVideoId(video.url)
+                ?: YoutubeUtils.extractVideoId(video.name)
+                ?: YoutubeUtils.extractVideoId(video.path)
+        } else null
+    }
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     }
@@ -190,7 +213,7 @@ fun PlayerScreen(
             val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             if (maxVol > 0) {
                 val curVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-                val curPct = ((curVol.toFloat() / maxVol) * 100).roundToInt().coerceIn(0, 100)
+                val curPct = ((curVol.toFloat() / maxVol) * 100f).coerceIn(0f, 100f)
                 viewModel.setInitialVolumePercent(curPct)
             }
         }
@@ -434,24 +457,13 @@ fun PlayerScreen(
     }
 
     // Load media source into ExoPlayer
-    LaunchedEffect(uiState.currentVideo) {
+    LaunchedEffect(uiState.currentVideo, youtubeId) {
+        if (youtubeId != null) return@LaunchedEffect
         val video = uiState.currentVideo ?: return@LaunchedEffect
         val uri = extractUri(video) ?: return@LaunchedEffect
 
-        if (isYouTubeUrl(uri.toString()) || isYouTubeUrl(video.name) || isYouTubeUrl(video.url)) {
-            runCatching {
-                val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-            }.onFailure {
-                viewModel.setErrorMessage("Impossible d'ouvrir le lien YouTube")
-            }
-            return@LaunchedEffect
-        }
-
         exoPlayer.stop()
-        exoPlayer.clearMediaItems()
+       exoPlayer.clearMediaItems()
         isPlayerReady = false
         val mediaItem = MediaItem.fromUri(uri)
         val startPos = uiState.initialPositionMs
@@ -499,34 +511,43 @@ fun PlayerScreen(
                         onDoubleTapLeft = {
                             if (!uiState.isLocked) {
                                 viewModel.seekBy(-10000L)
-                                exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
+                                if (youtubeId == null) {
+                                    exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
+                                }
                             }
                         },
                         onDoubleTapRight = {
                             if (!uiState.isLocked) {
                                 viewModel.seekBy(10000L)
-                                exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
+                                if (youtubeId == null) {
+                                    exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
+                                }
                             }
                         },
                         onVerticalDragLeft = { deltaRatio ->
                             if (!uiState.isLocked) {
-                                val current = if (uiState.brightnessPercent >= 0f) uiState.brightnessPercent else 0.8f
-                                viewModel.setBrightnessPercent(current + deltaRatio)
+                                viewModel.scaleBrightness(
+                                    Math.exp(deltaRatio * BRIGHTNESS_GESTURE_LOG_RANGE.toDouble()).toFloat(),
+                                )
                             }
                         },
                         onVerticalDragRight = { deltaRatio ->
                             if (!uiState.isLocked) {
-                                val deltaVol = (deltaRatio * 100f).roundToInt()
-                                viewModel.setVolumePercent(uiState.volumePercent + deltaVol)
+                                viewModel.setVolumePercent(
+                                    uiState.volumePercent + deltaRatio * VOLUME_GESTURE_PERCENT,
+                                )
                             }
                         },
                         onHorizontalDrag = { ratio ->
                             if (!uiState.isLocked) {
-                                val dur = exoPlayer.duration.coerceAtLeast(1L)
+                                val dur = if (youtubeId != null) uiState.durationMs else exoPlayer.duration.coerceAtLeast(1L)
+                                val curPos = if (youtubeId != null) uiState.positionMs else exoPlayer.currentPosition
                                 val seekOffset = (ratio * 60000L).toLong()
-                                val targetPos = (exoPlayer.currentPosition + seekOffset).coerceIn(0L, dur)
+                                val targetPos = (curPos + seekOffset).coerceIn(0L, dur)
                                 viewModel.seekBy(seekOffset)
-                                exoPlayer.seekTo(targetPos)
+                                if (youtubeId == null) {
+                                    exoPlayer.seekTo(targetPos)
+                                }
                             }
                         },
                     )
@@ -752,6 +773,8 @@ private suspend fun PointerInputScope.detectPlayerGestures(
         var isDrag = false
         var dragMode = 0
         var pointerActive = true
+        var lastX = startX
+        var lastY = down.position.y
 
         while (pointerActive) {
             val event = awaitPointerEvent()
@@ -765,13 +788,19 @@ private suspend fun PointerInputScope.detectPlayerGestures(
                     lastTapX = startX
                 }
             } else {
-                val dx = change.position.x - startX
-                val dy = change.position.y - down.position.y
-                if (!isDrag && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
+                val totalDx = change.position.x - startX
+                val totalDy = change.position.y - down.position.y
+                if (!isDrag && (abs(totalDx) > touchSlop || abs(totalDy) > touchSlop)) {
                     isDrag = true
-                    dragMode = if (abs(dx) > abs(dy)) 1 else if (startX < size.width * 0.5f) 2 else 3
+                    dragMode = if (abs(totalDx) > abs(totalDy)) 1 else if (startX < size.width * 0.5f) 2 else 3
+                    lastX = change.position.x
+                    lastY = change.position.y
                 }
                 if (isDrag) {
+                    val dx = change.position.x - lastX
+                    val dy = change.position.y - lastY
+                    lastX = change.position.x
+                    lastY = change.position.y
                     change.consume()
                     dispatchDragEvent(dragMode, dx / size.width.toFloat(), dy / size.height.toFloat(), callbacks)
                 }
@@ -1238,5 +1267,222 @@ private fun formatTimeMs(ms: Long): String {
         String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
     } else {
         String.format(Locale.US, "%02d:%02d", minutes, seconds)
+    }
+}
+
+
+@Suppress("UnusedPrivateMember", "LongMethod")
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun YouTubePlayerView(
+    videoId: String,
+    initialPositionMs: Long,
+    isPlaying: Boolean,
+    positionMs: Long,
+    onPositionChanged: (positionMs: Long, durationMs: Long) -> Unit,
+    onPlayingStateChanged: (isPlaying: Boolean) -> Unit,
+    onEnded: () -> Unit,
+    onError: (error: String?) -> Unit,
+    onBuffering: (isBuffering: Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    var isJsReady by remember { mutableStateOf(false) }
+    var lastWebPositionMs by remember { mutableLongStateOf(initialPositionMs) }
+
+    val startSeconds = (initialPositionMs / 1000).coerceAtLeast(0)
+
+    val htmlContent = remember(videoId, startSeconds) {
+        """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <style>
+                body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000000; overflow: hidden; }
+                #player { width: 100%; height: 100%; }
+            </style>
+        </head>
+        <body>
+            <div id="player"></div>
+            <script>
+                var tag = document.createElement('script');
+                tag.src = "https://www.youtube.com/iframe_api";
+                var firstScriptTag = document.getElementsByTagName('script')[0];
+                firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+                var player;
+                function onYouTubeIframeAPIReady() {
+                    player = new YT.Player('player', {
+                        height: '100%',
+                        width: '100%',
+                        videoId: '$videoId',
+                        playerVars: {
+                            'autoplay': 1,
+                            'controls': 0,
+                            'rel': 0,
+                            'fs': 0,
+                            'playsinline': 1,
+                            'start': $startSeconds,
+                            'enablejsapi': 1,
+                            'modestbranding': 1
+                        },
+                        events: {
+                            'onReady': onPlayerReady,
+                            'onStateChange': onPlayerStateChange,
+                            'onError': onPlayerError
+                        }
+                    });
+                }
+                function onPlayerReady(event) {
+                    if (window.AndroidBridge) {
+                        window.AndroidBridge.onPlayerReady();
+                    }
+                    setInterval(function() {
+                        if (player && player.getPlayerState && player.getPlayerState() === 1) {
+                            var curTime = player.getCurrentTime() || 0;
+                            var dur = player.getDuration() || 0;
+                            if (window.AndroidBridge) {
+                                window.AndroidBridge.onProgress(curTime, dur);
+                            }
+                        }
+                    }, 500);
+                }
+                function onPlayerStateChange(event) {
+                    if (window.AndroidBridge) {
+                        var curTime = player && player.getCurrentTime ? player.getCurrentTime() : 0;
+                        var dur = player && player.getDuration ? player.getDuration() : 0;
+                        window.AndroidBridge.onStateChange(event.data, curTime, dur);
+                    }
+                }
+                function onPlayerError(err) {
+                    if (window.AndroidBridge) {
+                        window.AndroidBridge.onError("" + err.data);
+                    }
+                }
+                function playVideo() { if(player && player.playVideo) player.playVideo(); }
+                function pauseVideo() { if(player && player.pauseVideo) player.pauseVideo(); }
+                function seekTo(sec) { if(player && player.seekTo) player.seekTo(sec, true); }
+            </script>
+        </body>
+        </html>
+        """.trimIndent()
+    }
+
+    DisposableEffect(videoId) {
+        onDispose {
+            webViewRef?.destroy()
+        }
+    }
+
+    LaunchedEffect(isPlaying, isJsReady) {
+        if (isJsReady) {
+            if (isPlaying) {
+                webViewRef?.evaluateJavascript("playVideo()", null)
+            } else {
+                webViewRef?.evaluateJavascript("pauseVideo()", null)
+            }
+        }
+    }
+
+    LaunchedEffect(positionMs, isJsReady) {
+        if (isJsReady && kotlin.math.abs(positionMs - lastWebPositionMs) > 1500L) {
+            val sec = positionMs / 1000f
+            lastWebPositionMs = positionMs
+            webViewRef?.evaluateJavascript("seekTo($sec)", null)
+        }
+    }
+
+    AndroidView(
+        factory = { ctx ->
+            WebView(ctx).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.mediaPlaybackRequiresUserGesture = false
+                webViewClient = object : WebViewClient() {}
+                webChromeClient = object : WebChromeClient() {}
+                val mainScope = CoroutineScope(Dispatchers.Main)
+                addJavascriptInterface(
+                    YouTubeBridge(
+                        mainScope = mainScope,
+                        onReady = { isJsReady = true },
+                        onStateChange = { state, currentTimeSec, durationSec ->
+                            when (state) {
+                                1 -> { // PLAYING
+                                    onBuffering(false)
+                                    onError(null)
+                                    onPlayingStateChanged(true)
+                                    val pos = (currentTimeSec * 1000).toLong()
+                                    lastWebPositionMs = pos
+                                    onPositionChanged(pos, (durationSec * 1000).toLong())
+                                }
+                                2 -> { // PAUSED
+                                    onBuffering(false)
+                                    onPlayingStateChanged(false)
+                                    val pos = (currentTimeSec * 1000).toLong()
+                                    lastWebPositionMs = pos
+                                    onPositionChanged(pos, (durationSec * 1000).toLong())
+                                }
+                                3 -> { // BUFFERING
+                                    onBuffering(true)
+                                }
+                                0 -> { // ENDED
+                                    onBuffering(false)
+                                    onPlayingStateChanged(false)
+                                    onEnded()
+                                }
+                                else -> Unit
+                            }
+                        },
+                        onProgress = { currentTimeSec, durationSec ->
+                            val pos = (currentTimeSec * 1000).toLong()
+                            lastWebPositionMs = pos
+                            onPositionChanged(pos, (durationSec * 1000).toLong())
+                        },
+                        onError = { errorCode ->
+                            onBuffering(false)
+                            onError("Erreur de lecture YouTube (code $errorCode)")
+                        },
+                    ),
+                    "AndroidBridge",
+                )
+
+                loadDataWithBaseURL("https://www.youtube.com", htmlContent, "text/html", "UTF-8", null)
+                webViewRef = this
+            }
+        },
+        modifier = modifier.fillMaxSize()
+    )
+}
+
+private class YouTubeBridge(
+    private val mainScope: CoroutineScope,
+    private val onReady: () -> Unit,
+    private val onStateChange: (state: Int, currentTimeSec: Float, durationSec: Float) -> Unit,
+    private val onProgress: (currentTimeSec: Float, durationSec: Float) -> Unit,
+    private val onError: (errorCode: String) -> Unit,
+) {
+    @JavascriptInterface
+    fun onPlayerReady() {
+        mainScope.launch { onReady() }
+    }
+
+    @JavascriptInterface
+    fun onStateChange(state: Int, currentTimeSec: Float, durationSec: Float) {
+        mainScope.launch { onStateChange(state, currentTimeSec, durationSec) }
+    }
+
+    @JavascriptInterface
+    fun onProgress(currentTimeSec: Float, durationSec: Float) {
+        mainScope.launch { onProgress(currentTimeSec, durationSec) }
+    }
+
+    @JavascriptInterface
+    fun onError(errorCode: String) {
+        mainScope.launch { onError(errorCode) }
     }
 }
