@@ -61,6 +61,7 @@ fun HomeScreen(
     onLogoClick: () -> Unit,
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onYouTubeClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -124,6 +125,7 @@ fun HomeScreen(
             onLogoClick = onLogoClick,
             onSearchClick = onSearchClick,
             onSettingsClick = onSettingsClick,
+            onYouTubeClick = onYouTubeClick,
             modifier = Modifier.align(Alignment.TopCenter),
         )
     }
