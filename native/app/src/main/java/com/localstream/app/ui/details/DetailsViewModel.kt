@@ -138,9 +138,10 @@ class DetailsViewModel(
         val meta = args[8] as TmdbMetadata?
         val cachedEpisodes = args[9] as Map<String, TmdbEpisode>
 
+        val isUrl = id.startsWith("http://") || id.startsWith("https://") || id.startsWith("content://") || id.startsWith("file://")
         val group = videos.find { it.name == id || it.seriesName == id }
             ?: videos.find { it.name.lowercase() == id.lowercase() }
-            ?: VideoItem(name = id, path = "", size = 0, duration = 0)
+            ?: VideoItem(name = id, url = if (isUrl) id else "", path = "", size = 0, duration = 0)
 
         val isGroupWatched = watchedSet.contains(group.name) ||
             (group.episodes?.isNotEmpty() == true && group.episodes.all { watchedSet.contains(it.name) })

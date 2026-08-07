@@ -1,5 +1,6 @@
 package com.localstream.app.ui.navigation
 
+import android.net.Uri
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -196,8 +197,9 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
                 route = Routes.DETAILS,
                 arguments = listOf(navArgument(Routes.ARG_ID) { type = NavType.StringType }),
             ) { entry ->
+                val argId = entry.arguments?.getString(Routes.ARG_ID).orEmpty()
                 DetailsScreen(
-                    id = entry.arguments?.getString(Routes.ARG_ID).orEmpty(),
+                    id = Uri.decode(argId),
                     onBack = { navController.popBackStack() },
                     onPlayVideo = openPlayerByName,
                 )
@@ -206,8 +208,9 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
                 route = Routes.PLAYER,
                 arguments = listOf(navArgument(Routes.ARG_ID) { type = NavType.StringType }),
             ) { entry ->
+                val argId = entry.arguments?.getString(Routes.ARG_ID).orEmpty()
                 PlayerScreen(
-                    videoName = entry.arguments?.getString(Routes.ARG_ID).orEmpty(),
+                    videoName = Uri.decode(argId),
                     onBack = { navController.popBackStack() },
                 )
             }

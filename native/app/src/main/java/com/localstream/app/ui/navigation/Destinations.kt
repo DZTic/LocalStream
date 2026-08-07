@@ -1,5 +1,6 @@
 package com.localstream.app.ui.navigation
 
+import android.net.Uri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.History
@@ -23,10 +24,10 @@ object Routes {
     const val SETTINGS = "settings"
 
     /** Construit la route Détails pour un identifiant donné. */
-    fun details(id: String): String = "details/$id"
+    fun details(id: String): String = "details/${Uri.encode(id)}"
 
     /** Construit la route Player pour un identifiant vidéo donné. */
-    fun player(id: String): String = "player/$id"
+    fun player(id: String): String = "player/${Uri.encode(id)}"
 
     /** Argument attendu par les routes [DETAILS] et [PLAYER]. */
     const val ARG_ID = "id"

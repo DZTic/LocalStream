@@ -228,7 +228,7 @@ class PlayerViewModel(
             rawVideo != null -> rawVideo
             else -> allGrouped.firstNotNullOfOrNull { group ->
                 group.episodes?.find { it.name == decodedName || it.name == rawName }
-            } ?: VideoItem(name = decodedName)
+            } ?: createFallbackVideoItem(decodedName)
         }
     }
 
@@ -507,7 +507,7 @@ class PlayerViewModel(
             }
             val video = allRaw.find { it.name == decodedName || it.name == newName }
                 ?: foundInGrouped
-                ?: VideoItem(name = decodedName)
+                ?: createFallbackVideoItem(decodedName)
 
             val watchedMap = container.watchStateRepository.getWatchedMap()
             val isWatched = watchedMap[video.name] == true
@@ -551,3 +551,13 @@ private fun isFinished(isWatched: Boolean, pct: Double, pos: Long, durMs: Long):
 
 private fun decodeUri(value: String): String =
     runCatching { URLDecoder.decode(value, "UTF-8") }.getOrDefault(value)
+
+private fun createFallbackVideoItem(name: String): VideoItem {
+    val isUrl = name.startsWith("http://") || name.startsWith("https://") ||
+            name.startsWith("content://") || name.startsWith("file://")
+    return VideoItem(
+        name = name,
+        url = if (isUrl) name else "",
+        nativeUri = if (name.startsWith("content://") || name.startsWith("file://")) name else null,
+    )
+}
