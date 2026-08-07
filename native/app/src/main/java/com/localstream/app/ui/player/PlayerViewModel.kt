@@ -1,10 +1,12 @@
 package com.localstream.app.ui.player
 
 import java.net.URLDecoder
+import kotlin.math.roundToInt
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.localstream.app.di.AppContainer
+import com.localstream.app.domain.YoutubeUtils
 import com.localstream.app.domain.model.VideoItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -58,7 +60,7 @@ data class PlayerUiState(
     val durationMs: Long = 0L,
     val isControlsVisible: Boolean = true,
     val isLocked: Boolean = false,
-    val volumePercent: Int = 100,
+    val volumePercent: Float = 100f,
     val brightnessPercent: Float = -1f,
     val aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT,
     val playbackSpeed: Float = 1.0f,
@@ -88,7 +90,7 @@ class PlayerViewModel(
     private val durationMsFlow = MutableStateFlow(0L)
     private val isControlsVisibleFlow = MutableStateFlow(true)
     private val isLockedFlow = MutableStateFlow(false)
-    private val volumePercentFlow = MutableStateFlow(100)
+    private val volumePercentFlow = MutableStateFlow(100f)
     private val brightnessPercentFlow = MutableStateFlow(-1f)
     private val aspectRatioModeFlow = MutableStateFlow(AspectRatioMode.FIT)
     private val playbackSpeedFlow = MutableStateFlow(1.0f)
@@ -158,7 +160,7 @@ class PlayerViewModel(
             durationMs = p1[3] as Long,
             isControlsVisible = p1[4] as Boolean,
             isLocked = p2[0] as Boolean,
-            volumePercent = p2[1] as Int,
+            volumePercent = p2[1] as Float,
             brightnessPercent = p2[2] as Float,
             aspectRatioMode = p2[3] as AspectRatioMode,
             playbackSpeed = p2[4] as Float,
@@ -184,6 +186,29 @@ class PlayerViewModel(
     private fun loadVideoDetails() {
         viewModelScope.launch {
             val decodedName = decodeUri(videoName)
+            val youtubeId = YoutubeUtils.extractVideoId(decodedName) ?: YoutubeUtils.extractVideoId(videoName)
+
+            if (youtubeId != null) {
+                val watchKey = YoutubeUtils.buildWatchStateKey(youtubeId)
+                val targetVideo = VideoItem(
+                    name = watchKey,
+                    url = YoutubeUtils.buildYoutubeUrl(youtubeId),
+                    path = "youtube:$youtubeId",
+                    type = "video/youtube",
+                )
+                val watchedMap = container.watchStateRepository.getWatchedMap()
+                val isWatched = watchedMap[targetVideo.name] == true
+                val state = container.watchStateRepository.getPlaybackState(targetVideo.name)
+                val rawPos = state?.positionMs ?: 0L
+                val pct = state?.progressPct ?: 0.0
+                val pos = if (isFinished(isWatched, pct, rawPos, targetVideo.duration * 1000L)) 0L else rawPos
+
+                initialPositionMsFlow.value = pos
+                positionMsFlow.value = pos
+                currentVideoFlow.value = targetVideo
+                return@launch
+            }
+
             val allRaw = container.videoRepository.getRawVideos()
             val allGrouped = container.videoRepository.getGroupedVideos()
 
@@ -383,25 +408,30 @@ class PlayerViewModel(
         playbackSpeedFlow.value = next
     }
 
-    fun adjustVolume(deltaPercent: Int) {
+    fun adjustVolume(deltaPercent: Float) {
         setVolumePercent(volumePercentFlow.value + deltaPercent)
     }
 
-    fun setInitialVolumePercent(newVol: Int) {
-        volumePercentFlow.value = newVol.coerceIn(0, 100)
+    fun setInitialVolumePercent(newVol: Float) {
+        setInitialVolumePercentInternal(newVol)
     }
 
-    fun initVolumePercent(newVol: Int) {
+    fun initVolumePercent(newVol: Float) {
         setInitialVolumePercent(newVol)
     }
 
-    fun setVolumePercent(newVol: Int) {
-        val coerced = newVol.coerceIn(0, 100)
+    private fun setInitialVolumePercentInternal(newVol: Float) {
+        volumePercentFlow.value = newVol.coerceIn(0f, MAX_VOLUME_PERCENT)
+    }
+
+    fun setVolumePercent(newVol: Float) {
+        val coerced = newVol.coerceIn(0f, MAX_VOLUME_PERCENT)
         volumePercentFlow.value = coerced
+        val coercedInt = coerced.roundToInt()
         gestureFeedbackFlow.value = GestureFeedback(
             type = FeedbackType.VOLUME,
-            valuePercent = coerced,
-            text = "Volume: $coerced%",
+            valuePercent = coercedInt,
+            text = "Volume: $coercedInt%",
         )
     }
 
@@ -411,10 +441,16 @@ class PlayerViewModel(
         setBrightnessPercent(baseline + deltaPercent)
     }
 
+    fun scaleBrightness(factor: Float) {
+        val current = brightnessPercentFlow.value
+        val baseline = if (current < 0f) DEFAULT_BRIGHTNESS else current
+        setBrightnessPercent(baseline * factor)
+    }
+
     fun setBrightnessPercent(newBright: Float) {
-        val coerced = newBright.coerceIn(0.05f, 1.0f)
+        val coerced = newBright.coerceIn(MIN_BRIGHTNESS, MAX_BRIGHTNESS)
         brightnessPercentFlow.value = coerced
-        val pct = (coerced * 100).toInt()
+        val pct = (coerced * 100).roundToInt()
         gestureFeedbackFlow.value = GestureFeedback(
             type = FeedbackType.BRIGHTNESS,
             valuePercent = pct,
@@ -532,6 +568,10 @@ class PlayerViewModel(
     companion object {
         private const val STOP_TIMEOUT_MS = 5000L
         private const val WATCHED_THRESHOLD_RATIO = 0.90
+        const val MAX_VOLUME_PERCENT: Float = 100f
+        const val MIN_BRIGHTNESS: Float = 0.05f
+        const val MAX_BRIGHTNESS: Float = 1.0f
+        private const val DEFAULT_BRIGHTNESS: Float = 1.0f
 
         fun factory(videoName: String, container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {

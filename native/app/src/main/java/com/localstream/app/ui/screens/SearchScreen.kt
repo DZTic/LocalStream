@@ -29,6 +29,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.unit.sp
+import com.localstream.app.domain.YoutubeUtils
+import com.localstream.app.ui.theme.Red600
 import com.localstream.app.domain.model.TmdbMetadata
 import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.components.VideoGrid
@@ -52,6 +63,7 @@ fun SearchScreen(
     onQueryChange: (String) -> Unit,
     onOpenDetails: (VideoItem) -> Unit,
     onBack: () -> Unit,
+    onPlayYouTube: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -60,6 +72,39 @@ fun SearchScreen(
             onQueryChange = onQueryChange,
             onBack = onBack,
         )
+
+        if (YoutubeUtils.isYoutubeUrlOrId(query) && onPlayYouTube != null) {
+            Card(
+                onClick = { onPlayYouTube(query) },
+                colors = CardDefaults.cardColors(containerColor = Zinc900),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(16.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayCircle,
+                        contentDescription = null,
+                        tint = Red600,
+                        modifier = Modifier.size(32.dp),
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Vid?o YouTube d?tect?e", color = White, fontWeight = FontWeight.Bold)
+                        Text(query, color = Zinc500, fontSize = 12.sp, maxLines = 1)
+                    }
+                    Button(
+                        onClick = { onPlayYouTube(query) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Red600),
+                    ) {
+                        Text("Lire", color = White)
+                    }
+                }
+            }
+        }
 
         if (query.isNotBlank()) {
             Text(

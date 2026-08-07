@@ -8,9 +8,12 @@ import com.localstream.app.data.repository.VideoRepository
 import com.localstream.app.data.repository.WatchStateRepository
 import com.localstream.app.data.scanner.MediaScanner
 import com.localstream.app.di.AppContainer
+import com.localstream.app.domain.YoutubeUtils
 import com.localstream.app.domain.model.MovieCollection
 import com.localstream.app.domain.model.SubtitleEntry
 import com.localstream.app.domain.model.VideoItem
+import kotlin.math.exp
+import kotlin.math.ln
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -87,6 +90,28 @@ class PlayerViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `PlayerViewModel correctly loads YouTube URL and restores saved position`() = runTest {
+        val ytUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        val watchKey = YoutubeUtils.buildWatchStateKey("dQw4w9WgXcQ")
+        playbackDao.upsert(PlaybackStateEntity(name = watchKey, progressPct = 40.0, positionMs = 120000L))
+
+        val viewModel = PlayerViewModel(ytUrl, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertNotNull(state.currentVideo)
+        assertEquals(watchKey, state.currentVideo?.name)
+        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", state.currentVideo?.url)
+        assertEquals(120000L, state.initialPositionMs)
+
+        viewModel.onPositionChanged(positionMs = 150000L, durationMs = 300000L)
+        advanceUntilIdle()
+
+        assertEquals(150000L, playbackDao.findByName(watchKey)?.positionMs)
     }
 
     @Test
@@ -222,9 +247,9 @@ class PlayerViewModelTest {
         backgroundScope.launch { viewModel.uiState.collect {} }
         advanceUntilIdle()
 
-        viewModel.setVolumePercent(50)
+        viewModel.setVolumePercent(50f)
         advanceUntilIdle()
-        assertEquals(50, viewModel.uiState.value.volumePercent)
+        assertEquals(50f, viewModel.uiState.value.volumePercent, 0.01f)
         assertEquals(FeedbackType.VOLUME, viewModel.uiState.value.gestureFeedback?.type)
 
         viewModel.setBrightnessPercent(0.4f)
@@ -239,10 +264,10 @@ class PlayerViewModelTest {
         backgroundScope.launch { viewModel.uiState.collect {} }
         advanceUntilIdle()
 
-        viewModel.setInitialVolumePercent(45)
+        viewModel.setInitialVolumePercent(45f)
         advanceUntilIdle()
 
-        assertEquals(45, viewModel.uiState.value.volumePercent)
+        assertEquals(45f, viewModel.uiState.value.volumePercent, 0.01f)
         assertEquals(null, viewModel.uiState.value.gestureFeedback)
     }
 
@@ -252,10 +277,10 @@ class PlayerViewModelTest {
         backgroundScope.launch { viewModel.uiState.collect {} }
         advanceUntilIdle()
 
-        viewModel.adjustVolume(-20)
+        viewModel.adjustVolume(-20f)
         advanceUntilIdle()
         val volState = viewModel.uiState.value
-        assertEquals(80, volState.volumePercent)
+        assertEquals(80f, volState.volumePercent, 0.01f)
         assertEquals(FeedbackType.VOLUME, volState.gestureFeedback?.type)
         assertEquals(80, volState.gestureFeedback?.valuePercent)
 
@@ -268,6 +293,63 @@ class PlayerViewModelTest {
         viewModel.clearGestureFeedback()
         advanceUntilIdle()
         assertEquals(null, viewModel.uiState.value.gestureFeedback)
+    }
+
+    @Test
+    fun `small volume gesture deltas accumulate precisely`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.setInitialVolumePercent(50f)
+        advanceUntilIdle()
+
+        // 10 per-frame deltas of 5% of the screen height (1000px) accumulate to 5%
+        repeat(10) {
+            viewModel.setVolumePercent(viewModel.uiState.value.volumePercent + 0.005f * 100f)
+            advanceUntilIdle()
+        }
+
+        assertEquals(55f, viewModel.uiState.value.volumePercent, 0.001f)
+        assertEquals(55, viewModel.uiState.value.gestureFeedback?.valuePercent)
+    }
+
+    @Test
+    fun `scaleBrightness applies log-scale gesture within bounds`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.setBrightnessPercent(0.5f)
+        advanceUntilIdle()
+
+        // A small upward gesture (1% of screen height) is a tiny multiplicative step
+        val logRange = ln((PlayerViewModel.MAX_BRIGHTNESS / PlayerViewModel.MIN_BRIGHTNESS).toDouble()).toFloat()
+        val smallUp = exp(0.01f * logRange)
+        viewModel.scaleBrightness(smallUp)
+        advanceUntilIdle()
+        val afterSmallUp = viewModel.uiState.value.brightnessPercent
+        assertEquals(0.5f * smallUp, afterSmallUp, 0.001f)
+
+        // Perceived symmetry: small steps up then small steps down returns near start
+        val step = exp(0.01f * logRange)
+        viewModel.setBrightnessPercent(0.5f)
+        advanceUntilIdle()
+        repeat(5) { viewModel.scaleBrightness(step); advanceUntilIdle() }
+        repeat(5) { viewModel.scaleBrightness(1f / step); advanceUntilIdle() }
+        assertEquals(0.5f, viewModel.uiState.value.brightnessPercent, 0.01f)
+
+        // A full-screen swipe up reaches max, a full-screen swipe down reaches min
+        val fullUp = exp(1f * logRange)
+        viewModel.setBrightnessPercent(0.5f)
+        viewModel.scaleBrightness(fullUp)
+        advanceUntilIdle()
+        assertEquals(PlayerViewModel.MAX_BRIGHTNESS, viewModel.uiState.value.brightnessPercent, 0.001f)
+
+        val fullDown = exp(-1f * logRange)
+        viewModel.scaleBrightness(fullDown)
+        advanceUntilIdle()
+        assertEquals(PlayerViewModel.MIN_BRIGHTNESS, viewModel.uiState.value.brightnessPercent, 0.001f)
     }
 
     @Test
