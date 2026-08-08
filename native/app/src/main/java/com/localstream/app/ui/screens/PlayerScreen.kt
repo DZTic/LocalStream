@@ -877,6 +877,7 @@ private fun launchExternalPlayer(context: Context, video: VideoItem, packageName
     }
 }
 
+@Suppress("ReturnCount")
 private fun extractUri(video: VideoItem?): Uri? {
     if (video == null) return null
     val target = when {
