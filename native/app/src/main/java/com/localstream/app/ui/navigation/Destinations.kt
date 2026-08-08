@@ -1,6 +1,6 @@
 package com.localstream.app.ui.navigation
 
-import android.net.Uri
+import java.net.URLEncoder
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.History
@@ -24,13 +24,16 @@ object Routes {
     const val SETTINGS = "settings"
 
     /** Construit la route Détails pour un identifiant donné. */
-    fun details(id: String): String = "details/${Uri.encode(id)}"
+    fun details(id: String): String = "details/${encodeRouteParam(id)}"
 
     /** Construit la route Player pour un identifiant vidéo donné. */
-    fun player(id: String): String = "player/${Uri.encode(id)}"
+    fun player(id: String): String = "player/${encodeRouteParam(id)}"
 
     /** Argument attendu par les routes [DETAILS] et [PLAYER]. */
     const val ARG_ID = "id"
+
+    private fun encodeRouteParam(param: String): String =
+        runCatching { URLEncoder.encode(param, "UTF-8").replace("+", "%20") }.getOrDefault(param)
 }
 
 /**
