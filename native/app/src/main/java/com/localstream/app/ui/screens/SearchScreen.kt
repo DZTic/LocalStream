@@ -1,17 +1,24 @@
 package com.localstream.app.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,21 +35,12 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.ui.unit.sp
-import com.localstream.app.domain.YoutubeUtils
-import com.localstream.app.ui.theme.Red600
 import com.localstream.app.domain.model.TmdbMetadata
 import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.components.VideoGrid
+import com.localstream.app.ui.theme.Red600
 import com.localstream.app.ui.theme.White
 import com.localstream.app.ui.theme.Zinc500
 import com.localstream.app.ui.theme.Zinc800
@@ -63,7 +61,6 @@ fun SearchScreen(
     onQueryChange: (String) -> Unit,
     onOpenDetails: (VideoItem) -> Unit,
     onBack: () -> Unit,
-    onPlayYouTube: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -73,34 +70,45 @@ fun SearchScreen(
             onBack = onBack,
         )
 
-        if (YoutubeUtils.isYoutubeUrlOrId(query) && onPlayYouTube != null) {
+        val trimmedQuery = query.trim()
+        val isUrl = trimmedQuery.startsWith("http://") || trimmedQuery.startsWith("https://") ||
+                trimmedQuery.contains("youtube.com") || trimmedQuery.contains("youtu.be")
+
+        if (isUrl) {
             Card(
-                onClick = { onPlayYouTube(query) },
                 colors = CardDefaults.cardColors(containerColor = Zinc900),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clickable {
+                        onOpenDetails(VideoItem(name = trimmedQuery, url = trimmedQuery))
+                    },
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.PlayCircle,
-                        contentDescription = null,
+                        Icons.Filled.PlayArrow,
+                        contentDescription = "Lancer",
                         tint = Red600,
                         modifier = Modifier.size(32.dp),
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Vid?o YouTube d?tect?e", color = White, fontWeight = FontWeight.Bold)
-                        Text(query, color = Zinc500, fontSize = 12.sp, maxLines = 1)
-                    }
-                    Button(
-                        onClick = { onPlayYouTube(query) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Red600),
-                    ) {
-                        Text("Lire", color = White)
+                    Column {
+                        Text(
+                            text = if (trimmedQuery.contains("youtube") || trimmedQuery.contains("youtu.be")) "Lancer la vidéo YouTube" else "Lancer le flux vidéo",
+                            color = White,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            text = trimmedQuery,
+                            color = Zinc500,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }

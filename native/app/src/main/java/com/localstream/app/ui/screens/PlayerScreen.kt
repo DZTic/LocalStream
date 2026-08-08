@@ -435,12 +435,7 @@ fun PlayerScreen(
         val externalTrack = uiState.subtitleTracks.firstOrNull { it.isExternal && it.isSelected && !it.uriString.isNullOrEmpty() }
         if (externalTrack != null) {
             val currentVideo = uiState.currentVideo ?: return@LaunchedEffect
-            val uri = when {
-                !currentVideo.nativeUri.isNullOrEmpty() -> Uri.parse(currentVideo.nativeUri)
-                !currentVideo.url.isNullOrEmpty() -> Uri.parse(currentVideo.url)
-                currentVideo.path.isNotEmpty() -> Uri.fromFile(File(currentVideo.path))
-                else -> null
-            } ?: return@LaunchedEffect
+            val uri = extractUri(currentVideo) ?: return@LaunchedEffect
 
             val subUri = Uri.parse(externalTrack.uriString)
             val subConfig = MediaItem.SubtitleConfiguration.Builder(subUri)
@@ -465,15 +460,10 @@ fun PlayerScreen(
     LaunchedEffect(uiState.currentVideo, youtubeId) {
         if (youtubeId != null) return@LaunchedEffect
         val video = uiState.currentVideo ?: return@LaunchedEffect
-        val uri = when {
-            !video.nativeUri.isNullOrEmpty() -> Uri.parse(video.nativeUri)
-            !video.url.isNullOrEmpty() -> Uri.parse(video.url)
-            video.path.isNotEmpty() -> Uri.fromFile(File(video.path))
-            else -> null
-        } ?: return@LaunchedEffect
+        val uri = extractUri(video) ?: return@LaunchedEffect
 
         exoPlayer.stop()
-        exoPlayer.clearMediaItems()
+       exoPlayer.clearMediaItems()
         isPlayerReady = false
         val mediaItem = MediaItem.fromUri(uri)
         val startPos = uiState.initialPositionMs
@@ -865,21 +855,45 @@ private fun dispatchDragEvent(
 }
 
 private fun launchExternalPlayer(context: Context, video: VideoItem, packageName: String) {
-    val uri = when {
-        !video.nativeUri.isNullOrEmpty() -> Uri.parse(video.nativeUri)
-        !video.url.isNullOrEmpty() -> Uri.parse(video.url)
-        video.path.isNotEmpty() -> Uri.fromFile(File(video.path))
-        else -> null
-    } ?: return
+    val uri = extractUri(video) ?: return
 
     val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(uri, "video/*")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (isYouTubeUrl(uri.toString()) || isYouTubeUrl(video.name)) {
+            setDataAndType(uri, "text/html")
+        } else {
+            setDataAndType(uri, "video/*")
+        }
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         if (packageName.isNotEmpty()) {
             setPackage(packageName)
         }
     }
-    context.startActivity(Intent.createChooser(intent, video.name))
+    runCatching {
+        context.startActivity(Intent.createChooser(intent, video.name))
+    }.onFailure {
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+        }
+    }
+}
+
+@Suppress("ReturnCount")
+private fun extractUri(video: VideoItem?): Uri? {
+    if (video == null) return null
+    val target = when {
+        !video.nativeUri.isNullOrEmpty() -> video.nativeUri
+        !video.url.isNullOrEmpty() -> video.url
+        video.path.isNotEmpty() -> return Uri.fromFile(File(video.path))
+        video.name.startsWith("http://") || video.name.startsWith("https://") || video.name.startsWith("content://") -> video.name
+        else -> null
+    } ?: return null
+    return runCatching { Uri.parse(target) }.getOrNull()
+}
+
+private fun isYouTubeUrl(urlStr: String?): Boolean {
+    if (urlStr == null) return false
+    val lower = urlStr.lowercase()
+    return lower.contains("youtube.com") || lower.contains("youtu.be")
 }
 
 private fun enterPipMode(activity: Activity?) {

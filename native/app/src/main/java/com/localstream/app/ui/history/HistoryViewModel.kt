@@ -107,7 +107,8 @@ class HistoryViewModel(
         val clean = TitleCleaner.getCleanTitle(title.trim())
         viewModelScope.launch {
             container.watchStateRepository.setWatched(clean, true)
-            val dummyVideo = VideoItem(name = clean, path = "", size = 0, duration = 0)
+            val isUrl = clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("content://") || clean.startsWith("file://")
+            val dummyVideo = VideoItem(name = clean, url = if (isUrl) clean else "", path = "", size = 0, duration = 0)
             container.tmdbRepository.fetchMetadataForVideo(dummyVideo)
         }
     }
