@@ -47,6 +47,12 @@ data class DetailsUiState(
     val refreshSuccess: Boolean = false,
 )
 
+private data class TmdbRefreshFeedback(
+    val isLoading: Boolean,
+    val error: String?,
+    val success: Boolean,
+)
+
 @Suppress("TooManyFunctions", "LongMethod", "UNCHECKED_CAST", "CyclomaticComplexMethod")
 class DetailsViewModel(
     val id: String,
@@ -60,6 +66,14 @@ class DetailsViewModel(
     private val refreshSuccessFlow = MutableStateFlow(false)
     private val cachedMetadataFlow = MutableStateFlow<TmdbMetadata?>(null)
     private val cachedEpisodesFlow = MutableStateFlow<Map<String, TmdbEpisode>>(emptyMap())
+
+    private val refreshFeedbackFlow: StateFlow<TmdbRefreshFeedback> = combine(
+        isLoadingTmdbFlow,
+        tmdbErrorFlow,
+        refreshSuccessFlow,
+    ) { isLoading, error, success ->
+        TmdbRefreshFeedback(isLoading = isLoading, error = error, success = success)
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, TmdbRefreshFeedback(isLoading = false, error = null, success = false))
 
     init {
         loadMetadata()
@@ -123,8 +137,7 @@ class DetailsViewModel(
             container.playlistRepository.observePlaylists,
             selectedSeasonFlow,
             expandedEpisodesFlow,
-            isLoadingTmdbFlow,
-            tmdbErrorFlow,
+            refreshFeedbackFlow,
             cachedMetadataFlow,
             cachedEpisodesFlow,
         )
@@ -135,11 +148,9 @@ class DetailsViewModel(
         val playlists = args[3] as List<PlaylistInfo>
         val season = args[4] as Int
         val expandedSet = args[5] as Set<String>
-        val isLoading = args[6] as Boolean
-        val tmdbErr = args[7] as String?
-        val meta = args[8] as TmdbMetadata?
-        val cachedEpisodes = args[9] as Map<String, TmdbEpisode>
-        val refreshSuccess = args[10] as Boolean
+        val refreshFeedback = args[6] as TmdbRefreshFeedback
+        val meta = args[7] as TmdbMetadata?
+        val cachedEpisodes = args[8] as Map<String, TmdbEpisode>
 
         val group = videos.find { it.name == id || it.seriesName == id }
             ?: videos.find { it.name.lowercase() == id.lowercase() }
@@ -209,9 +220,9 @@ class DetailsViewModel(
             selectedSeason = currentSeason,
             availableSeasons = seasons,
             episodes = episodeUiStates,
-            isLoadingTmdb = isLoading,
-            tmdbError = tmdbErr,
-            refreshSuccess = refreshSuccess,
+            isLoadingTmdb = refreshFeedback.isLoading,
+            tmdbError = refreshFeedback.error,
+            refreshSuccess = refreshFeedback.success,
         )
     }.stateIn(
         scope = viewModelScope,
