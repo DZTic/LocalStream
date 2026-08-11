@@ -23,6 +23,8 @@ interface TmdbApi {
         @Query("api_key") apiKey: String,
         @Query("query") query: String,
         @Query("language") language: String = DEFAULT_LANGUAGE,
+        @Query("primary_release_year") primaryReleaseYear: Int? = null,
+        @Query("year") year: Int? = null,
     ): TmdbSearchResponse
 
     @GET("movie/{id}")

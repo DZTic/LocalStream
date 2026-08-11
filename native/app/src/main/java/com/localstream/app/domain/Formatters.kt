@@ -6,10 +6,26 @@ import kotlin.math.ln
 import kotlin.math.pow
 
 object TitleCleaner {
+    private val YEAR_IN_PAREN_REGEX = Regex("[\\(\\[]((?:19|20)\\d{2})[\\)\\]]")
+    private val YEAR_REGEX = Regex("(?:^|[\\s\\._\\-\\(\\[])((?:19|20)\\d{2})(?=[\\s\\._\\-\\)\\]]|$)")
+
+    fun extractYear(filename: String): Int? {
+        val nameWithoutExt = filename.replace(Regex("\\.[^/.]+$"), "")
+        val parenMatch = YEAR_IN_PAREN_REGEX.find(nameWithoutExt)
+        if (parenMatch != null) {
+            return parenMatch.groupValues[1].toIntOrNull()
+        }
+        val matches = YEAR_REGEX.findAll(nameWithoutExt).toList()
+        if (matches.isNotEmpty()) {
+            return matches.last().groupValues[1].toIntOrNull()
+        }
+        return null
+    }
+
     fun getCleanTitle(filename: String): String {
         var title = filename.replace(Regex("\\.[^/.]+$"), "")
         title = title.replace(Regex("[sS]\\d+(\\s*)?([eE]\\d+)?|(\\d+)(\\s*)?x(\\d+).*", RegexOption.IGNORE_CASE), "")
-        title = title.replace(Regex("(19|20)\\d{2}.*"), "")
+        title = title.replace(Regex("(?<=\\w|\\s|\\.|\\-|_|\\()\\s*[\\(\\.\\[\\-_]?(19|20)\\d{2}.*"), "")
         title = title.replace(Regex("[\\.\\-_]"), " ")
         title = title.replace(
             Regex("1080p|720p|2160p|4k|bluray|webrip|hdtv|x264|x265|hevc|vostfr|french|truefrench", RegexOption.IGNORE_CASE),

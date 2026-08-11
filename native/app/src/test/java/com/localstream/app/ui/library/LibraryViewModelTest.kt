@@ -248,7 +248,13 @@ class LibraryViewModelTest {
     private class UnusedTmdbApi : TmdbApi {
         private fun unused(): Nothing = throw UnsupportedOperationException("appel réseau inattendu")
         override suspend fun searchMulti(apiKey: String, query: String, language: String): TmdbSearchResponse = unused()
-        override suspend fun searchMovie(apiKey: String, query: String, language: String): TmdbSearchResponse = unused()
+        override suspend fun searchMovie(
+            apiKey: String,
+            query: String,
+            language: String,
+            primaryReleaseYear: Int?,
+            year: Int?,
+        ): TmdbSearchResponse = unused()
         override suspend fun getMovieDetails(movieId: Long, apiKey: String, language: String): TmdbMovieDetailsDto = unused()
         override suspend fun getCollection(collectionId: Long, apiKey: String, language: String): TmdbCollectionDetailsDto = unused()
         override suspend fun getSeason(tvId: Long, seasonNumber: Int, apiKey: String, language: String): TmdbSeasonDetailsDto = unused()

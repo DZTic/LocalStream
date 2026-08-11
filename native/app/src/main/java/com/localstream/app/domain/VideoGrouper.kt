@@ -34,7 +34,12 @@ object VideoGrouper {
                 val finalName = resolveSeriesName(updatedVideo, match)
                 groups.getOrPut(finalName) { mutableListOf() }.add(updatedVideo)
             } else {
-                standalone.add(video.copy(cleanTitle = TitleCleaner.getCleanTitle(video.name)))
+                standalone.add(
+                    video.copy(
+                        cleanTitle = TitleCleaner.getCleanTitle(video.name),
+                        year = video.year ?: TitleCleaner.extractYear(video.name)
+                    )
+                )
             }
         }
         return Pair(groups, standalone)
@@ -129,4 +134,3 @@ object VideoGrouper {
         return Pair(sagas, remaining)
     }
 }
-

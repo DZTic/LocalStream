@@ -208,6 +208,8 @@ class TmdbRepository(
         cleanTitle: String,
         video: VideoItem,
     ): TmdbMetadata {
+        val targetYear = video.year ?: TitleCleaner.extractYear(video.name)
+
         val searchResponse = executeWithRetryAndThrottling {
             tmdbApi.searchMulti(apiKey, cleanTitle)
         }
@@ -217,15 +219,15 @@ class TmdbRepository(
             throw NoSuchElementException("Aucun résultat pour $cleanTitle")
         }
 
-        val bestResult = selectBestMatch(results, cleanTitle, video.isTvSeries)
+        val bestResult = selectBestMatch(results, cleanTitle, video.isTvSeries, targetYear)
             ?: throw NoSuchElementException("Aucun résultat valide pour $cleanTitle")
 
         var collectionId: Long? = null
         var collectionName: String? = null
         var details: TmdbMovieDetailsDto? = null
 
-        val isMovie = bestResult.mediaType == "movie" || (!video.isTvSeries && !video.isSeriesGroup)
-        if (isMovie) {
+        val isMovieResult = bestResult.mediaType == "movie" || (!video.isTvSeries && !video.isSeriesGroup)
+        if (isMovieResult) {
             try {
                 details = executeWithRetryAndThrottling {
                     tmdbApi.getMovieDetails(bestResult.id, apiKey)
@@ -299,29 +301,71 @@ class TmdbRepository(
         results: List<TmdbSearchResultDto>,
         cleanTitle: String,
         isTvSeries: Boolean,
+        targetYear: Int? = null,
     ): TmdbSearchResultDto? {
-        val cleanLower = cleanTitle.lowercase()
-        val exactMatchWithPoster = results.find { dto ->
-            val name = (dto.name ?: dto.title ?: "").lowercase()
-            name == cleanLower && !dto.posterPath.isNullOrBlank()
+        if (results.isEmpty()) return null
+        return results.maxByOrNull { dto ->
+            scoreCandidate(dto, cleanTitle, isTvSeries, targetYear)
         }
-        if (exactMatchWithPoster != null) return exactMatchWithPoster
+    }
 
-        val exactMatchAny = results.find { dto ->
-            val name = (dto.name ?: dto.title ?: "").lowercase()
-            name == cleanLower
+    @Suppress("MagicNumber")
+    private fun scoreCandidate(
+        dto: TmdbSearchResultDto,
+        cleanTitle: String,
+        isTvSeries: Boolean,
+        targetYear: Int?,
+    ): Int {
+        var score = 0
+        val cleanLower = cleanTitle.lowercase().trim()
+        val candidateTitleRaw = (dto.title ?: dto.name ?: "").lowercase().trim()
+        val candidateTitleNormalized = candidateTitleRaw.removePrefix("the ").trim()
+        val cleanNormalized = cleanLower.removePrefix("the ").trim()
+
+        val isExactTitle = candidateTitleRaw == cleanLower
+        val isNormalizedTitleMatch = candidateTitleNormalized == cleanNormalized
+
+        if (isExactTitle) {
+            score += 100
+        } else if (isNormalizedTitleMatch) {
+            score += 80
+        } else if (candidateTitleRaw.contains(cleanLower) || cleanLower.contains(candidateTitleRaw)) {
+            score += 40
         }
-        if (exactMatchAny != null) return exactMatchAny
 
-        return if (isTvSeries) {
-            results.find { it.mediaType == "tv" && !it.posterPath.isNullOrBlank() }
-                ?: results.find { !it.posterPath.isNullOrBlank() }
-                ?: results.firstOrNull()
+        val mediaType = dto.mediaType
+        if (isTvSeries) {
+            if (mediaType == "tv") score += 50
+            else if (mediaType == "movie") score -= 30
         } else {
-            results.find { it.mediaType == "movie" && !it.posterPath.isNullOrBlank() }
-                ?: results.find { !it.posterPath.isNullOrBlank() }
-                ?: results.firstOrNull()
+            if (mediaType == "movie") score += 50
+            else if (mediaType == "tv") score -= 30
         }
+
+        val candidateYear = extractYearFromDateString(dto.releaseDate ?: dto.firstAirDate)
+        if (targetYear != null && candidateYear != null) {
+            if (candidateYear == targetYear) {
+                score += 150
+            } else {
+                val yearDiff = kotlin.math.abs(candidateYear - targetYear)
+                if (yearDiff == 1) {
+                    score += 20
+                } else {
+                    score -= 80
+                }
+            }
+        }
+
+        if (!dto.posterPath.isNullOrBlank()) {
+            score += 10
+        }
+
+        return score
+    }
+
+    private fun extractYearFromDateString(dateStr: String?): Int? {
+        if (dateStr.isNullOrBlank() || dateStr.length < 4) return null
+        return dateStr.take(4).toIntOrNull()
     }
 
     suspend fun fetchAllMetadata(
