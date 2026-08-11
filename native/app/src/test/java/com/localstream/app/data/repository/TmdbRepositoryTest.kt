@@ -120,6 +120,54 @@ class TmdbRepositoryTest {
     }
 
     @Test
+    fun testFetchMetadataForMovieDisambiguatesByYearAndType() = runTest {
+        val searchJson = """
+            {
+              "results": [
+                {
+                  "id": 33260,
+                  "name": "Running Man",
+                  "overview": "Korean variety show...",
+                  "poster_path": "/tv_poster.jpg",
+                  "first_air_date": "2010-07-11",
+                  "media_type": "tv"
+                },
+                {
+                  "id": 123456,
+                  "title": "The Running Man",
+                  "overview": "The 2025 movie...",
+                  "poster_path": "/movie2025_poster.jpg",
+                  "release_date": "2025-11-21",
+                  "media_type": "movie"
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val detailsJson = """
+            {
+              "id": 123456,
+              "title": "The Running Man",
+              "poster_path": "/movie2025_poster.jpg",
+              "release_date": "2025-11-21"
+            }
+        """.trimIndent()
+
+        mockWebServer.enqueue(jsonResponse(searchJson))
+        mockWebServer.enqueue(jsonResponse(detailsJson))
+
+        val video = VideoItem(name = "Running Man (2025).mp4")
+        val result = repository.fetchMetadataForVideo(video)
+
+        assertTrue(result.isSuccess)
+        val metadata = result.getOrNull()
+        assertNotNull(metadata)
+        assertEquals("The Running Man", metadata?.title)
+        assertEquals(123456L, metadata?.tmdbId)
+        assertEquals("movie", metadata?.mediaType)
+    }
+
+    @Test
     fun testCacheHitDoesNotHitNetwork() = runTest {
         val searchJson = """
             {
