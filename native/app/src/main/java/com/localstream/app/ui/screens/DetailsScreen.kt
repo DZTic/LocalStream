@@ -271,13 +271,49 @@ fun DetailsScreen(
                             Text(text = "MA LISTE", modifier = Modifier.padding(start = 4.dp))
                         }
 
-                        IconButton(onClick = detailsViewModel::refreshTmdbMetadata) {
-                            Icon(Icons.Filled.Refresh, contentDescription = "Recharger TMDB", tint = White)
+                        IconButton(
+                            onClick = detailsViewModel::refreshTmdbMetadata,
+                            enabled = !uiState.isLoadingTmdb,
+                        ) {
+                            Icon(
+                                Icons.Filled.Refresh,
+                                contentDescription = "Recharger TMDB",
+                                tint = if (uiState.isLoadingTmdb) Zinc500 else White,
+                            )
                         }
 
                         IconButton(onClick = { showSubtitleSheet = true }) {
                             Icon(Icons.Filled.ClosedCaption, contentDescription = "Sous-titres", tint = White)
                         }
+                    }
+
+                    // Loading indicator while refreshing TMDB
+                    if (uiState.isLoadingTmdb) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Red600,
+                        )
+                    }
+
+                    // Success feedback after refresh
+                    if (uiState.refreshSuccess) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Métadonnées actualisées",
+                            color = Color(0xFF4CAF50),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+
+                    // Error message if refresh failed
+                    uiState.tmdbError?.let { error ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = error,
+                            color = Red600,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))

@@ -191,7 +191,7 @@ class TmdbRepository(
             Result.failure(e)
         } catch (e: Exception) {
             // En cas d'erreur réseau / HTTP, repli sur le cache expiré si présent
-            if (cachedEntity != null && cachedEntity.json != NOT_FOUND_JSON) {
+            if (!forceRefresh && cachedEntity != null && cachedEntity.json != NOT_FOUND_JSON) {
                 try {
                     val meta = json.decodeFromString<TmdbMetadata>(cachedEntity.json)
                     return Result.success(meta)

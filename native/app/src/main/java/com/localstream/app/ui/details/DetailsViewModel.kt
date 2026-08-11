@@ -44,6 +44,7 @@ data class DetailsUiState(
     val episodes: List<EpisodeUiState> = emptyList(),
     val isLoadingTmdb: Boolean = false,
     val tmdbError: String? = null,
+    val refreshSuccess: Boolean = false,
 )
 
 @Suppress("TooManyFunctions", "LongMethod", "UNCHECKED_CAST", "CyclomaticComplexMethod")
@@ -56,6 +57,7 @@ class DetailsViewModel(
     private val expandedEpisodesFlow = MutableStateFlow<Set<String>>(emptySet())
     private val isLoadingTmdbFlow = MutableStateFlow(false)
     private val tmdbErrorFlow = MutableStateFlow<String?>(null)
+    private val refreshSuccessFlow = MutableStateFlow(false)
     private val cachedMetadataFlow = MutableStateFlow<TmdbMetadata?>(null)
     private val cachedEpisodesFlow = MutableStateFlow<Map<String, TmdbEpisode>>(emptyMap())
 
@@ -137,6 +139,7 @@ class DetailsViewModel(
         val tmdbErr = args[7] as String?
         val meta = args[8] as TmdbMetadata?
         val cachedEpisodes = args[9] as Map<String, TmdbEpisode>
+        val refreshSuccess = args[10] as Boolean
 
         val group = videos.find { it.name == id || it.seriesName == id }
             ?: videos.find { it.name.lowercase() == id.lowercase() }
@@ -208,6 +211,7 @@ class DetailsViewModel(
             episodes = episodeUiStates,
             isLoadingTmdb = isLoading,
             tmdbError = tmdbErr,
+            refreshSuccess = refreshSuccess,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -275,6 +279,7 @@ class DetailsViewModel(
         viewModelScope.launch {
             isLoadingTmdbFlow.value = true
             tmdbErrorFlow.value = null
+            refreshSuccessFlow.value = false
             val result = container.tmdbRepository.fetchMetadataForVideo(group, forceRefresh = true)
             if (result.isSuccess) {
                 cachedMetadataFlow.value = result.getOrNull()
@@ -286,10 +291,14 @@ class DetailsViewModel(
                     }
                     loadEpisodesFromCache(lookupName, eps)
                 }
+                isLoadingTmdbFlow.value = false
+                refreshSuccessFlow.value = true
+                kotlinx.coroutines.delay(REFRESH_FEEDBACK_DURATION_MS)
+                refreshSuccessFlow.value = false
             } else {
                 tmdbErrorFlow.value = result.exceptionOrNull()?.message ?: "Erreur de récupération TMDB"
+                isLoadingTmdbFlow.value = false
             }
-            isLoadingTmdbFlow.value = false
         }
     }
 
@@ -313,6 +322,8 @@ class DetailsViewModel(
     }
 
     companion object {
+        private const val REFRESH_FEEDBACK_DURATION_MS = 3000L
+
         fun factory(id: String, container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
