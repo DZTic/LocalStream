@@ -9,6 +9,7 @@ object TitleCleaner {
     private val YEAR_IN_PAREN_REGEX = Regex("[\\(\\[]((?:19|20)\\d{2})[\\)\\]]")
     private val YEAR_REGEX = Regex("(?:^|[\\s\\._\\-\\(\\[])((?:19|20)\\d{2})(?=[\\s\\._\\-\\)\\]]|$)")
 
+    @Suppress("ReturnCount")
     fun extractYear(filename: String): Int? {
         val nameWithoutExt = filename.replace(Regex("\\.[^/.]+$"), "")
         val parenMatch = YEAR_IN_PAREN_REGEX.find(nameWithoutExt)
@@ -16,10 +17,7 @@ object TitleCleaner {
             return parenMatch.groupValues[1].toIntOrNull()
         }
         val matches = YEAR_REGEX.findAll(nameWithoutExt).toList()
-        if (matches.isNotEmpty()) {
-            return matches.last().groupValues[1].toIntOrNull()
-        }
-        return null
+        return matches.lastOrNull()?.groupValues?.get(1)?.toIntOrNull()
     }
 
     fun getCleanTitle(filename: String): String {
