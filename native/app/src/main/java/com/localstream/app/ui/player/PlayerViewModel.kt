@@ -221,8 +221,19 @@ class PlayerViewModel(
             val pct = state?.progressPct ?: 0.0
             val pos = if (isFinished(isWatched, pct, rawPos, targetVideo.duration * 1000L)) 0L else rawPos
 
+            val targetDur = if (targetVideo.duration > 0L) {
+                targetVideo.duration * 1000L
+            } else if (pct > 0.0 && rawPos > 0L) {
+                (rawPos / (pct / 100.0)).toLong()
+            } else {
+                0L
+            }
+
             initialPositionMsFlow.value = pos
             positionMsFlow.value = pos
+            if (targetDur > 0L) {
+                durationMsFlow.value = targetDur
+            }
             currentVideoFlow.value = targetVideo
 
             resolveNextVideo(targetVideo, allGrouped, allRaw)
@@ -552,8 +563,19 @@ class PlayerViewModel(
             val pct = state?.progressPct ?: 0.0
             val pos = if (isFinished(isWatched, pct, rawPos, video.duration * 1000L)) 0L else rawPos
 
+            val targetDur = if (video.duration > 0L) {
+                video.duration * 1000L
+            } else if (pct > 0.0 && rawPos > 0L) {
+                (rawPos / (pct / 100.0)).toLong()
+            } else {
+                0L
+            }
+
             initialPositionMsFlow.value = pos
             positionMsFlow.value = pos
+            if (targetDur > 0L) {
+                durationMsFlow.value = targetDur
+            }
             currentVideoFlow.value = video
 
             resolveNextVideo(video, allGrouped, allRaw)
