@@ -299,6 +299,10 @@ fun PlayerScreen(
                         viewModel.setBuffering(false)
                         viewModel.setErrorMessage(null)
                         isPlayerReady = true
+                        val dur = exoPlayer.duration.coerceAtLeast(0L)
+                        if (dur > 0L) {
+                            viewModel.onPositionChanged(exoPlayer.currentPosition.coerceAtLeast(0L), dur)
+                        }
                     }
                     Player.STATE_ENDED -> {
                         viewModel.setBuffering(false)
@@ -465,9 +469,9 @@ fun PlayerScreen(
     // Continuously update position flow
     LaunchedEffect(exoPlayer) {
         while (true) {
-            if (exoPlayer.isPlaying && isPlayerReady) {
+            if (isPlayerReady) {
                 viewModel.onPositionChanged(
-                    positionMs = exoPlayer.currentPosition,
+                    positionMs = exoPlayer.currentPosition.coerceAtLeast(0L),
                     durationMs = exoPlayer.duration.coerceAtLeast(0L),
                 )
             }
@@ -996,15 +1000,25 @@ private fun BottomPlayerBar(
             }
         }
 
+        val sliderValue = if (durationMs > 0L) {
+            displayPos.coerceIn(0L, durationMs).toFloat()
+        } else {
+            0f
+        }
+
         Slider(
-            value = displayPos.coerceIn(0L, durationMs.coerceAtLeast(1L)).toFloat(),
+            value = sliderValue,
             onValueChange = {
-                isSeeking = true
-                seekPositionMs = it.toLong()
+                if (durationMs > 0L) {
+                    isSeeking = true
+                    seekPositionMs = it.toLong()
+                }
             },
             onValueChangeFinished = {
-                onSeek(seekPositionMs)
-                isSeeking = false
+                if (durationMs > 0L) {
+                    onSeek(seekPositionMs)
+                    isSeeking = false
+                }
             },
             valueRange = 0f..durationMs.coerceAtLeast(1L).toFloat(),
             colors = SliderDefaults.colors(
