@@ -44,6 +44,13 @@ data class DetailsUiState(
     val episodes: List<EpisodeUiState> = emptyList(),
     val isLoadingTmdb: Boolean = false,
     val tmdbError: String? = null,
+    val refreshSuccess: Boolean = false,
+)
+
+private data class TmdbRefreshFeedback(
+    val isLoading: Boolean,
+    val error: String?,
+    val success: Boolean,
 )
 
 @Suppress("TooManyFunctions", "LongMethod", "UNCHECKED_CAST", "CyclomaticComplexMethod")
@@ -56,8 +63,17 @@ class DetailsViewModel(
     private val expandedEpisodesFlow = MutableStateFlow<Set<String>>(emptySet())
     private val isLoadingTmdbFlow = MutableStateFlow(false)
     private val tmdbErrorFlow = MutableStateFlow<String?>(null)
+    private val refreshSuccessFlow = MutableStateFlow(false)
     private val cachedMetadataFlow = MutableStateFlow<TmdbMetadata?>(null)
     private val cachedEpisodesFlow = MutableStateFlow<Map<String, TmdbEpisode>>(emptyMap())
+
+    private val refreshFeedbackFlow: StateFlow<TmdbRefreshFeedback> = combine(
+        isLoadingTmdbFlow,
+        tmdbErrorFlow,
+        refreshSuccessFlow,
+    ) { isLoading, error, success ->
+        TmdbRefreshFeedback(isLoading = isLoading, error = error, success = success)
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, TmdbRefreshFeedback(isLoading = false, error = null, success = false))
 
     init {
         loadMetadata()
@@ -121,8 +137,7 @@ class DetailsViewModel(
             container.playlistRepository.observePlaylists,
             selectedSeasonFlow,
             expandedEpisodesFlow,
-            isLoadingTmdbFlow,
-            tmdbErrorFlow,
+            refreshFeedbackFlow,
             cachedMetadataFlow,
             cachedEpisodesFlow,
         )
@@ -133,10 +148,9 @@ class DetailsViewModel(
         val playlists = args[3] as List<PlaylistInfo>
         val season = args[4] as Int
         val expandedSet = args[5] as Set<String>
-        val isLoading = args[6] as Boolean
-        val tmdbErr = args[7] as String?
-        val meta = args[8] as TmdbMetadata?
-        val cachedEpisodes = args[9] as Map<String, TmdbEpisode>
+        val refreshFeedback = args[6] as TmdbRefreshFeedback
+        val meta = args[7] as TmdbMetadata?
+        val cachedEpisodes = args[8] as Map<String, TmdbEpisode>
 
         val isUrl = id.startsWith("http://") || id.startsWith("https://") || id.startsWith("content://") || id.startsWith("file://")
         val group = videos.find { it.name == id || it.seriesName == id }
@@ -207,8 +221,9 @@ class DetailsViewModel(
             selectedSeason = currentSeason,
             availableSeasons = seasons,
             episodes = episodeUiStates,
-            isLoadingTmdb = isLoading,
-            tmdbError = tmdbErr,
+            isLoadingTmdb = refreshFeedback.isLoading,
+            tmdbError = refreshFeedback.error,
+            refreshSuccess = refreshFeedback.success,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -276,6 +291,7 @@ class DetailsViewModel(
         viewModelScope.launch {
             isLoadingTmdbFlow.value = true
             tmdbErrorFlow.value = null
+            refreshSuccessFlow.value = false
             val result = container.tmdbRepository.fetchMetadataForVideo(group, forceRefresh = true)
             if (result.isSuccess) {
                 cachedMetadataFlow.value = result.getOrNull()
@@ -287,10 +303,14 @@ class DetailsViewModel(
                     }
                     loadEpisodesFromCache(lookupName, eps)
                 }
+                isLoadingTmdbFlow.value = false
+                refreshSuccessFlow.value = true
+                kotlinx.coroutines.delay(REFRESH_FEEDBACK_DURATION_MS)
+                refreshSuccessFlow.value = false
             } else {
                 tmdbErrorFlow.value = result.exceptionOrNull()?.message ?: "Erreur de récupération TMDB"
+                isLoadingTmdbFlow.value = false
             }
-            isLoadingTmdbFlow.value = false
         }
     }
 
@@ -314,6 +334,8 @@ class DetailsViewModel(
     }
 
     companion object {
+        private const val REFRESH_FEEDBACK_DURATION_MS = 3000L
+
         fun factory(id: String, container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {

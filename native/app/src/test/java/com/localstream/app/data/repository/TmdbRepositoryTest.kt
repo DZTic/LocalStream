@@ -300,6 +300,24 @@ class TmdbRepositoryTest {
     }
 
     @Test
+    fun testForceRefreshDoesNotFallbackOnFailure() = runTest {
+        val expiredTimestamp = System.currentTimeMillis() - (35L * 24 * 3600 * 1000)
+        fakeDao.insertMetadata(
+            TmdbMetadataEntity(
+                queryKey = "BladeRunner.mp4",
+                json = """{"queryKey":"BladeRunner.mp4","tmdbId":400,"title":"Blade Runner Cached"}""",
+                fetchedAt = expiredTimestamp,
+            )
+        )
+
+        mockWebServer.enqueue(jsonResponse("Internal Error", 500))
+
+        val video = VideoItem(name = "BladeRunner.mp4")
+        val result = repository.fetchMetadataForVideo(video, forceRefresh = true)
+        assertTrue(result.isFailure)
+    }
+
+    @Test
     fun testNotFoundReturnsErrorAndCachesMarker() = runTest {
         val emptySearch = """{"results": []}"""
         mockWebServer.enqueue(jsonResponse(emptySearch))
