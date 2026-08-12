@@ -143,6 +143,7 @@ private const val CONTROLS_TIMEOUT_MS = 3500L
 private const val FEEDBACK_TIMEOUT_MS = 1500L
 // A full-height vertical swipe spans 100% of the volume range (lower = more sensitive).
 private const val VOLUME_GESTURE_PERCENT = 100f
+private const val DRAG_SEEK_THROTTLE_MS = 120L
 // A full-height vertical swipe spans the whole 5%-100% brightness range (log scale).
 private val BRIGHTNESS_GESTURE_LOG_RANGE: Float =
     Math.log((PlayerViewModel.MAX_BRIGHTNESS / PlayerViewModel.MIN_BRIGHTNESS).toDouble()).toFloat()
@@ -194,12 +195,15 @@ fun PlayerScreen(
         }
     }
 
-    // Keep screen turned on while playing
-    DisposableEffect(activity, uiState.isPlaying) {
+    // Keep screen turned on for the whole time the player is on screen.
+    // NOTE: this used to be tied to `uiState.isPlaying`, which caused the flag to be
+    // removed and re-added on every buffering stall (isPlaying flips to false while
+    // buffering). If the system's screen-timeout fired during one of those brief gaps,
+    // the screen would go to sleep and never wake back up on its own (see issue #80).
+    // Keeping it on for the entire player session removes that race entirely.
+    DisposableEffect(activity) {
         val window = activity?.window
-        if (window != null && uiState.isPlaying) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
@@ -297,10 +301,14 @@ fun PlayerScreen(
             .build()
     }
 
-    // Pause on background lifecycle event
+    // Pause on background lifecycle event, but NOT when the ON_PAUSE is caused by
+    // entering Picture-in-Picture mode (that would freeze the video the instant the
+    // user taps the PiP button, defeating the whole point of the feature).
     DisposableEffect(lifecycleOwner, exoPlayer) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_PAUSE) {
+            val isEnteringPip = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                activity?.isInPictureInPictureMode == true
+            if (event == Lifecycle.Event.ON_PAUSE && !isEnteringPip) {
                 exoPlayer.pause()
             }
         }
@@ -498,6 +506,12 @@ fun PlayerScreen(
         onBack()
     }
 
+    // Tracks the running target position of an in-progress horizontal swipe so that
+    // exoPlayer.seekTo() calls can be throttled (see onHorizontalDrag below) without
+    // losing track of the total accumulated drag distance.
+    var pendingSeekTargetMs by remember { mutableStateOf<Long?>(null) }
+    var lastRealSeekAtMs by remember { mutableStateOf(0L) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -541,14 +555,35 @@ fun PlayerScreen(
                         onHorizontalDrag = { ratio ->
                             if (!uiState.isLocked) {
                                 val dur = if (youtubeId != null) uiState.durationMs else exoPlayer.duration.coerceAtLeast(1L)
-                                val curPos = if (youtubeId != null) uiState.positionMs else exoPlayer.currentPosition
+                                // Base the running target off our own accumulator rather than
+                                // exoPlayer.currentPosition, since that position only updates
+                                // when we actually call seekTo() below (which we now throttle).
+                                val basePos = pendingSeekTargetMs
+                                    ?: (if (youtubeId != null) uiState.positionMs else exoPlayer.currentPosition)
                                 val seekOffset = (ratio * 60000L).toLong()
-                                val targetPos = (curPos + seekOffset).coerceIn(0L, dur)
+                                val targetPos = (basePos + seekOffset).coerceIn(0L, dur)
+                                pendingSeekTargetMs = targetPos
                                 viewModel.seekBy(seekOffset)
                                 if (youtubeId == null) {
-                                    exoPlayer.seekTo(targetPos)
+                                    // Real seeks are expensive (keyframe lookup + decode), so we
+                                    // only send one every DRAG_SEEK_THROTTLE_MS instead of on every
+                                    // pointer-move delta, which used to cause visible stutter.
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastRealSeekAtMs >= DRAG_SEEK_THROTTLE_MS) {
+                                        lastRealSeekAtMs = now
+                                        exoPlayer.seekTo(targetPos)
+                                    }
                                 }
                             }
+                        },
+                        onDragEnd = {
+                            // Always land on the exact released position, even if the last
+                            // move event was throttled away.
+                            val target = pendingSeekTargetMs
+                            if (target != null && youtubeId == null) {
+                                exoPlayer.seekTo(target)
+                            }
+                            pendingSeekTargetMs = null
                         },
                     )
                 )

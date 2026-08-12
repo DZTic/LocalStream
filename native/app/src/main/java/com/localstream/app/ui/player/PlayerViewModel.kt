@@ -454,7 +454,7 @@ class PlayerViewModel(
         gestureFeedbackFlow.value = GestureFeedback(
             type = FeedbackType.BRIGHTNESS,
             valuePercent = pct,
-            text = "Luminosit?: $pct%",
+            text = "Luminosité: $pct%",
         )
     }
 
