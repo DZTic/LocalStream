@@ -75,6 +75,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -183,6 +184,9 @@ fun PlayerScreen(
     }
 
     var isVolumeInitialized by remember { mutableStateOf(false) }
+    var dragStartVolume by remember { mutableIntStateOf(0) }
+    var dragStartBrightness by remember { mutableFloatStateOf(0f) }
+    var dragStartSeekPos by remember { mutableLongStateOf(0L) }
 
     // Init volume from system AudioManager
     LaunchedEffect(Unit) {
@@ -506,24 +510,31 @@ fun PlayerScreen(
                                 exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
                             }
                         },
+                        onDragStart = {
+                            dragStartVolume = uiState.volumePercent
+                            val curB = uiState.brightnessPercent
+                            dragStartBrightness = if (curB >= 0f) curB else getScreenBrightness(activity)
+                            dragStartSeekPos = exoPlayer.currentPosition
+                        },
                         onVerticalDragLeft = { deltaRatio ->
                             if (!uiState.isLocked) {
-                                val current = if (uiState.brightnessPercent >= 0f) uiState.brightnessPercent else 0.8f
-                                viewModel.setBrightnessPercent(current + deltaRatio)
+                                val target = (dragStartBrightness + deltaRatio).coerceIn(0.05f, 1.0f)
+                                viewModel.setBrightnessPercent(target)
                             }
                         },
                         onVerticalDragRight = { deltaRatio ->
                             if (!uiState.isLocked) {
                                 val deltaVol = (deltaRatio * 100f).roundToInt()
-                                viewModel.setVolumePercent(uiState.volumePercent + deltaVol)
+                                val target = (dragStartVolume + deltaVol).coerceIn(0, 100)
+                                viewModel.setVolumePercent(target)
                             }
                         },
                         onHorizontalDrag = { ratio ->
                             if (!uiState.isLocked) {
                                 val dur = exoPlayer.duration.coerceAtLeast(1L)
                                 val seekOffset = (ratio * 60000L).toLong()
-                                val targetPos = (exoPlayer.currentPosition + seekOffset).coerceIn(0L, dur)
-                                viewModel.seekBy(seekOffset)
+                                val targetPos = (dragStartSeekPos + seekOffset).coerceIn(0L, dur)
+                                viewModel.seekBy(targetPos - dragStartSeekPos)
                                 exoPlayer.seekTo(targetPos)
                             }
                         },
@@ -733,6 +744,7 @@ private data class PlayerGestureCallbacks(
     val onVerticalDragLeft: (Float) -> Unit,
     val onVerticalDragRight: (Float) -> Unit,
     val onHorizontalDrag: (Float) -> Unit,
+    val onDragStart: () -> Unit = {},
     val onDragEnd: () -> Unit = {},
 )
 
@@ -768,6 +780,7 @@ private suspend fun PointerInputScope.detectPlayerGestures(
                 if (!isDrag && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
                     isDrag = true
                     dragMode = if (abs(dx) > abs(dy)) 1 else if (startX < size.width * 0.5f) 2 else 3
+                    callbacks.onDragStart()
                 }
                 if (isDrag) {
                     change.consume()
@@ -1214,4 +1227,20 @@ private fun formatTimeMs(ms: Long): String {
     } else {
         String.format(Locale.US, "%02d:%02d", minutes, seconds)
     }
+}
+
+private fun getScreenBrightness(activity: Activity?): Float {
+    if (activity != null) {
+        val lp = activity.window.attributes.screenBrightness
+        if (lp >= 0f) return lp
+        try {
+            val sysBright = android.provider.Settings.System.getInt(
+                activity.contentResolver,
+                android.provider.Settings.System.SCREEN_BRIGHTNESS,
+            )
+            return (sysBright / 255f).coerceIn(0.05f, 1.0f)
+        } catch (_: Exception) {
+        }
+    }
+    return 0.5f
 }
