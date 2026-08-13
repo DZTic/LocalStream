@@ -13,6 +13,15 @@ class FormattersTest {
         assertEquals("Inception", TitleCleaner.getCleanTitle("Inception.2010.1080p.BluRay.x264.mkv"))
         assertEquals("Breaking Bad", TitleCleaner.getCleanTitle("Breaking.Bad.S01E01.720p.mkv"))
         assertEquals("The Office", TitleCleaner.getCleanTitle("The Office 1x05.mp4"))
+        assertEquals("Running Man", TitleCleaner.getCleanTitle("Running Man (2025).mp4"))
+    }
+
+    @Test
+    fun extractYear_correctlyExtractsYearFromFilename() {
+        assertEquals(2025, TitleCleaner.extractYear("Running Man (2025).mp4"))
+        assertEquals(2010, TitleCleaner.extractYear("Inception.2010.1080p.mkv"))
+        assertEquals(1999, TitleCleaner.extractYear("Fight.Club.1999.mp4"))
+        assertNull(TitleCleaner.extractYear("Breaking.Bad.S01E01.mp4"))
     }
 
     @Test

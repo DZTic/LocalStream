@@ -3,6 +3,7 @@ package com.localstream.app.data.scanner
 import android.content.Context
 import android.database.Cursor
 import android.provider.MediaStore
+import com.localstream.app.domain.TitleCleaner
 import com.localstream.app.domain.VideoGrouper
 import com.localstream.app.domain.VideoNameParser
 import com.localstream.app.domain.model.MovieCollection
@@ -71,6 +72,7 @@ class MediaStoreScanner(
 
         val contentUri = "content://media/external/video/media/$id"
         val seriesInfo = VideoNameParser.parseSeriesInfo(name, path)
+        val extractedYear = TitleCleaner.extractYear(name)
 
         return VideoItem(
             url = contentUri,
@@ -82,7 +84,8 @@ class MediaStoreScanner(
             duration = durationMs / 1000L,
             seriesName = seriesInfo.seriesName,
             season = seriesInfo.season,
-            episode = seriesInfo.episode
+            episode = seriesInfo.episode,
+            year = extractedYear
         )
     }
 
@@ -160,6 +163,7 @@ class MediaStoreScanner(
                 .filter { it.isFile && VideoNameParser.VIDEO_EXT_REGEX.containsMatchIn(it.name) }
                 .map { file ->
                     val seriesInfo = VideoNameParser.parseSeriesInfo(file.name, file.absolutePath)
+                    val extractedYear = TitleCleaner.extractYear(file.name)
                     VideoItem(
                         url = "file://${file.absolutePath}",
                         name = file.name,
@@ -169,7 +173,8 @@ class MediaStoreScanner(
                         lastModified = file.lastModified(),
                         seriesName = seriesInfo.seriesName,
                         season = seriesInfo.season,
-                        episode = seriesInfo.episode
+                        episode = seriesInfo.episode,
+                        year = extractedYear
                     )
                 }.toList()
         }

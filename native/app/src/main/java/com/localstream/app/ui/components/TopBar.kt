@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -52,6 +53,7 @@ fun TopBar(
     onLogoClick: () -> Unit,
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onYouTubeClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val background = if (solid) {
@@ -85,6 +87,15 @@ fun TopBar(
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (isFetchingMetadata) {
                 SpinningRefreshIcon()
+            }
+            if (onYouTubeClick != null) {
+                IconButton(onClick = onYouTubeClick) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayCircle,
+                        contentDescription = "Vid?o YouTube",
+                        tint = Red600,
+                    )
+                }
             }
             if (showSearch) {
                 IconButton(onClick = onSearchClick) {
