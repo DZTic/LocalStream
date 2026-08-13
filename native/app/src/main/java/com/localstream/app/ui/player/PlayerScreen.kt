@@ -89,10 +89,9 @@ import kotlin.math.roundToInt
 
 private const val CONTROLS_TIMEOUT_MS = 4000L
 private const val FEEDBACK_TIMEOUT_MS = 1500L
-private const val VOLUME_GESTURE_PERCENT = 4f
-private const val BRIGHTNESS_GESTURE_LOG_RANGE = 2.0f
 private const val DRAG_SEEK_THROTTLE_MS = 100L
 
+@Suppress("LongMethod", "CyclomaticComplexMethod", "TooManyFunctions")
 @Composable
 fun PlayerScreen(
     videoName: String,
@@ -725,6 +724,7 @@ private fun launchExternalPlayer(context: Context, video: VideoItem, packageName
     }
 }
 
+@Suppress("ReturnCount")
 private fun extractUri(video: VideoItem?): Uri? {
     if (video == null) return null
     if (video.url.isNotBlank()) {

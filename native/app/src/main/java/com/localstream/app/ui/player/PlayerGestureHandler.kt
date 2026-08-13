@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.localstream.app.ui.player
 
 import androidx.compose.foundation.gestures.awaitEachGesture
