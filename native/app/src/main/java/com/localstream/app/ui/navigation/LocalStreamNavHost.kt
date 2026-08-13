@@ -38,7 +38,7 @@ import com.localstream.app.ui.screens.HistoryScreen
 import com.localstream.app.ui.screens.HomeScreen
 import com.localstream.app.ui.screens.LibraryScreen
 import com.localstream.app.ui.screens.PermissionScreen
-import com.localstream.app.ui.screens.PlayerScreen
+import com.localstream.app.ui.player.PlayerScreen
 import com.localstream.app.ui.screens.PlaylistsScreen
 import com.localstream.app.ui.screens.SearchScreen
 import com.localstream.app.ui.screens.SettingsScreen
