@@ -44,6 +44,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -143,7 +145,10 @@ fun PlayerScreen(
         }
     }
 
-    var isVolumeInitialized by remember { mutableStateOf(false) }
+        var isVolumeInitialized by remember { mutableStateOf(false) }
+    var dragStartVolume by remember { mutableFloatStateOf(0f) }
+    var dragStartBrightness by remember { mutableFloatStateOf(0f) }
+    var dragStartSeekPos by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(Unit) {
         audioManager?.let { am ->
@@ -454,29 +459,31 @@ fun PlayerScreen(
                                 }
                             }
                         },
+                        onDragStart = {
+                            dragStartVolume = uiState.volumePercent
+                            val curB = uiState.brightnessPercent
+                            dragStartBrightness = if (curB >= 0f) curB else getScreenBrightness(activity)
+                            dragStartSeekPos = pendingSeekTargetMs ?: (if (youtubeId != null) uiState.positionMs else exoPlayer.currentPosition)
+                        },
                         onVerticalDragLeft = { deltaRatio ->
                             if (!uiState.isLocked) {
-                                viewModel.scaleBrightness(
-                                    Math.exp(deltaRatio * BRIGHTNESS_GESTURE_LOG_RANGE.toDouble()).toFloat(),
-                                )
+                                val target = (dragStartBrightness + deltaRatio).coerceIn(0.05f, 1.0f)
+                                viewModel.setBrightnessPercent(target)
                             }
                         },
                         onVerticalDragRight = { deltaRatio ->
                             if (!uiState.isLocked) {
-                                viewModel.setVolumePercent(
-                                    uiState.volumePercent + deltaRatio * VOLUME_GESTURE_PERCENT,
-                                )
+                                val target = (dragStartVolume + deltaRatio * 100f).coerceIn(0f, 100f)
+                                viewModel.setVolumePercent(target)
                             }
                         },
                         onHorizontalDrag = { ratio ->
                             if (!uiState.isLocked) {
                                 val dur = if (youtubeId != null) uiState.durationMs else exoPlayer.duration.coerceAtLeast(1L)
-                                val basePos = pendingSeekTargetMs
-                                    ?: (if (youtubeId != null) uiState.positionMs else exoPlayer.currentPosition)
                                 val seekOffset = (ratio * 60000L).toLong()
-                                val targetPos = (basePos + seekOffset).coerceIn(0L, dur)
+                                val targetPos = (dragStartSeekPos + seekOffset).coerceIn(0L, dur)
                                 pendingSeekTargetMs = targetPos
-                                viewModel.seekBy(seekOffset)
+                                viewModel.seekBy(targetPos - dragStartSeekPos)
                                 if (youtubeId == null) {
                                     val now = System.currentTimeMillis()
                                     if (now - lastRealSeekAtMs >= DRAG_SEEK_THROTTLE_MS) {
@@ -742,4 +749,21 @@ private fun enterPipMode(activity: Activity?) {
             .build()
         activity.enterPictureInPictureMode(params)
     }
+}
+
+@Suppress("CyclomaticComplexMethod", "ReturnCount")
+private fun getScreenBrightness(activity: Activity?): Float {
+    if (activity != null) {
+        val lp = activity.window.attributes.screenBrightness
+        if (lp >= 0f) return lp
+        try {
+            val sysBright = android.provider.Settings.System.getInt(
+                activity.contentResolver,
+                android.provider.Settings.System.SCREEN_BRIGHTNESS,
+            )
+            return (sysBright / 255f).coerceIn(0.05f, 1.0f)
+        } catch (_: Exception) {
+        }
+    }
+    return 0.5f
 }

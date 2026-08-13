@@ -12,6 +12,7 @@ data class PlayerGestureCallbacks(
     val onVerticalDragLeft: (Float) -> Unit,
     val onVerticalDragRight: (Float) -> Unit,
     val onHorizontalDrag: (Float) -> Unit,
+    val onDragStart: () -> Unit = {},
     val onDragEnd: () -> Unit = {},
 )
 
@@ -51,6 +52,7 @@ suspend fun PointerInputScope.detectPlayerGestures(
                     dragMode = if (abs(totalDx) > abs(totalDy)) 1 else if (startX < size.width * 0.5f) 2 else 3
                     lastX = change.position.x
                     lastY = change.position.y
+                    callbacks.onDragStart()
                 }
                 if (isDrag) {
                     val dx = change.position.x - lastX
