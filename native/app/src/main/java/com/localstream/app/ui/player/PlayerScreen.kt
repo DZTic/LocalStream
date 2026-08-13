@@ -89,6 +89,7 @@ import kotlin.math.roundToInt
 
 private const val CONTROLS_TIMEOUT_MS = 4000L
 private const val FEEDBACK_TIMEOUT_MS = 1500L
+private const val DRAG_SEEK_THROTTLE_MS = 100L
 
 @Suppress("LongMethod", "CyclomaticComplexMethod", "TooManyFunctions")
 @Composable
@@ -176,18 +177,6 @@ fun PlayerScreen(
         if (uiState.playerMode == "external" && video != null) {
             launchExternalPlayer(context, video, uiState.selectedExternalPlayer)
             onBack()
-        }
-    }
-
-    LaunchedEffect(youtubeId, uiState.currentVideo) {
-        val video = uiState.currentVideo ?: return@LaunchedEffect
-        if (youtubeId != null) {
-            val uri = extractUri(video)
-            if (uri == null || !openYoutube(context, uri)) {
-                viewModel.setErrorMessage("Aucune application ne peut lire cette vidéo YouTube.")
-            } else {
-                onBack()
-            }
         }
     }
 
@@ -402,8 +391,8 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(uiState.currentVideo, youtubeId) {
-        val video = uiState.currentVideo ?: return@LaunchedEffect
         if (youtubeId != null) return@LaunchedEffect
+        val video = uiState.currentVideo ?: return@LaunchedEffect
         val uri = extractUri(video) ?: return@LaunchedEffect
 
         exoPlayer.stop()
@@ -441,6 +430,7 @@ fun PlayerScreen(
     }
 
     var pendingSeekTargetMs by remember { mutableStateOf<Long?>(null) }
+    var lastRealSeekAtMs by remember { mutableStateOf(0L) }
 
     Box(
         modifier = Modifier
@@ -455,20 +445,24 @@ fun PlayerScreen(
                         onDoubleTapLeft = {
                             if (!uiState.isLocked) {
                                 viewModel.seekBy(-10000L)
-                                exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
+                                if (youtubeId == null) {
+                                    exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
+                                }
                             }
                         },
                         onDoubleTapRight = {
                             if (!uiState.isLocked) {
                                 viewModel.seekBy(10000L)
-                                exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
+                                if (youtubeId == null) {
+                                    exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
+                                }
                             }
                         },
                         onDragStart = {
                             dragStartVolume = uiState.volumePercent
                             val curB = uiState.brightnessPercent
                             dragStartBrightness = if (curB >= 0f) curB else getScreenBrightness(activity)
-                            dragStartSeekPos = pendingSeekTargetMs ?: exoPlayer.currentPosition
+                            dragStartSeekPos = pendingSeekTargetMs ?: (if (youtubeId != null) uiState.positionMs else exoPlayer.currentPosition)
                         },
                         onVerticalDragLeft = { deltaRatio ->
                             if (!uiState.isLocked) {
@@ -484,17 +478,23 @@ fun PlayerScreen(
                         },
                         onHorizontalDrag = { ratio ->
                             if (!uiState.isLocked) {
-                                val dur = exoPlayer.duration.coerceAtLeast(1L)
+                                val dur = if (youtubeId != null) uiState.durationMs else exoPlayer.duration.coerceAtLeast(1L)
                                 val seekOffset = (ratio * 60000L).toLong()
                                 val targetPos = (dragStartSeekPos + seekOffset).coerceIn(0L, dur)
                                 pendingSeekTargetMs = targetPos
                                 viewModel.onPositionChanged(targetPos, dur)
-                                exoPlayer.seekTo(targetPos)
+                                if (youtubeId == null) {
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastRealSeekAtMs >= DRAG_SEEK_THROTTLE_MS) {
+                                        lastRealSeekAtMs = now
+                                        exoPlayer.seekTo(targetPos)
+                                    }
+                                }
                             }
                         },
                         onDragEnd = {
                             val target = pendingSeekTargetMs
-                            if (target != null) {
+                            if (target != null && youtubeId == null) {
                                 exoPlayer.seekTo(target)
                             }
                             pendingSeekTargetMs = null
@@ -503,28 +503,43 @@ fun PlayerScreen(
                 )
             },
     ) {
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = exoPlayer
-                    useController = false
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    )
-                }
-            },
-            update = { playerView ->
-                playerView.resizeMode = when (uiState.aspectRatioMode) {
-                    AspectRatioMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    AspectRatioMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                    AspectRatioMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    AspectRatioMode.RATIO_16_9 -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
-                    AspectRatioMode.RATIO_4_3 -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT
-                }
-            },
-            modifier = Modifier.fillMaxSize(),
-        )
+        if (youtubeId != null) {
+            YouTubePlayerView(
+                videoId = youtubeId,
+                initialPositionMs = uiState.initialPositionMs,
+                isPlaying = uiState.isPlaying,
+                positionMs = uiState.positionMs,
+                onPositionChanged = viewModel::onPositionChanged,
+                onPlayingStateChanged = viewModel::onPlayingStateChanged,
+                onEnded = viewModel::onVideoEnded,
+                onError = viewModel::setErrorMessage,
+                onBuffering = viewModel::setBuffering,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        player = exoPlayer
+                        useController = false
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        )
+                    }
+                },
+                update = { playerView ->
+                    playerView.resizeMode = when (uiState.aspectRatioMode) {
+                        AspectRatioMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        AspectRatioMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        AspectRatioMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        AspectRatioMode.RATIO_16_9 -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+                        AspectRatioMode.RATIO_4_3 -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
 
         if (uiState.isBuffering && uiState.errorMessage == null) {
             CircularProgressIndicator(
@@ -569,14 +584,9 @@ fun PlayerScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = {
-                            if (youtubeId != null) {
-                                val uri = extractUri(uiState.currentVideo)
-                                if (uri != null && openYoutube(context, uri)) onBack()
-                            } else {
-                                viewModel.retryPlayback()
-                                exoPlayer.prepare()
-                                exoPlayer.play()
-                            }
+                            viewModel.retryPlayback()
+                            exoPlayer.prepare()
+                            exoPlayer.play()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Red600),
                     ) {
@@ -608,24 +618,34 @@ fun PlayerScreen(
             onCycleAspect = viewModel::cycleAspectRatio,
             onCycleSpeed = viewModel::cyclePlaybackSpeed,
             onTogglePlay = {
-                if (exoPlayer.isPlaying) {
-                    exoPlayer.pause()
+                if (youtubeId != null) {
+                    viewModel.onPlayingStateChanged(!uiState.isPlaying)
                 } else {
-                    exoPlayer.play()
+                    if (exoPlayer.isPlaying) {
+                        exoPlayer.pause()
+                    } else {
+                        exoPlayer.play()
+                    }
                 }
             },
             onRewind = {
                 viewModel.seekBy(-10000L)
-                exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
+                if (youtubeId == null) {
+                    exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
+                }
             },
             onForward = {
                 viewModel.seekBy(10000L)
-                exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
+                if (youtubeId == null) {
+                    exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
+                }
             },
             onNextVideo = viewModel::playNextVideo,
             onSeek = { newPos ->
                 viewModel.onPositionChanged(newPos, uiState.durationMs)
-                exoPlayer.seekTo(newPos)
+                if (youtubeId == null) {
+                    exoPlayer.seekTo(newPos)
+                }
             },
             onToggleLock = viewModel::toggleLock,
             onEnterPip = {
@@ -700,21 +720,6 @@ private fun launchExternalPlayer(context: Context, video: VideoItem, packageName
         try {
             context.startActivity(fallbackIntent)
         } catch (_: Exception) {
-        }
-    }
-}
-
-private fun openYoutube(context: Context, uri: Uri): Boolean {
-    val youtubeIntent = Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.youtube")
-    return try {
-        context.startActivity(youtubeIntent)
-        true
-    } catch (_: Exception) {
-        try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-            true
-        } catch (_: Exception) {
-            false
         }
     }
 }
