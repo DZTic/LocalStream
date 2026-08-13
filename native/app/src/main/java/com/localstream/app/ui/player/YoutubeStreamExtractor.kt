@@ -8,8 +8,8 @@ object YoutubeStreamExtractor {
         val request = YoutubeDLRequest(youtubeUrl).apply {
             addOption("-f", "best[acodec!=none][vcodec!=none]/best")
         }
-        return YoutubeDL.getInstance().getInfo(request).url
-            .takeIf { it.isNotBlank() }
+        val info = YoutubeDL.getInstance().getInfo(request)
+        return info.url?.takeIf { it.isNotBlank() }
             ?: error("yt-dlp n'a retourné aucun flux lisible")
     }
 }
