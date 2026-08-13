@@ -45,6 +45,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,6 +86,8 @@ import com.localstream.app.ui.theme.Red600
 import com.localstream.app.ui.theme.White
 import com.localstream.app.ui.theme.Zinc900
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 private const val CONTROLS_TIMEOUT_MS = 4000L
@@ -181,6 +184,7 @@ fun PlayerScreen(
     }
 
     var showTracksSheet by remember { mutableStateOf(false) }
+    var playbackAttempt by remember { mutableIntStateOf(0) }
 
     val subtitleFilePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -390,10 +394,19 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(uiState.currentVideo, youtubeId) {
-        if (youtubeId != null) return@LaunchedEffect
+    LaunchedEffect(uiState.currentVideo, youtubeId, playbackAttempt) {
         val video = uiState.currentVideo ?: return@LaunchedEffect
-        val uri = extractUri(video) ?: return@LaunchedEffect
+        val uri = if (youtubeId != null) {
+            viewModel.setBuffering(true)
+            runCatching {
+                withContext(Dispatchers.IO) { YoutubeStreamExtractor.extract(video.url) }
+            }.onFailure { error ->
+                viewModel.setBuffering(false)
+                viewModel.setErrorMessage("Impossible d'extraire le flux YouTube : ${error.message}")
+            }.getOrNull()?.let(Uri::parse) ?: return@LaunchedEffect
+        } else {
+            extractUri(video) ?: return@LaunchedEffect
+        }
 
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
@@ -445,24 +458,20 @@ fun PlayerScreen(
                         onDoubleTapLeft = {
                             if (!uiState.isLocked) {
                                 viewModel.seekBy(-10000L)
-                                if (youtubeId == null) {
-                                    exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
-                                }
+                                exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
                             }
                         },
                         onDoubleTapRight = {
                             if (!uiState.isLocked) {
                                 viewModel.seekBy(10000L)
-                                if (youtubeId == null) {
-                                    exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
-                                }
+                                exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
                             }
                         },
                         onDragStart = {
                             dragStartVolume = uiState.volumePercent
                             val curB = uiState.brightnessPercent
                             dragStartBrightness = if (curB >= 0f) curB else getScreenBrightness(activity)
-                            dragStartSeekPos = pendingSeekTargetMs ?: (if (youtubeId != null) uiState.positionMs else exoPlayer.currentPosition)
+                            dragStartSeekPos = pendingSeekTargetMs ?: exoPlayer.currentPosition
                         },
                         onVerticalDragLeft = { deltaRatio ->
                             if (!uiState.isLocked) {
@@ -478,23 +487,21 @@ fun PlayerScreen(
                         },
                         onHorizontalDrag = { ratio ->
                             if (!uiState.isLocked) {
-                                val dur = if (youtubeId != null) uiState.durationMs else exoPlayer.duration.coerceAtLeast(1L)
+                                val dur = exoPlayer.duration.coerceAtLeast(1L)
                                 val seekOffset = (ratio * 60000L).toLong()
                                 val targetPos = (dragStartSeekPos + seekOffset).coerceIn(0L, dur)
                                 pendingSeekTargetMs = targetPos
                                 viewModel.onPositionChanged(targetPos, dur)
-                                if (youtubeId == null) {
-                                    val now = System.currentTimeMillis()
-                                    if (now - lastRealSeekAtMs >= DRAG_SEEK_THROTTLE_MS) {
-                                        lastRealSeekAtMs = now
-                                        exoPlayer.seekTo(targetPos)
-                                    }
+                                val now = System.currentTimeMillis()
+                                if (now - lastRealSeekAtMs >= DRAG_SEEK_THROTTLE_MS) {
+                                    lastRealSeekAtMs = now
+                                    exoPlayer.seekTo(targetPos)
                                 }
                             }
                         },
                         onDragEnd = {
                             val target = pendingSeekTargetMs
-                            if (target != null && youtubeId == null) {
+                            if (target != null) {
                                 exoPlayer.seekTo(target)
                             }
                             pendingSeekTargetMs = null
@@ -503,43 +510,28 @@ fun PlayerScreen(
                 )
             },
     ) {
-        if (youtubeId != null) {
-            YouTubePlayerView(
-                videoId = youtubeId,
-                initialPositionMs = uiState.initialPositionMs,
-                isPlaying = uiState.isPlaying,
-                positionMs = uiState.positionMs,
-                onPositionChanged = viewModel::onPositionChanged,
-                onPlayingStateChanged = viewModel::onPlayingStateChanged,
-                onEnded = viewModel::onVideoEnded,
-                onError = viewModel::setErrorMessage,
-                onBuffering = viewModel::setBuffering,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = exoPlayer
-                        useController = false
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                        )
-                    }
-                },
-                update = { playerView ->
-                    playerView.resizeMode = when (uiState.aspectRatioMode) {
-                        AspectRatioMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        AspectRatioMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                        AspectRatioMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                        AspectRatioMode.RATIO_16_9 -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
-                        AspectRatioMode.RATIO_4_3 -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    player = exoPlayer
+                    useController = false
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    )
+                }
+            },
+            update = { playerView ->
+                playerView.resizeMode = when (uiState.aspectRatioMode) {
+                    AspectRatioMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    AspectRatioMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    AspectRatioMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    AspectRatioMode.RATIO_16_9 -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+                    AspectRatioMode.RATIO_4_3 -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
 
         if (uiState.isBuffering && uiState.errorMessage == null) {
             CircularProgressIndicator(
@@ -584,9 +576,13 @@ fun PlayerScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = {
-                            viewModel.retryPlayback()
-                            exoPlayer.prepare()
-                            exoPlayer.play()
+                            if (youtubeId != null) {
+                                playbackAttempt++
+                            } else {
+                                viewModel.retryPlayback()
+                                exoPlayer.prepare()
+                                exoPlayer.play()
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Red600),
                     ) {
@@ -618,34 +614,24 @@ fun PlayerScreen(
             onCycleAspect = viewModel::cycleAspectRatio,
             onCycleSpeed = viewModel::cyclePlaybackSpeed,
             onTogglePlay = {
-                if (youtubeId != null) {
-                    viewModel.onPlayingStateChanged(!uiState.isPlaying)
+                if (exoPlayer.isPlaying) {
+                    exoPlayer.pause()
                 } else {
-                    if (exoPlayer.isPlaying) {
-                        exoPlayer.pause()
-                    } else {
-                        exoPlayer.play()
-                    }
+                    exoPlayer.play()
                 }
             },
             onRewind = {
                 viewModel.seekBy(-10000L)
-                if (youtubeId == null) {
-                    exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
-                }
+                exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
             },
             onForward = {
                 viewModel.seekBy(10000L)
-                if (youtubeId == null) {
-                    exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
-                }
+                exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
             },
             onNextVideo = viewModel::playNextVideo,
             onSeek = { newPos ->
                 viewModel.onPositionChanged(newPos, uiState.durationMs)
-                if (youtubeId == null) {
-                    exoPlayer.seekTo(newPos)
-                }
+                exoPlayer.seekTo(newPos)
             },
             onToggleLock = viewModel::toggleLock,
             onEnterPip = {
