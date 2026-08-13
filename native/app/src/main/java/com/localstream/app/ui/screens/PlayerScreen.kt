@@ -208,7 +208,7 @@ fun PlayerScreen(
     }
 
     var isVolumeInitialized by remember { mutableStateOf(false) }
-    var dragStartVolume by remember { mutableIntStateOf(0) }
+    var dragStartVolume by remember { mutableFloatStateOf(0f) }
     var dragStartBrightness by remember { mutableFloatStateOf(0f) }
     var dragStartSeekPos by remember { mutableLongStateOf(0L) }
 
@@ -557,8 +557,7 @@ fun PlayerScreen(
                         },
                         onVerticalDragRight = { deltaRatio ->
                             if (!uiState.isLocked) {
-                                val deltaVol = (deltaRatio * 100f).roundToInt()
-                                val target = (dragStartVolume + deltaVol).coerceIn(0, 100)
+                                val target = (dragStartVolume + deltaRatio * 100f).coerceIn(0f, 100f)
                                 viewModel.setVolumePercent(target)
                             }
                         },
