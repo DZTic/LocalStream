@@ -143,11 +143,8 @@ import kotlinx.coroutines.delay
 private const val CONTROLS_TIMEOUT_MS = 3500L
 private const val FEEDBACK_TIMEOUT_MS = 1500L
 // A full-height vertical swipe spans 100% of the volume range (lower = more sensitive).
-private const val VOLUME_GESTURE_PERCENT = 100f
 private const val DRAG_SEEK_THROTTLE_MS = 120L
 // A full-height vertical swipe spans the whole 5%-100% brightness range (log scale).
-private val BRIGHTNESS_GESTURE_LOG_RANGE: Float =
-    Math.log((PlayerViewModel.MAX_BRIGHTNESS / PlayerViewModel.MIN_BRIGHTNESS).toDouble()).toFloat()
 
 
 @Suppress("LongMethod", "CyclomaticComplexMethod", "TooManyFunctions")
@@ -1323,6 +1320,7 @@ private fun formatTimeMs(ms: Long): String {
     }
 }
 
+@Suppress("CyclomaticComplexMethod", "ReturnCount")
 private fun getScreenBrightness(activity: Activity?): Float {
     if (activity != null) {
         val lp = activity.window.attributes.screenBrightness
@@ -1337,6 +1335,7 @@ private fun getScreenBrightness(activity: Activity?): Float {
         }
     }
     return 0.5f
+}
 
 @Suppress("UnusedPrivateMember", "LongMethod")
 @SuppressLint("SetJavaScriptEnabled")
