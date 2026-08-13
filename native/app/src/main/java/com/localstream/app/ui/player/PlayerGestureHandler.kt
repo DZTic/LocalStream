@@ -32,8 +32,6 @@ suspend fun PointerInputScope.detectPlayerGestures(
         var isDrag = false
         var dragMode = 0
         var pointerActive = true
-        var lastX = startX
-        var lastY = down.position.y
 
         while (pointerActive) {
             val event = awaitPointerEvent()
@@ -52,17 +50,11 @@ suspend fun PointerInputScope.detectPlayerGestures(
                 if (!isDrag && (abs(totalDx) > touchSlop || abs(totalDy) > touchSlop)) {
                     isDrag = true
                     dragMode = if (abs(totalDx) > abs(totalDy)) 1 else if (startX < size.width * 0.5f) 2 else 3
-                    lastX = change.position.x
-                    lastY = change.position.y
                     callbacks.onDragStart()
                 }
                 if (isDrag) {
-                    val dx = change.position.x - lastX
-                    val dy = change.position.y - lastY
-                    lastX = change.position.x
-                    lastY = change.position.y
                     change.consume()
-                    dispatchDragEvent(dragMode, dx / size.width.toFloat(), dy / size.height.toFloat(), callbacks)
+                    dispatchDragEvent(dragMode, totalDx / size.width.toFloat(), totalDy / size.height.toFloat(), callbacks)
                 }
             }
         }
