@@ -482,7 +482,7 @@ fun PlayerScreen(
                                 val seekOffset = (ratio * 60000L).toLong()
                                 val targetPos = (dragStartSeekPos + seekOffset).coerceIn(0L, dur)
                                 pendingSeekTargetMs = targetPos
-                                viewModel.seekBy(targetPos - dragStartSeekPos)
+                                viewModel.onPositionChanged(targetPos, dur)
                                 if (youtubeId == null) {
                                     val now = System.currentTimeMillis()
                                     if (now - lastRealSeekAtMs >= DRAG_SEEK_THROTTLE_MS) {
