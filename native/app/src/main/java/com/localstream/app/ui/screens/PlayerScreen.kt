@@ -75,6 +75,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -142,11 +143,8 @@ import kotlinx.coroutines.delay
 private const val CONTROLS_TIMEOUT_MS = 3500L
 private const val FEEDBACK_TIMEOUT_MS = 1500L
 // A full-height vertical swipe spans 100% of the volume range (lower = more sensitive).
-private const val VOLUME_GESTURE_PERCENT = 100f
 private const val DRAG_SEEK_THROTTLE_MS = 120L
 // A full-height vertical swipe spans the whole 5%-100% brightness range (log scale).
-private val BRIGHTNESS_GESTURE_LOG_RANGE: Float =
-    Math.log((PlayerViewModel.MAX_BRIGHTNESS / PlayerViewModel.MIN_BRIGHTNESS).toDouble()).toFloat()
 
 
 @Suppress("LongMethod", "CyclomaticComplexMethod", "TooManyFunctions")
@@ -210,6 +208,9 @@ fun PlayerScreen(
     }
 
     var isVolumeInitialized by remember { mutableStateOf(false) }
+    var dragStartVolume by remember { mutableFloatStateOf(0f) }
+    var dragStartBrightness by remember { mutableFloatStateOf(0f) }
+    var dragStartSeekPos by remember { mutableLongStateOf(0L) }
 
     // Init volume from system AudioManager
     LaunchedEffect(Unit) {
@@ -542,36 +543,32 @@ fun PlayerScreen(
                                 }
                             }
                         },
+                        onDragStart = {
+                            dragStartVolume = uiState.volumePercent
+                            val curB = uiState.brightnessPercent
+                            dragStartBrightness = if (curB >= 0f) curB else getScreenBrightness(activity)
+                            dragStartSeekPos = pendingSeekTargetMs ?: (if (youtubeId != null) uiState.positionMs else exoPlayer.currentPosition)
+                        },
                         onVerticalDragLeft = { deltaRatio ->
                             if (!uiState.isLocked) {
-                                viewModel.scaleBrightness(
-                                    Math.exp(deltaRatio * BRIGHTNESS_GESTURE_LOG_RANGE.toDouble()).toFloat(),
-                                )
+                                val target = (dragStartBrightness + deltaRatio).coerceIn(0.05f, 1.0f)
+                                viewModel.setBrightnessPercent(target)
                             }
                         },
                         onVerticalDragRight = { deltaRatio ->
                             if (!uiState.isLocked) {
-                                viewModel.setVolumePercent(
-                                    uiState.volumePercent + deltaRatio * VOLUME_GESTURE_PERCENT,
-                                )
+                                val target = (dragStartVolume + deltaRatio * 100f).coerceIn(0f, 100f)
+                                viewModel.setVolumePercent(target)
                             }
                         },
                         onHorizontalDrag = { ratio ->
                             if (!uiState.isLocked) {
                                 val dur = if (youtubeId != null) uiState.durationMs else exoPlayer.duration.coerceAtLeast(1L)
-                                // Base the running target off our own accumulator rather than
-                                // exoPlayer.currentPosition, since that position only updates
-                                // when we actually call seekTo() below (which we now throttle).
-                                val basePos = pendingSeekTargetMs
-                                    ?: (if (youtubeId != null) uiState.positionMs else exoPlayer.currentPosition)
                                 val seekOffset = (ratio * 60000L).toLong()
-                                val targetPos = (basePos + seekOffset).coerceIn(0L, dur)
+                                val targetPos = (dragStartSeekPos + seekOffset).coerceIn(0L, dur)
                                 pendingSeekTargetMs = targetPos
-                                viewModel.seekBy(seekOffset)
+                                viewModel.seekBy(targetPos - dragStartSeekPos)
                                 if (youtubeId == null) {
-                                    // Real seeks are expensive (keyframe lookup + decode), so we
-                                    // only send one every DRAG_SEEK_THROTTLE_MS instead of on every
-                                    // pointer-move delta, which used to cause visible stutter.
                                     val now = System.currentTimeMillis()
                                     if (now - lastRealSeekAtMs >= DRAG_SEEK_THROTTLE_MS) {
                                         lastRealSeekAtMs = now
@@ -795,6 +792,7 @@ private data class PlayerGestureCallbacks(
     val onVerticalDragLeft: (Float) -> Unit,
     val onVerticalDragRight: (Float) -> Unit,
     val onHorizontalDrag: (Float) -> Unit,
+    val onDragStart: () -> Unit = {},
     val onDragEnd: () -> Unit = {},
 )
 
@@ -834,6 +832,7 @@ private suspend fun PointerInputScope.detectPlayerGestures(
                     dragMode = if (abs(totalDx) > abs(totalDy)) 1 else if (startX < size.width * 0.5f) 2 else 3
                     lastX = change.position.x
                     lastY = change.position.y
+                    callbacks.onDragStart()
                 }
                 if (isDrag) {
                     val dx = change.position.x - lastX
@@ -1320,6 +1319,22 @@ private fun formatTimeMs(ms: Long): String {
     }
 }
 
+@Suppress("CyclomaticComplexMethod", "ReturnCount")
+private fun getScreenBrightness(activity: Activity?): Float {
+    if (activity != null) {
+        val lp = activity.window.attributes.screenBrightness
+        if (lp >= 0f) return lp
+        try {
+            val sysBright = android.provider.Settings.System.getInt(
+                activity.contentResolver,
+                android.provider.Settings.System.SCREEN_BRIGHTNESS,
+            )
+            return (sysBright / 255f).coerceIn(0.05f, 1.0f)
+        } catch (_: Exception) {
+        }
+    }
+    return 0.5f
+}
 
 @Suppress("UnusedPrivateMember", "LongMethod")
 @SuppressLint("SetJavaScriptEnabled")
