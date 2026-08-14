@@ -10,6 +10,7 @@ Fonctionne aussi bien en local qu'au sein d'un workflow GitHub Actions.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -119,6 +120,19 @@ def generate_markdown_summary(
         for pr in merged_prs:
             author_login = pr.get("author", {}).get("login", "inconnu") if isinstance(pr.get("author"), dict) else str(pr.get("author", "inconnu"))
             lines.append(f"| [#{pr['number']}]({pr['url']}) | {pr['title']} | @{author_login} | `{pr['headRefName']}` |")
+        lines.append("")
+        lines.append("## 🎯 Clôture automatique des PRs et Issues")
+        lines.append("")
+        closes_list = []
+        for pr in merged_prs:
+            closes_list.append(f"Closes #{pr['number']}")
+            title_issues = re.findall(r"#(\d+)", pr.get("title", ""))
+            body_issues = re.findall(r"(?:closes|fixes|resolves)\s*#(\d+)", pr.get("body", "") or "", re.IGNORECASE)
+            for iss in set(title_issues + body_issues):
+                if iss != str(pr["number"]):
+                    closes_list.append(f"Closes #{iss}")
+        unique_closes = list(dict.fromkeys(closes_list))
+        lines.append(", ".join(unique_closes))
         lines.append("")
 
     if conflicted_prs:
