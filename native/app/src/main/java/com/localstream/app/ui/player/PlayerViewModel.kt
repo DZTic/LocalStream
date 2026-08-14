@@ -8,10 +8,14 @@ import androidx.lifecycle.viewModelScope
 import com.localstream.app.di.AppContainer
 import com.localstream.app.domain.YoutubeUtils
 import com.localstream.app.domain.model.VideoItem
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -105,8 +109,26 @@ class PlayerViewModel(
     private val isBufferingFlow = MutableStateFlow(false)
     private val errorMessageFlow = MutableStateFlow<String?>(null)
 
-    private var lastSavedPosMs = 0L
-    private var lastSavedTime = 0L
+    private data class SavePositionRequest(
+        val videoName: String,
+        val positionMs: Long,
+        val durationMs: Long,
+    )
+
+    private val savePositionChannel = Channel<SavePositionRequest>(Channel.CONFLATED)
+
+    @OptIn(FlowPreview::class)
+    private val positionSaveJob = viewModelScope.launch {
+        savePositionChannel.receiveAsFlow()
+            .debounce(2000L)
+            .collect { req ->
+                container.watchStateRepository.savePlaybackState(
+                    videoName = req.videoName,
+                    positionMs = req.positionMs,
+                    durationMs = req.durationMs,
+                )
+            }
+    }
 
     init {
         loadVideoDetails()
@@ -316,30 +338,24 @@ class PlayerViewModel(
         }
         val video = currentVideoFlow.value ?: return
 
-        val now = System.currentTimeMillis()
-        val isThresholdReached = durationMs > 0L && positionMs >= (durationMs * WATCHED_THRESHOLD_RATIO)
-        val timeDelta = now - lastSavedTime
-        val posDelta = kotlin.math.abs(positionMs - lastSavedPosMs)
+        if (positionMs > 0L) {
+            savePositionChannel.trySend(
+                SavePositionRequest(
+                    videoName = video.name,
+                    positionMs = positionMs,
+                    durationMs = durationMs,
+                )
+            )
+        }
 
-        val isIntervalReached = timeDelta >= 3000L || posDelta >= 2000L
-        if (lastSavedPosMs == 0L || isThresholdReached || isIntervalReached) {
-            lastSavedTime = now
-            lastSavedPosMs = positionMs
+        val isThresholdReached = durationMs > 0L && positionMs >= (durationMs * WATCHED_THRESHOLD_RATIO)
+        if (isThresholdReached) {
             viewModelScope.launch {
-                if (positionMs > 0L) {
-                    container.watchStateRepository.savePlaybackState(
-                        videoName = video.name,
-                        positionMs = positionMs,
-                        durationMs = durationMs,
-                    )
-                }
-                if (isThresholdReached) {
-                    container.watchStateRepository.setWatched(
-                        videoName = video.name,
-                        watched = true,
-                        mediaStoreId = video.mediaStoreId,
-                    )
-                }
+                container.watchStateRepository.setWatched(
+                    videoName = video.name,
+                    watched = true,
+                    mediaStoreId = video.mediaStoreId,
+                )
             }
         }
     }
