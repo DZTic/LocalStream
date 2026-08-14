@@ -11,12 +11,11 @@ import com.localstream.app.domain.model.VideoItem
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class AspectRatioMode(val label: String) {
@@ -82,32 +81,14 @@ data class PlayerUiState(
     val errorMessage: String? = null,
 )
 
-@Suppress("TooManyFunctions", "LongMethod", "UNCHECKED_CAST")
+@Suppress("TooManyFunctions", "LongMethod")
 class PlayerViewModel(
     val videoName: String,
     private val container: AppContainer,
 ) : ViewModel() {
 
-    private val currentVideoFlow = MutableStateFlow<VideoItem?>(null)
-    private val isPlayingFlow = MutableStateFlow(false)
-    private val positionMsFlow = MutableStateFlow(0L)
-    private val durationMsFlow = MutableStateFlow(0L)
-    private val isControlsVisibleFlow = MutableStateFlow(true)
-    private val isLockedFlow = MutableStateFlow(false)
-    private val volumePercentFlow = MutableStateFlow(100f)
-    private val brightnessPercentFlow = MutableStateFlow(-1f)
-    private val aspectRatioModeFlow = MutableStateFlow(AspectRatioMode.FIT)
-    private val playbackSpeedFlow = MutableStateFlow(1.0f)
-    private val audioTracksFlow = MutableStateFlow<List<AudioTrackUiState>>(emptyList())
-    private val subtitleTracksFlow = MutableStateFlow<List<SubtitleTrackUiState>>(emptyList())
-    private val selectedAudioTrackIdFlow = MutableStateFlow<String?>(null)
-    private val selectedSubtitleTrackIdFlow = MutableStateFlow<String?>(null)
-    private val gestureFeedbackFlow = MutableStateFlow<GestureFeedback?>(null)
-    private val nextVideoFlow = MutableStateFlow<VideoItem?>(null)
-    private val isEndedFlow = MutableStateFlow(false)
-    private val initialPositionMsFlow = MutableStateFlow(0L)
-    private val isBufferingFlow = MutableStateFlow(false)
-    private val errorMessageFlow = MutableStateFlow<String?>(null)
+    private val _uiState = MutableStateFlow(PlayerUiState())
+    val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
     private data class SavePositionRequest(
         val videoName: String,
@@ -130,79 +111,18 @@ class PlayerViewModel(
                     )
                 }
         }
+        viewModelScope.launch {
+            container.settingsRepository.observePlayerMode.collect { mode ->
+                _uiState.update { it.copy(playerMode = mode) }
+            }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.observeExternalPlayer.collect { extPlayer ->
+                _uiState.update { it.copy(selectedExternalPlayer = extPlayer) }
+            }
+        }
         loadVideoDetails()
     }
-
-    val uiState: StateFlow<PlayerUiState> = combine(
-        combine(
-            listOf(
-                currentVideoFlow,
-                isPlayingFlow,
-                positionMsFlow,
-                durationMsFlow,
-                isControlsVisibleFlow,
-            )
-        ) { arr -> arr },
-        combine(
-            listOf(
-                isLockedFlow,
-                volumePercentFlow,
-                brightnessPercentFlow,
-                aspectRatioModeFlow,
-                playbackSpeedFlow,
-            )
-        ) { arr -> arr },
-        combine(
-            listOf(
-                audioTracksFlow,
-                subtitleTracksFlow,
-                selectedAudioTrackIdFlow,
-                selectedSubtitleTrackIdFlow,
-                gestureFeedbackFlow,
-            )
-        ) { arr -> arr },
-        combine(
-            listOf(
-                nextVideoFlow,
-                isEndedFlow,
-                container.settingsRepository.observePlayerMode,
-                container.settingsRepository.observeExternalPlayer,
-                initialPositionMsFlow,
-                isBufferingFlow,
-                errorMessageFlow,
-            )
-        ) { arr -> arr },
-    ) { p1, p2, p3, p4 ->
-        @Suppress("UNCHECKED_CAST")
-        PlayerUiState(
-            currentVideo = p1[0] as VideoItem?,
-            isPlaying = p1[1] as Boolean,
-            positionMs = p1[2] as Long,
-            durationMs = p1[3] as Long,
-            isControlsVisible = p1[4] as Boolean,
-            isLocked = p2[0] as Boolean,
-            volumePercent = p2[1] as Float,
-            brightnessPercent = p2[2] as Float,
-            aspectRatioMode = p2[3] as AspectRatioMode,
-            playbackSpeed = p2[4] as Float,
-            audioTracks = (p3[0] as List<*>).filterIsInstance<AudioTrackUiState>(),
-            subtitleTracks = (p3[1] as List<*>).filterIsInstance<SubtitleTrackUiState>(),
-            selectedAudioTrackId = p3[2] as String?,
-            selectedSubtitleTrackId = p3[3] as String?,
-            gestureFeedback = p3[4] as GestureFeedback?,
-            nextVideo = p4[0] as VideoItem?,
-            isEnded = p4[1] as Boolean,
-            playerMode = p4[2] as String,
-            selectedExternalPlayer = p4[3] as String,
-            initialPositionMs = p4[4] as Long,
-            isBuffering = p4[5] as Boolean,
-            errorMessage = p4[6] as String?,
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
-        initialValue = PlayerUiState(),
-    )
 
     private fun loadVideoDetails() {
         viewModelScope.launch {
@@ -224,9 +144,13 @@ class PlayerViewModel(
                 val pct = state?.progressPct ?: 0.0
                 val pos = if (isFinished(isWatched, pct, rawPos, targetVideo.duration * 1000L)) 0L else rawPos
 
-                initialPositionMsFlow.value = pos
-                positionMsFlow.value = pos
-                currentVideoFlow.value = targetVideo
+                _uiState.update {
+                    it.copy(
+                        initialPositionMs = pos,
+                        positionMs = pos,
+                        currentVideo = targetVideo,
+                    )
+                }
                 return@launch
             }
 
@@ -250,12 +174,14 @@ class PlayerViewModel(
                 0L
             }
 
-            initialPositionMsFlow.value = pos
-            positionMsFlow.value = pos
-            if (targetDur > 0L) {
-                durationMsFlow.value = targetDur
+            _uiState.update {
+                it.copy(
+                    initialPositionMs = pos,
+                    positionMs = pos,
+                    durationMs = if (targetDur > 0L) targetDur else it.durationMs,
+                    currentVideo = targetVideo,
+                )
             }
-            currentVideoFlow.value = targetVideo
 
             resolveNextVideo(targetVideo, allGrouped, allRaw)
         }
@@ -301,41 +227,42 @@ class PlayerViewModel(
         val episodes = parentGroup?.episodes.orEmpty()
         val currentIndex = episodes.indexOfFirst { it.name == video.name }
         if (currentIndex >= 0 && currentIndex < episodes.size - 1) {
-            nextVideoFlow.value = episodes[currentIndex + 1]
+            val nextVid = episodes[currentIndex + 1]
+            _uiState.update { it.copy(nextVideo = nextVid) }
             return
         }
         val indexInRaw = allRaw.indexOfFirst { it.name == video.name }
         if (indexInRaw >= 0 && indexInRaw < allRaw.size - 1) {
-            nextVideoFlow.value = allRaw[indexInRaw + 1]
+            val nextVid = allRaw[indexInRaw + 1]
+            _uiState.update { it.copy(nextVideo = nextVid) }
         }
     }
 
     fun setBuffering(isBuffering: Boolean) {
-        isBufferingFlow.value = isBuffering
+        _uiState.update { it.copy(isBuffering = isBuffering) }
     }
 
     fun setErrorMessage(msg: String?) {
-        errorMessageFlow.value = msg
+        _uiState.update { it.copy(errorMessage = msg) }
     }
 
     fun retryPlayback() {
-        errorMessageFlow.value = null
-        isBufferingFlow.value = true
+        _uiState.update { it.copy(errorMessage = null, isBuffering = true) }
     }
 
     fun onPlayingStateChanged(isPlaying: Boolean) {
-        isPlayingFlow.value = isPlaying
+        _uiState.update { it.copy(isPlaying = isPlaying) }
         if (!isPlaying) {
             saveCurrentPosition()
         }
     }
 
     fun onPositionChanged(positionMs: Long, durationMs: Long) {
-        positionMsFlow.value = positionMs
-        if (durationMs > 0L) {
-            durationMsFlow.value = durationMs
+        _uiState.update { state ->
+            val newDur = if (durationMs > 0L) durationMs else state.durationMs
+            state.copy(positionMs = positionMs, durationMs = newDur)
         }
-        val video = currentVideoFlow.value ?: return
+        val video = _uiState.value.currentVideo ?: return
 
         if (positionMs > 0L) {
             savePositionChannel.trySend(
@@ -360,9 +287,9 @@ class PlayerViewModel(
     }
 
     private fun saveCurrentPosition() {
-        val video = currentVideoFlow.value ?: return
-        val pos = positionMsFlow.value
-        val dur = durationMsFlow.value
+        val video = _uiState.value.currentVideo ?: return
+        val pos = _uiState.value.positionMs
+        val dur = _uiState.value.durationMs
         if (pos > 0L) {
             viewModelScope.launch {
                 container.watchStateRepository.savePlaybackState(
@@ -375,9 +302,8 @@ class PlayerViewModel(
     }
 
     fun onVideoEnded() {
-        isEndedFlow.value = true
-        isPlayingFlow.value = false
-        val video = currentVideoFlow.value ?: return
+        _uiState.update { it.copy(isEnded = true, isPlaying = false) }
+        val video = _uiState.value.currentVideo ?: return
         viewModelScope.launch {
             container.watchStateRepository.setWatched(
                 videoName = video.name,
@@ -388,54 +314,49 @@ class PlayerViewModel(
     }
 
     fun toggleControlsVisibility() {
-        if (!isLockedFlow.value) {
-            isControlsVisibleFlow.value = !isControlsVisibleFlow.value
-        }
+        _uiState.update { if (!it.isLocked) it.copy(isControlsVisible = !it.isControlsVisible) else it }
     }
 
     fun setControlsVisible(visible: Boolean) {
-        if (!isLockedFlow.value) {
-            isControlsVisibleFlow.value = visible
-        }
+        _uiState.update { if (!it.isLocked) it.copy(isControlsVisible = visible) else it }
     }
 
     fun toggleLock() {
-        val newLocked = !isLockedFlow.value
-        isLockedFlow.value = newLocked
-        if (newLocked) {
-            isControlsVisibleFlow.value = false
-        } else {
-            isControlsVisibleFlow.value = true
+        _uiState.update {
+            val newLocked = !it.isLocked
+            it.copy(isLocked = newLocked, isControlsVisible = !newLocked)
         }
     }
 
     fun cycleAspectRatio() {
-        val current = aspectRatioModeFlow.value
-        val next = when (current) {
-            AspectRatioMode.FIT -> AspectRatioMode.FILL
-            AspectRatioMode.FILL -> AspectRatioMode.ZOOM
-            AspectRatioMode.ZOOM -> AspectRatioMode.RATIO_16_9
-            AspectRatioMode.RATIO_16_9 -> AspectRatioMode.RATIO_4_3
-            AspectRatioMode.RATIO_4_3 -> AspectRatioMode.FIT
+        _uiState.update {
+            val next = when (it.aspectRatioMode) {
+                AspectRatioMode.FIT -> AspectRatioMode.FILL
+                AspectRatioMode.FILL -> AspectRatioMode.ZOOM
+                AspectRatioMode.ZOOM -> AspectRatioMode.RATIO_16_9
+                AspectRatioMode.RATIO_16_9 -> AspectRatioMode.RATIO_4_3
+                AspectRatioMode.RATIO_4_3 -> AspectRatioMode.FIT
+            }
+            it.copy(aspectRatioMode = next)
         }
-        aspectRatioModeFlow.value = next
     }
 
     fun cyclePlaybackSpeed() {
-        val current = playbackSpeedFlow.value
-        val next = when (current) {
-            0.5f -> 0.75f
-            0.75f -> 1.0f
-            1.0f -> 1.25f
-            1.25f -> 1.5f
-            1.5f -> 2.0f
-            else -> 0.5f
+        _uiState.update {
+            val next = when (it.playbackSpeed) {
+                0.5f -> 0.75f
+                0.75f -> 1.0f
+                1.0f -> 1.25f
+                1.25f -> 1.5f
+                1.5f -> 2.0f
+                else -> 0.5f
+            }
+            it.copy(playbackSpeed = next)
         }
-        playbackSpeedFlow.value = next
     }
 
     fun adjustVolume(deltaPercent: Float) {
-        setVolumePercent(volumePercentFlow.value + deltaPercent)
+        setVolumePercent(_uiState.value.volumePercent + deltaPercent)
     }
 
     fun setInitialVolumePercent(newVol: Float) {
@@ -447,90 +368,102 @@ class PlayerViewModel(
     }
 
     private fun setInitialVolumePercentInternal(newVol: Float) {
-        volumePercentFlow.value = newVol.coerceIn(0f, MAX_VOLUME_PERCENT)
+        _uiState.update { it.copy(volumePercent = newVol.coerceIn(0f, MAX_VOLUME_PERCENT)) }
     }
 
     fun setVolumePercent(newVol: Float) {
         val coerced = newVol.coerceIn(0f, MAX_VOLUME_PERCENT)
-        volumePercentFlow.value = coerced
         val coercedInt = coerced.roundToInt()
-        gestureFeedbackFlow.value = GestureFeedback(
-            type = FeedbackType.VOLUME,
-            valuePercent = coercedInt,
-            text = "Volume: $coercedInt%",
-        )
+        _uiState.update {
+            it.copy(
+                volumePercent = coerced,
+                gestureFeedback = GestureFeedback(
+                    type = FeedbackType.VOLUME,
+                    valuePercent = coercedInt,
+                    text = "Volume: $coercedInt%",
+                ),
+            )
+        }
     }
 
     fun adjustBrightness(deltaPercent: Float) {
-        val current = brightnessPercentFlow.value
+        val current = _uiState.value.brightnessPercent
         val baseline = if (current < 0f) 1.0f else current
         setBrightnessPercent(baseline + deltaPercent)
     }
 
     fun scaleBrightness(factor: Float) {
-        val current = brightnessPercentFlow.value
+        val current = _uiState.value.brightnessPercent
         val baseline = if (current < 0f) DEFAULT_BRIGHTNESS else current
         setBrightnessPercent(baseline * factor)
     }
 
     fun setBrightnessPercent(newBright: Float) {
         val coerced = newBright.coerceIn(MIN_BRIGHTNESS, MAX_BRIGHTNESS)
-        brightnessPercentFlow.value = coerced
         val pct = (coerced * 100).roundToInt()
-        gestureFeedbackFlow.value = GestureFeedback(
-            type = FeedbackType.BRIGHTNESS,
-            valuePercent = pct,
-            text = "Luminosité: $pct%",
-        )
+        _uiState.update {
+            it.copy(
+                brightnessPercent = coerced,
+                gestureFeedback = GestureFeedback(
+                    type = FeedbackType.BRIGHTNESS,
+                    valuePercent = pct,
+                    text = "Luminosité: $pct%",
+                ),
+            )
+        }
     }
 
     fun seekBy(deltaMs: Long) {
-        val newPos = (positionMsFlow.value + deltaMs).coerceIn(0L, durationMsFlow.value.coerceAtLeast(1L))
-        positionMsFlow.value = newPos
+        val state = _uiState.value
+        val newPos = (state.positionMs + deltaMs).coerceIn(0L, state.durationMs.coerceAtLeast(1L))
         val type = if (deltaMs >= 0) FeedbackType.SEEK_FORWARD else FeedbackType.SEEK_REWIND
         val text = if (deltaMs >= 0) "+10s" else "-10s"
-        gestureFeedbackFlow.value = GestureFeedback(
-            type = type,
-            text = text,
-        )
+        _uiState.update {
+            it.copy(
+                positionMs = newPos,
+                gestureFeedback = GestureFeedback(
+                    type = type,
+                    text = text,
+                ),
+            )
+        }
     }
 
     fun clearGestureFeedback() {
-        gestureFeedbackFlow.value = null
+        _uiState.update { it.copy(gestureFeedback = null) }
     }
 
     fun updateTracks(
         audio: List<AudioTrackUiState>,
         subtitles: List<SubtitleTrackUiState>,
     ) {
-        audioTracksFlow.value = audio
-        subtitleTracksFlow.value = subtitles
-
-        if (selectedAudioTrackIdFlow.value == null) {
-            val selected = audio.firstOrNull { it.isSelected }?.id
-            if (selected != null) {
-                selectedAudioTrackIdFlow.value = selected
-            }
-        }
-        if (selectedSubtitleTrackIdFlow.value == null) {
-            val selected = subtitles.firstOrNull { it.isSelected }?.id
-            if (selected != null) {
-                selectedSubtitleTrackIdFlow.value = selected
-            }
+        _uiState.update { state ->
+            val selectedAudio = state.selectedAudioTrackId ?: audio.firstOrNull { it.isSelected }?.id
+            val selectedSub = state.selectedSubtitleTrackId ?: subtitles.firstOrNull { it.isSelected }?.id
+            state.copy(
+                audioTracks = audio,
+                subtitleTracks = subtitles,
+                selectedAudioTrackId = selectedAudio,
+                selectedSubtitleTrackId = selectedSub,
+            )
         }
     }
 
     fun selectAudioTrack(id: String) {
-        selectedAudioTrackIdFlow.value = id
-        audioTracksFlow.value = audioTracksFlow.value.map {
-            it.copy(isSelected = it.id == id)
+        _uiState.update { state ->
+            state.copy(
+                selectedAudioTrackId = id,
+                audioTracks = state.audioTracks.map { it.copy(isSelected = it.id == id) },
+            )
         }
     }
 
     fun selectSubtitleTrack(id: String?) {
-        selectedSubtitleTrackIdFlow.value = id
-        subtitleTracksFlow.value = subtitleTracksFlow.value.map {
-            it.copy(isSelected = it.id == id)
+        _uiState.update { state ->
+            state.copy(
+                selectedSubtitleTrackId = id,
+                subtitleTracks = state.subtitleTracks.map { it.copy(isSelected = it.id == id) },
+            )
         }
     }
 
@@ -543,19 +476,23 @@ class PlayerViewModel(
             isExternal = true,
             uriString = uriString,
         )
-        val updated = subtitleTracksFlow.value.map { it.copy(isSelected = false) } + newTrack
-        subtitleTracksFlow.value = updated
-        selectedSubtitleTrackIdFlow.value = id
+        _uiState.update { state ->
+            val updated = state.subtitleTracks.map { it.copy(isSelected = false) } + newTrack
+            state.copy(
+                subtitleTracks = updated,
+                selectedSubtitleTrackId = id,
+            )
+        }
     }
 
     fun playNextVideo() {
-        val next = nextVideoFlow.value ?: return
+        val next = _uiState.value.nextVideo ?: return
         videoNameFlowOrLoad(next.name)
     }
 
     private fun videoNameFlowOrLoad(newName: String) {
         viewModelScope.launch {
-            isEndedFlow.value = false
+            _uiState.update { it.copy(isEnded = false) }
             val decodedName = decodeUri(newName)
             val allRaw = container.videoRepository.getRawVideos()
             val allGrouped = container.videoRepository.getGroupedVideos()
@@ -586,12 +523,14 @@ class PlayerViewModel(
                 0L
             }
 
-            initialPositionMsFlow.value = pos
-            positionMsFlow.value = pos
-            if (targetDur > 0L) {
-                durationMsFlow.value = targetDur
+            _uiState.update {
+                it.copy(
+                    initialPositionMs = pos,
+                    positionMs = pos,
+                    durationMs = if (targetDur > 0L) targetDur else it.durationMs,
+                    currentVideo = video,
+                )
             }
-            currentVideoFlow.value = video
 
             resolveNextVideo(video, allGrouped, allRaw)
         }
@@ -603,7 +542,6 @@ class PlayerViewModel(
     }
 
     companion object {
-        private const val STOP_TIMEOUT_MS = 5000L
         private const val WATCHED_THRESHOLD_RATIO = 0.90
         const val MAX_VOLUME_PERCENT: Float = 100f
         const val MIN_BRIGHTNESS: Float = 0.05f
@@ -612,6 +550,7 @@ class PlayerViewModel(
 
         fun factory(videoName: String, container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     return PlayerViewModel(videoName, container) as T
                 }
