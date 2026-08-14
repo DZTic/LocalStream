@@ -15,6 +15,7 @@ import com.localstream.app.data.repository.SettingsRepository
 import com.localstream.app.data.repository.TmdbRepository
 import com.localstream.app.data.repository.VideoRepository
 import com.localstream.app.data.repository.WatchStateRepository
+import okhttp3.ResponseBody
 import retrofit2.Response
 import com.localstream.app.data.scanner.MediaScanner
 import com.localstream.app.domain.model.MovieCollection
@@ -247,17 +248,19 @@ class LibraryViewModelTest {
     /** Sans clé API configurée, aucune méthode distante ne doit être appelée. */
     private class UnusedTmdbApi : TmdbApi {
         private fun unused(): Nothing = throw UnsupportedOperationException("appel réseau inattendu")
-        override suspend fun searchMulti(apiKey: String, query: String, language: String): TmdbSearchResponse = unused()
+        override suspend fun searchMulti(apiKey: String, query: String, language: String, overrideKey: String?): TmdbSearchResponse = unused()
         override suspend fun searchMovie(
             apiKey: String,
             query: String,
             language: String,
             primaryReleaseYear: Int?,
             year: Int?,
+            overrideKey: String?,
         ): TmdbSearchResponse = unused()
-        override suspend fun getMovieDetails(movieId: Long, apiKey: String, language: String): TmdbMovieDetailsDto = unused()
-        override suspend fun getCollection(collectionId: Long, apiKey: String, language: String): TmdbCollectionDetailsDto = unused()
-        override suspend fun getSeason(tvId: Long, seasonNumber: Int, apiKey: String, language: String): TmdbSeasonDetailsDto = unused()
-        override suspend fun getPopular(apiKey: String, language: String): Response<TmdbSearchResponse> = unused()
+        override suspend fun getMovieDetails(movieId: Long, apiKey: String, language: String, overrideKey: String?): TmdbMovieDetailsDto = unused()
+        override suspend fun getCollection(collectionId: Long, apiKey: String, language: String, overrideKey: String?): TmdbCollectionDetailsDto = unused()
+        override suspend fun getSeason(tvId: Long, seasonNumber: Int, apiKey: String, language: String, overrideKey: String?): TmdbSeasonDetailsDto = unused()
+        override suspend fun validateApiKey(overrideKey: String?): Response<ResponseBody> = unused()
+        override suspend fun getPopular(apiKey: String, language: String, overrideKey: String?): Response<TmdbSearchResponse> = unused()
     }
 }

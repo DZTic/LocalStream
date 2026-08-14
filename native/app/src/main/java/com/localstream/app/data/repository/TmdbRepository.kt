@@ -20,6 +20,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import retrofit2.HttpException
 
+import com.localstream.app.data.remote.tmdb.TmdbAuthInterceptor
+
 class TmdbAuthException(message: String = "Clé API TMDB invalide") : Exception(message)
 
 @Suppress(
@@ -31,7 +33,7 @@ class TmdbAuthException(message: String = "Clé API TMDB invalide") : Exception(
     "SwallowedException",
     "ReturnCount"
 )
-class TmdbRepository(
+open class TmdbRepository(
     private val tmdbApi: TmdbApi,
     private val tmdbMetadataDao: TmdbMetadataDao,
     private val settingsRepository: SettingsRepository,
@@ -51,19 +53,20 @@ class TmdbRepository(
         peakConcurrentRequests.set(0)
     }
 
-    suspend fun testApiKey(apiKeyOverride: String? = null): Result<Boolean> {
-        val apiKey = apiKeyOverride ?: settingsRepository.getTmdbApiKey()
-        if (apiKey.isBlank()) return Result.success(false)
+    open suspend fun testApiKey(apiKeyOverride: String? = null): Result<Boolean> {
+        val rawCandidate = apiKeyOverride ?: settingsRepository.getTmdbApiKey()
+        val apiKey = TmdbAuthInterceptor.cleanKey(rawCandidate)
+        if (apiKey.isBlank()) {
+            return Result.failure(IllegalArgumentException("Veuillez saisir une clé API TMDB"))
+        }
         return try {
-            val response = executeWithRetryAndThrottling {
-                tmdbApi.getPopular(apiKey)
-            }
+            val response = tmdbApi.validateApiKey(overrideKey = apiKey)
             if (response.isSuccessful) {
                 Result.success(true)
             } else if (response.code() == HTTP_UNAUTHORIZED) {
-                Result.failure(TmdbAuthException())
+                Result.failure(TmdbAuthException("Clé API TMDB invalide (erreur 401)"))
             } else {
-                Result.success(false)
+                Result.failure(IllegalStateException("Erreur HTTP ${response.code()} lors du test TMDB"))
             }
         } catch (e: TmdbAuthException) {
             Result.failure(e)

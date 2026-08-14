@@ -9,10 +9,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Subtitles
@@ -145,30 +148,56 @@ fun SettingsScreen(
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Button(
                             onClick = { viewModel.testTmdbApiKey(tmdbKeyInput) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Red600),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Red600,
+                                disabledContainerColor = Red600.copy(alpha = 0.5f),
+                                disabledContentColor = White,
+                            ),
                             shape = RoundedCornerShape(4.dp),
                             enabled = !uiState.isTestingTmdbKey,
                         ) {
                             if (uiState.isTestingTmdbKey) {
-                                CircularProgressIndicator(color = White, modifier = Modifier.height(16.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = White,
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Text("Test...", color = White)
+                                }
                             } else {
                                 Text(stringResource(R.string.settings_tmdb_test_key_button), color = White)
                             }
                         }
 
                         uiState.tmdbTestResult?.let { msg ->
-                            val isOk = msg.contains("valide")
-                            Text(
-                                text = msg,
-                                color = if (isOk) White else Red600,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                            )
+                            val isSuccess = uiState.tmdbTestSuccess == true
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.weight(1f, fill = false),
+                            ) {
+                                Icon(
+                                    imageVector = if (isSuccess) Icons.Filled.CheckCircle else Icons.Filled.Error,
+                                    contentDescription = null,
+                                    tint = if (isSuccess) White else Red600,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Text(
+                                    text = msg,
+                                    color = if (isSuccess) White else Red600,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
                         }
                     }
                 }
