@@ -13,6 +13,7 @@ import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import android.util.Rational
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -492,7 +493,7 @@ fun PlayerScreen(
                                 val targetPos = (dragStartSeekPos + seekOffset).coerceIn(0L, dur)
                                 pendingSeekTargetMs = targetPos
                                 viewModel.onPositionChanged(targetPos, dur)
-                                val now = System.currentTimeMillis()
+                                val now = SystemClock.elapsedRealtime()
                                 if (now - lastRealSeekAtMs >= DRAG_SEEK_THROTTLE_MS) {
                                     lastRealSeekAtMs = now
                                     exoPlayer.seekTo(targetPos)
