@@ -36,6 +36,7 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   combine:
@@ -79,3 +80,23 @@ jobs:
           fi
           
           python .github/scripts/combine_prs.py $ARGS
+
+      - name: Setup JDK 17
+        if: ${{ inputs.dry_run != true }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        if: ${{ inputs.dry_run != true }}
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        if: ${{ inputs.dry_run != true }}
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Exécuter les tests et l'analyse statique sur la PR consolidée
+        if: ${{ inputs.dry_run != true }}
+        working-directory: native
+        run: ./gradlew testDebugUnitTest detekt --no-daemon --stacktrace
