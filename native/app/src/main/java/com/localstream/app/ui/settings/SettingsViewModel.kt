@@ -8,6 +8,7 @@ import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.localstream.app.data.remote.tmdb.TmdbAuthInterceptor
 import com.localstream.app.di.AppContainer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,7 @@ data class SettingsUiState(
     val tmdbApiKey: String = "",
     val isTestingTmdbKey: Boolean = false,
     val tmdbTestResult: String? = null,
+    val tmdbTestSuccess: Boolean? = null,
     val osApiKey: String = "",
     val osUsername: String = "",
     val osPassword: String = "",
@@ -43,6 +45,7 @@ class SettingsViewModel(
 
     private val isTestingTmdbFlow = MutableStateFlow(false)
     private val tmdbTestResultFlow = MutableStateFlow<String?>(null)
+    private val tmdbTestSuccessFlow = MutableStateFlow<Boolean?>(null)
     private val isLoggingInOsFlow = MutableStateFlow(false)
     private val osLoginStatusFlow = MutableStateFlow("Non connecté")
     private val installedPlayersFlow = MutableStateFlow<List<ExternalPlayerInfo>>(emptyList())
@@ -53,6 +56,7 @@ class SettingsViewModel(
             container.settingsRepository.observeExternalPlayer,
             isTestingTmdbFlow,
             tmdbTestResultFlow,
+            tmdbTestSuccessFlow,
             isLoggingInOsFlow,
             osLoginStatusFlow,
             installedPlayersFlow,
@@ -62,9 +66,10 @@ class SettingsViewModel(
         val extPlayer = args[1] as String
         val testingTmdb = args[2] as Boolean
         val tmdbRes = args[3] as String?
-        val loggingOs = args[4] as Boolean
-        val osStatus = args[5] as String
-        val installed = args[6] as List<ExternalPlayerInfo>
+        val tmdbSuccess = args[4] as Boolean?
+        val loggingOs = args[5] as Boolean
+        val osStatus = args[6] as String
+        val installed = args[7] as List<ExternalPlayerInfo>
 
         val tmdbKey = container.settingsRepository.getTmdbApiKey()
         val osKey = container.settingsRepository.getOpenSubtitlesApiKey()
@@ -78,6 +83,7 @@ class SettingsViewModel(
             tmdbApiKey = tmdbKey,
             isTestingTmdbKey = testingTmdb,
             tmdbTestResult = tmdbRes,
+            tmdbTestSuccess = tmdbSuccess,
             osApiKey = osKey,
             osUsername = osUser,
             osPassword = osPass,
@@ -95,7 +101,8 @@ class SettingsViewModel(
 
     fun saveTmdbApiKey(key: String) {
         viewModelScope.launch {
-            container.settingsRepository.saveTmdbApiKey(key.trim())
+            val cleaned = TmdbAuthInterceptor.cleanKey(key)
+            container.settingsRepository.saveTmdbApiKey(cleaned)
         }
     }
 
@@ -103,11 +110,15 @@ class SettingsViewModel(
         viewModelScope.launch {
             isTestingTmdbFlow.value = true
             tmdbTestResultFlow.value = null
+            tmdbTestSuccessFlow.value = null
             val result = container.tmdbRepository.testApiKey(apiKeyOverride)
             if (result.isSuccess && result.getOrDefault(false)) {
                 tmdbTestResultFlow.value = "Clé API valide !"
+                tmdbTestSuccessFlow.value = true
             } else {
-                tmdbTestResultFlow.value = result.exceptionOrNull()?.message ?: "Clé API TMDB invalide"
+                val error = result.exceptionOrNull()?.message ?: "Clé API TMDB invalide"
+                tmdbTestResultFlow.value = error
+                tmdbTestSuccessFlow.value = false
             }
             isTestingTmdbFlow.value = false
         }

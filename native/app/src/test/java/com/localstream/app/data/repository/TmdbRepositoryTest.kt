@@ -23,6 +23,9 @@ import org.junit.Test
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
+import com.localstream.app.data.remote.tmdb.TmdbAuthInterceptor
+import okhttp3.OkHttpClient
+
 @Suppress("MaxLineLength", "TooManyFunctions", "LargeClass", "MagicNumber")
 class TmdbRepositoryTest {
 
@@ -39,15 +42,20 @@ class TmdbRepositoryTest {
         mockWebServer = MockWebServer()
         mockWebServer.start()
 
+        settingsRepository = FakeSettingsRepository("test_api_key")
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(TmdbAuthInterceptor { settingsRepository.getTmdbApiKey() })
+            .build()
+
         val contentType = "application/json".toMediaType()
         val retrofit = Retrofit.Builder()
             .baseUrl(mockWebServer.url("/"))
+            .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory(contentType))
             .build()
 
         tmdbApi = retrofit.create(TmdbApi::class.java)
         fakeDao = FakeTmdbMetadataDao()
-        settingsRepository = FakeSettingsRepository("test_api_key")
 
         repository = TmdbRepository(
             tmdbApi = tmdbApi,
@@ -426,6 +434,27 @@ class TmdbRepositoryTest {
         val invalidResult = repository.testApiKey("invalid_key")
         assertTrue(invalidResult.isFailure)
         assertTrue(invalidResult.exceptionOrNull() is TmdbAuthException)
+    }
+
+    @Test
+    fun testTestApiKeyWithV4BearerToken() = runTest {
+        val popularJson = """{"results": [{"id": 1, "title": "Popular Movie"}]}"""
+        mockWebServer.enqueue(jsonResponse(popularJson))
+
+        val v4Token = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxMjM0NTY3ODkwIiwic3ViIjoiMTIzNDU2Nzg5MCJ9.signature"
+        val result = repository.testApiKey("  Bearer $v4Token  ")
+        assertTrue(result.isSuccess)
+        assertTrue(result.getOrNull() == true)
+
+        val recorded = mockWebServer.takeRequest()
+        assertEquals("Bearer $v4Token", recorded.getHeader("Authorization"))
+    }
+
+    @Test
+    fun testTestApiKeyWithBlankKeyReturnsFailure() = runTest {
+        val result = repository.testApiKey("   ")
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
     }
 }
 

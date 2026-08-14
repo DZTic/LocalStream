@@ -8,6 +8,7 @@ import com.localstream.app.data.local.UserPreferencesDataStore
 import com.localstream.app.data.remote.opensubtitles.OpenSubtitlesApi
 import com.localstream.app.data.remote.opensubtitles.OpenSubtitlesInterceptor
 import com.localstream.app.data.remote.tmdb.TmdbApi
+import com.localstream.app.data.remote.tmdb.TmdbAuthInterceptor
 import com.localstream.app.data.repository.OpenSubtitlesRepository
 import com.localstream.app.data.repository.PlaylistRepository
 import com.localstream.app.data.repository.SettingsRepository
@@ -60,12 +61,17 @@ open class AppContainer(
     }
 
     private val tmdbApi: TmdbApi by lazy {
-        if (appContext == null) NoOpTmdbApi() else Retrofit.Builder()
-            .baseUrl(TmdbApi.BASE_URL)
-            .client(okHttpClient)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
-            .create(TmdbApi::class.java)
+        if (appContext == null) NoOpTmdbApi() else {
+            val client = okHttpClient.newBuilder()
+                .addInterceptor(TmdbAuthInterceptor { settingsRepository.getTmdbApiKey() })
+                .build()
+            Retrofit.Builder()
+                .baseUrl(TmdbApi.BASE_URL)
+                .client(client)
+                .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+                .build()
+                .create(TmdbApi::class.java)
+        }
     }
 
     private val openSubtitlesApi: OpenSubtitlesApi by lazy {
