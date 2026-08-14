@@ -60,9 +60,7 @@ open class TmdbRepository(
             return Result.failure(IllegalArgumentException("Veuillez saisir une clé API TMDB"))
         }
         return try {
-            val response = executeWithRetryAndThrottling {
-                tmdbApi.getPopular(overrideKey = apiKey)
-            }
+            val response = tmdbApi.getPopular(overrideKey = apiKey)
             if (response.isSuccessful) {
                 Result.success(true)
             } else if (response.code() == HTTP_UNAUTHORIZED) {
