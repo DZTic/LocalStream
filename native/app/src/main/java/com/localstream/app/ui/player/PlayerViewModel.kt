@@ -117,20 +117,19 @@ class PlayerViewModel(
 
     private val savePositionChannel = Channel<SavePositionRequest>(Channel.CONFLATED)
 
-    @OptIn(FlowPreview::class)
-    private val positionSaveJob = viewModelScope.launch {
-        savePositionChannel.receiveAsFlow()
-            .debounce(2000L)
-            .collect { req ->
-                container.watchStateRepository.savePlaybackState(
-                    videoName = req.videoName,
-                    positionMs = req.positionMs,
-                    durationMs = req.durationMs,
-                )
-            }
-    }
-
     init {
+        @OptIn(FlowPreview::class)
+        viewModelScope.launch {
+            savePositionChannel.receiveAsFlow()
+                .debounce(2000L)
+                .collect { req ->
+                    container.watchStateRepository.savePlaybackState(
+                        videoName = req.videoName,
+                        positionMs = req.positionMs,
+                        durationMs = req.durationMs,
+                    )
+                }
+        }
         loadVideoDetails()
     }
 
