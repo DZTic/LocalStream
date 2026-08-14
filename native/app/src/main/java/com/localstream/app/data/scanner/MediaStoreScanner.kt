@@ -1,7 +1,10 @@
 package com.localstream.app.data.scanner
 
+import android.content.ContentResolver
 import android.content.Context
 import android.database.Cursor
+import android.os.Build
+import android.os.Bundle
 import android.provider.MediaStore
 import com.localstream.app.domain.TitleCleaner
 import com.localstream.app.domain.VideoGrouper
@@ -65,17 +68,10 @@ class MediaStoreScanner(
         pageSize: Int,
         offset: Int,
     ): Pair<List<VideoItem>, Int> {
-        val sortOrder = "${MediaStore.Video.Media.DATE_MODIFIED} DESC LIMIT $pageSize OFFSET $offset"
         val batch = mutableListOf<VideoItem>()
         var rowsInBatch = 0
 
-        val cursor = resolver.query(
-            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-            projection,
-            null,
-            null,
-            sortOrder,
-        )
+        val cursor = queryVideoPage(resolver, projection, pageSize, offset)
 
         cursor?.use { c ->
             val indices = VideoCursorIndices(
@@ -94,6 +90,46 @@ class MediaStoreScanner(
         }
 
         return Pair(batch, rowsInBatch)
+    }
+
+    /**
+     * Requête paginée (tri + LIMIT/OFFSET) sur MediaStore.
+     *
+     * Depuis Android 10/11, `MediaProvider` valide strictement la grammaire SQL du
+     * paramètre `sortOrder` et rejette tout token comme `LIMIT`/`OFFSET` injecté
+     * manuellement dans la chaîne (`IllegalArgumentException: Invalid token LIMIT`).
+     * À partir de l'API 30, on utilise donc l'API `Bundle` (`QUERY_ARG_LIMIT` /
+     * `QUERY_ARG_OFFSET`), seule méthode officiellement supportée pour paginer une
+     * requête MediaStore. En dessous de l'API 30, la pagination native n'est pas
+     * fiable : on trie sans LIMIT et on charge tout en un seul appel (l'appelant
+     * détecte la fin via `rowCount < pageSize`, donc `hasMore` repasse à `false`
+     * après ce premier lot).
+     */
+    private fun queryVideoPage(
+        resolver: android.content.ContentResolver,
+        projection: Array<String>,
+        pageSize: Int,
+        offset: Int,
+    ): Cursor? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val queryArgs = Bundle().apply {
+                putStringArray(
+                    ContentResolver.QUERY_ARG_SORT_COLUMNS,
+                    arrayOf(MediaStore.Video.Media.DATE_MODIFIED),
+                )
+                putInt(
+                    ContentResolver.QUERY_ARG_SORT_DIRECTION,
+                    ContentResolver.QUERY_SORT_DIRECTION_DESCENDING,
+                )
+                putInt(ContentResolver.QUERY_ARG_LIMIT, pageSize)
+                putInt(ContentResolver.QUERY_ARG_OFFSET, offset)
+            }
+            resolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, queryArgs, null)
+        } else {
+            if (offset > 0) return null
+            val sortOrder = "${MediaStore.Video.Media.DATE_MODIFIED} DESC"
+            resolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, null, null, sortOrder)
+        }
     }
 
     private fun parseVideoFromCursor(c: Cursor, idx: VideoCursorIndices): VideoItem? {
