@@ -4,7 +4,6 @@ import android.app.Application
 import android.util.Log
 import com.localstream.app.di.AppContainer
 import com.yausername.youtubedl_android.YoutubeDL
-import com.yausername.youtubedl_android.YoutubeDLException
 
 /**
  * Application de l'app native : héberge le [AppContainer] (injection manuelle).
@@ -16,11 +15,12 @@ class LocalStreamApplication : Application() {
     lateinit var container: AppContainer
         private set
 
+    @Suppress("TooGenericExceptionCaught")
     override fun onCreate() {
         super.onCreate()
         try {
             YoutubeDL.getInstance().init(this)
-        } catch (error: YoutubeDLException) {
+        } catch (error: Throwable) {
             Log.e("LocalStream", "Impossible d'initialiser yt-dlp", error)
         }
         container = AppContainer(this)

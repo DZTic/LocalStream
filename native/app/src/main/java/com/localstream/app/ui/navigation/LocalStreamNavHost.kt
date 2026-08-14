@@ -27,6 +27,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.localstream.app.LocalStreamApplication
+import com.localstream.app.di.AppContainer
 import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.components.LocalStreamBottomBar
 import com.localstream.app.ui.components.YouTubeUrlDialog
@@ -52,7 +53,8 @@ import com.localstream.app.ui.theme.Black
 @Composable
 fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
     val context = LocalContext.current
-    val container = (context.applicationContext as LocalStreamApplication).container
+    val container = (context.applicationContext as? LocalStreamApplication)?.container
+        ?: remember { AppContainer(context.applicationContext) }
 
     // ViewModels partagés (scope activité) : bibliothèque + dérivation accueil.
     val libraryViewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.factory(container))
