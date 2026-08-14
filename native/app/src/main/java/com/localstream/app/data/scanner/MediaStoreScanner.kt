@@ -160,7 +160,7 @@ class MediaStoreScanner(
         val dirsToScan = customDirectories.ifEmpty { defaultDirsToScan() }
         return dirsToScan.filter { it.isDirectory }.flatMap { dir ->
             dir.walkTopDown().maxDepth(MAX_SCAN_DEPTH)
-                .filter { it.isFile && VideoNameParser.VIDEO_EXT_REGEX.containsMatchIn(it.name) }
+                .filter { it.isFile && it.extension.lowercase() in VIDEO_EXTENSIONS }
                 .map { file ->
                     val seriesInfo = VideoNameParser.parseSeriesInfo(file.name, file.absolutePath)
                     val extractedYear = TitleCleaner.extractYear(file.name)
@@ -184,7 +184,7 @@ class MediaStoreScanner(
         val dirsToScan = customDirectories.ifEmpty { defaultDirsToScan() }
         return dirsToScan.filter { it.isDirectory }.flatMap { dir ->
             dir.walkTopDown().maxDepth(MAX_SCAN_DEPTH)
-                .filter { it.isFile && VideoNameParser.SUBTITLE_EXT_REGEX.containsMatchIn(it.name) }
+                .filter { it.isFile && it.extension.lowercase() in SUBTITLE_EXTENSIONS }
                 .map { file ->
                     val folder = VideoNameParser.parentFolder(file.absolutePath)
                     SubtitleEntry(
@@ -205,6 +205,8 @@ class MediaStoreScanner(
 
     private companion object {
         private const val MAX_SCAN_DEPTH = 5
+        private val VIDEO_EXTENSIONS = setOf("mp4", "mkv", "webm", "avi", "mov")
+        private val SUBTITLE_EXTENSIONS = setOf("srt", "vtt", "ass", "ssa")
     }
 }
 

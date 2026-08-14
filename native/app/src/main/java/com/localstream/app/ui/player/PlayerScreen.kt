@@ -88,6 +88,7 @@ import com.localstream.app.ui.theme.White
 import com.localstream.app.ui.theme.Zinc900
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -283,6 +284,17 @@ fun PlayerScreen(
                 viewModel.onPlayingStateChanged(isPlaying)
             }
 
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                val dur = exoPlayer.duration.coerceAtLeast(0L)
+                if (dur > 0L) {
+                    viewModel.onPositionChanged(exoPlayer.currentPosition.coerceAtLeast(0L), dur)
+                }
+            }
+
             override fun onTracksChanged(tracks: Tracks) {
                 val audioList = mutableListOf<AudioTrackUiState>()
                 val subList = mutableListOf<SubtitleTrackUiState>()
@@ -334,17 +346,8 @@ fun PlayerScreen(
 
         val selAudioId = uiState.selectedAudioTrackId
         if (selAudioId != null) {
-            for (group in tracks.groups) {
-                if (group.type == C.TRACK_TYPE_AUDIO) {
-                    for (i in 0 until group.length) {
-                        val format = group.getTrackFormat(i)
-                        val id = format.id ?: "${group.type}-$i"
-                        if (id == selAudioId) {
-                            builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, i))
-                            break
-                        }
-                    }
-                }
+            findTrackOverride(tracks, C.TRACK_TYPE_AUDIO, selAudioId)?.let {
+                builder.setOverrideForType(it)
             }
         }
 
@@ -353,17 +356,8 @@ fun PlayerScreen(
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
         } else {
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            for (group in tracks.groups) {
-                if (group.type == C.TRACK_TYPE_TEXT) {
-                    for (i in 0 until group.length) {
-                        val format = group.getTrackFormat(i)
-                        val id = format.id ?: "${group.type}-$i"
-                        if (id == selSubId) {
-                            builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, i))
-                            break
-                        }
-                    }
-                }
+            findTrackOverride(tracks, C.TRACK_TYPE_TEXT, selSubId)?.let {
+                builder.setOverrideForType(it)
             }
         }
 
@@ -423,15 +417,15 @@ fun PlayerScreen(
         exoPlayer.playWhenReady = true
     }
 
-    LaunchedEffect(exoPlayer) {
-        while (true) {
-            if (isPlayerReady) {
+    LaunchedEffect(exoPlayer, isPlayerReady, uiState.isPlaying) {
+        if (isPlayerReady && uiState.isPlaying) {
+            while (isActive) {
                 viewModel.onPositionChanged(
                     positionMs = exoPlayer.currentPosition.coerceAtLeast(0L),
                     durationMs = exoPlayer.duration.coerceAtLeast(0L),
                 )
+                delay(250L)
             }
-            delay(500L)
         }
     }
 
@@ -753,4 +747,18 @@ private fun getScreenBrightness(activity: Activity?): Float {
         }
     }
     return 0.5f
+}
+
+private fun findTrackOverride(tracks: Tracks, trackType: @C.TrackType Int, targetId: String): TrackSelectionOverride? {
+    for (group in tracks.groups) {
+        if (group.type != trackType) continue
+        for (i in 0 until group.length) {
+            val format = group.getTrackFormat(i)
+            val id = format.id ?: "$trackType-$i"
+            if (id == targetId) {
+                return TrackSelectionOverride(group.mediaTrackGroup, i)
+            }
+        }
+    }
+    return null
 }

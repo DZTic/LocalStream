@@ -15,6 +15,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,20 @@ fun BottomPlayerBar(
 
     val displayPos = if (isSeeking) seekPositionMs else positionMs
 
+    val timeLabel by remember(displayPos, durationMs) {
+        derivedStateOf { "${formatTimeMs(displayPos)} / ${formatTimeMs(durationMs)}" }
+    }
+
+    val sliderValue by remember(displayPos, durationMs) {
+        derivedStateOf {
+            if (durationMs > 0L) {
+                displayPos.coerceIn(0L, durationMs).toFloat()
+            } else {
+                0f
+            }
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -67,7 +82,7 @@ fun BottomPlayerBar(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "${formatTimeMs(displayPos)} / ${formatTimeMs(durationMs)}",
+                text = timeLabel,
                 color = White,
                 fontSize = 12.sp,
             )
