@@ -58,11 +58,17 @@ class TmdbAuthInterceptor(
 
         fun cleanKey(key: String?): String {
             if (key == null) return ""
-            return key.trim()
-                .removePrefix("Bearer ")
-                .removePrefix("bearer ")
-                .removePrefix("BEARER ")
-                .trim()
+            var cleaned = key.trim()
+            if (cleaned.startsWith("bearer ", ignoreCase = true)) {
+                cleaned = cleaned.substring(7).trim()
+            } else if (cleaned.startsWith("bearer", ignoreCase = true)) {
+                cleaned = cleaned.substring(6).trim()
+            }
+            return cleaned
+                .replace("\n", "")
+                .replace("\r", "")
+                .replace(" ", "")
+                .replace("\t", "")
         }
 
         fun isV4Token(key: String): Boolean {

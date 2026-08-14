@@ -123,6 +123,7 @@ class SettingsViewModelTest {
         override suspend fun getMovieDetails(movieId: Long, apiKey: String, language: String, overrideKey: String?): com.localstream.app.data.remote.tmdb.dto.TmdbMovieDetailsDto = unused()
         override suspend fun getCollection(collectionId: Long, apiKey: String, language: String, overrideKey: String?): com.localstream.app.data.remote.tmdb.dto.TmdbCollectionDetailsDto = unused()
         override suspend fun getSeason(tvId: Long, seasonNumber: Int, apiKey: String, language: String, overrideKey: String?): com.localstream.app.data.remote.tmdb.dto.TmdbSeasonDetailsDto = unused()
+        override suspend fun validateApiKey(overrideKey: String?): Response<ResponseBody> = unused()
         override suspend fun getPopular(apiKey: String, language: String, overrideKey: String?): Response<com.localstream.app.data.remote.tmdb.dto.TmdbSearchResponse> = unused()
     }
 

@@ -277,6 +277,7 @@ class DetailsViewModelTest {
         override suspend fun getMovieDetails(movieId: Long, apiKey: String, language: String, overrideKey: String?): TmdbMovieDetailsDto = unused()
         override suspend fun getCollection(collectionId: Long, apiKey: String, language: String, overrideKey: String?): TmdbCollectionDetailsDto = unused()
         override suspend fun getSeason(tvId: Long, seasonNumber: Int, apiKey: String, language: String, overrideKey: String?): TmdbSeasonDetailsDto = unused()
+        override suspend fun validateApiKey(overrideKey: String?): Response<ResponseBody> = unused()
         override suspend fun getPopular(apiKey: String, language: String, overrideKey: String?): Response<TmdbSearchResponse> = unused()
     }
 

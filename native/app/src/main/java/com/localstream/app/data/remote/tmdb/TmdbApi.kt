@@ -4,6 +4,7 @@ import com.localstream.app.data.remote.tmdb.dto.TmdbCollectionDetailsDto
 import com.localstream.app.data.remote.tmdb.dto.TmdbMovieDetailsDto
 import com.localstream.app.data.remote.tmdb.dto.TmdbSearchResponse
 import com.localstream.app.data.remote.tmdb.dto.TmdbSeasonDetailsDto
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Header
@@ -54,6 +55,11 @@ interface TmdbApi {
         @Query("language") language: String = DEFAULT_LANGUAGE,
         @Header(TmdbAuthInterceptor.HEADER_OVERRIDE_KEY) overrideKey: String? = null,
     ): TmdbSeasonDetailsDto
+
+    @GET("authentication")
+    suspend fun validateApiKey(
+        @Header(TmdbAuthInterceptor.HEADER_OVERRIDE_KEY) overrideKey: String? = null,
+    ): Response<ResponseBody>
 
     @GET("movie/popular")
     suspend fun getPopular(

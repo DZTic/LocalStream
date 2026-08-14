@@ -111,16 +111,22 @@ class SettingsViewModel(
             isTestingTmdbFlow.value = true
             tmdbTestResultFlow.value = null
             tmdbTestSuccessFlow.value = null
-            val result = container.tmdbRepository.testApiKey(apiKeyOverride)
-            if (result.isSuccess && result.getOrDefault(false)) {
-                tmdbTestResultFlow.value = "Clé API valide !"
-                tmdbTestSuccessFlow.value = true
-            } else {
-                val error = result.exceptionOrNull()?.message ?: "Clé API TMDB invalide"
-                tmdbTestResultFlow.value = error
+            try {
+                val result = container.tmdbRepository.testApiKey(apiKeyOverride)
+                if (result.isSuccess && result.getOrDefault(false)) {
+                    tmdbTestResultFlow.value = "Clé API valide !"
+                    tmdbTestSuccessFlow.value = true
+                } else {
+                    val error = result.exceptionOrNull()?.message ?: "Clé API TMDB invalide"
+                    tmdbTestResultFlow.value = error
+                    tmdbTestSuccessFlow.value = false
+                }
+            } catch (e: Exception) {
+                tmdbTestResultFlow.value = e.message ?: "Erreur inattendue"
                 tmdbTestSuccessFlow.value = false
+            } finally {
+                isTestingTmdbFlow.value = false
             }
-            isTestingTmdbFlow.value = false
         }
     }
 
