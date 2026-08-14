@@ -172,7 +172,10 @@ fun PlayerScreen(
             val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             if (maxVol > 0) {
                 val targetVol = ((uiState.volumePercent / 100f) * maxVol).roundToInt().coerceIn(0, maxVol)
-                am.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+                val curVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                if (curVol != targetVol) {
+                    am.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+                }
             }
         }
     }
