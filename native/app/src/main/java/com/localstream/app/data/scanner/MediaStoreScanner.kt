@@ -20,6 +20,13 @@ class MediaStoreScanner(
 ) : MediaScanner {
 
     override fun scanVideoFiles(): List<VideoItem> {
+        return scanVideoFilesPaged(pageSize = DEFAULT_PAGE_SIZE)
+    }
+
+    fun scanVideoFilesPaged(
+        pageSize: Int = DEFAULT_PAGE_SIZE,
+        onBatchScanned: ((List<VideoItem>) -> Unit)? = null,
+    ): List<VideoItem> {
         val resolver = context?.contentResolver ?: return scanVideoFilesFromFileSystem()
         val videos = mutableListOf<VideoItem>()
 
@@ -30,15 +37,44 @@ class MediaStoreScanner(
             MediaStore.Video.Media.SIZE,
             MediaStore.Video.Media.DURATION,
             MediaStore.Video.Media.DATE_MODIFIED,
-            MediaStore.Video.Media.MIME_TYPE
+            MediaStore.Video.Media.MIME_TYPE,
         )
+
+        var offset = 0
+        var hasMore = true
+
+        while (hasMore) {
+            val (batch, rowCount) = fetchVideoBatch(resolver, projection, pageSize, offset)
+            if (batch.isNotEmpty()) {
+                videos.addAll(batch)
+                onBatchScanned?.invoke(batch)
+            }
+            if (rowCount < pageSize || rowCount == 0) {
+                hasMore = false
+            } else {
+                offset += pageSize
+            }
+        }
+
+        return if (videos.isNotEmpty()) videos else scanVideoFilesFromFileSystem()
+    }
+
+    private fun fetchVideoBatch(
+        resolver: android.content.ContentResolver,
+        projection: Array<String>,
+        pageSize: Int,
+        offset: Int,
+    ): Pair<List<VideoItem>, Int> {
+        val sortOrder = "${MediaStore.Video.Media.DATE_MODIFIED} DESC LIMIT $pageSize OFFSET $offset"
+        val batch = mutableListOf<VideoItem>()
+        var rowsInBatch = 0
 
         val cursor = resolver.query(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
             projection,
             null,
             null,
-            "${MediaStore.Video.Media.DATE_MODIFIED} DESC"
+            sortOrder,
         )
 
         cursor?.use { c ->
@@ -49,14 +85,15 @@ class MediaStoreScanner(
                 size = c.getColumnIndex(MediaStore.Video.Media.SIZE),
                 dur = c.getColumnIndex(MediaStore.Video.Media.DURATION),
                 date = c.getColumnIndex(MediaStore.Video.Media.DATE_MODIFIED),
-                mime = c.getColumnIndex(MediaStore.Video.Media.MIME_TYPE)
+                mime = c.getColumnIndex(MediaStore.Video.Media.MIME_TYPE),
             )
             while (c.moveToNext()) {
-                parseVideoFromCursor(c, indices)?.let { videos.add(it) }
+                rowsInBatch++
+                parseVideoFromCursor(c, indices)?.let { batch.add(it) }
             }
         }
 
-        return if (videos.isNotEmpty()) videos else scanVideoFilesFromFileSystem()
+        return Pair(batch, rowsInBatch)
     }
 
     private fun parseVideoFromCursor(c: Cursor, idx: VideoCursorIndices): VideoItem? {
@@ -203,7 +240,8 @@ class MediaStoreScanner(
         }
     }
 
-    private companion object {
+    companion object {
+        const val DEFAULT_PAGE_SIZE = 100
         private const val MAX_SCAN_DEPTH = 5
         private val VIDEO_EXTENSIONS = setOf("mp4", "mkv", "webm", "avi", "mov")
         private val SUBTITLE_EXTENSIONS = setOf("srt", "vtt", "ass", "ssa")
