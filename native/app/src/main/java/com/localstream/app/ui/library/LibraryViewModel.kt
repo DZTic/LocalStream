@@ -81,6 +81,7 @@ class LibraryViewModel(
     private val tmdbRepository: TmdbRepository,
     private val settingsRepository: SettingsRepository,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val metadataChunkSize: Int = DEFAULT_METADATA_CHUNK_SIZE,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LibraryUiState())
@@ -187,7 +188,7 @@ class LibraryViewModel(
 
     /** Récupère les métadonnées par paquets et publie chaque paquet dès réception. */
     private suspend fun fetchMetadataIntoState(videos: List<VideoItem>) {
-        for (chunk in videos.chunked(METADATA_CHUNK_SIZE)) {
+        for (chunk in videos.chunked(metadataChunkSize)) {
             val results = coroutineScope {
                 chunk.map { video ->
                     async(ioDispatcher) {
@@ -308,7 +309,9 @@ class LibraryViewModel(
     }
 
     companion object {
-        private const val METADATA_CHUNK_SIZE = 8
+        const val DEFAULT_METADATA_CHUNK_SIZE = 8
+        const val WIFI_METADATA_CHUNK_SIZE = 16
+        const val MOBILE_METADATA_CHUNK_SIZE = 4
         private const val SEARCH_DEBOUNCE_MS = 250L
 
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {
