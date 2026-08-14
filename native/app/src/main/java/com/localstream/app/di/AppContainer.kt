@@ -84,7 +84,7 @@ open class AppContainer(
 
     open val settingsRepository: SettingsRepository by lazy {
         overrideSettingsRepository ?: SettingsRepository(
-            encryptedPrefs = appContext?.let { EncryptedPreferencesManager(it) },
+            encryptedPrefs = appContext?.let { ctx -> runCatching { EncryptedPreferencesManager(ctx) }.getOrNull() },
             dataStore = appContext?.let { UserPreferencesDataStore(it) },
         )
     }
