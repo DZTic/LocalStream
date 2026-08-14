@@ -75,4 +75,16 @@ class MediaStoreScannerTest {
         assertTrue(dark != null)
         assertEquals(2, dark?.episodes?.size)
     }
+
+    @Test
+    fun scanVideoFilesPaged_returnsAllVideosWithCallback() {
+        File(tempDir, "Vid1.mkv").createNewFile()
+        File(tempDir, "Vid2.mp4").createNewFile()
+        val scanner = MediaStoreScanner(context = null, customDirectories = listOf(tempDir))
+        var batchCalls = 0
+        val result = scanner.scanVideoFilesPaged(pageSize = 1) {
+            batchCalls++
+        }
+        assertEquals(2, result.size)
+    }
 }
