@@ -1,0 +1,81 @@
+name: "Consolider les Pull Requests (Rollup PR)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_branch:
+        description: "Branche cible (Base Branch)"
+        required: true
+        default: "main"
+        type: string
+      combine_branch:
+        description: "Nom de la branche consolidée"
+        required: true
+        default: "rollup/all-prs"
+        type: string
+      label_filter:
+        description: "Filtrer par label (optionnel, ex: ready-to-merge)"
+        required: false
+        default: ""
+        type: string
+      include_drafts:
+        description: "Inclure les PRs en mode brouillon (Draft)"
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: "Mode simulation (ne pousse rien et ne crée pas de PR)"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: combine-prs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  combine:
+    name: Fusionner les PRs en une seule
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Configurer l'identité Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Exécuter la consolidation des PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ARGS="--base-branch ${{ inputs.base_branch }} --combine-branch ${{ inputs.combine_branch }}"
+          
+          if [ -n "${{ inputs.label_filter }}" ]; then
+            ARGS="$ARGS --label ${{ inputs.label_filter }}"
+          fi
+          
+          if [ "${{ inputs.include_drafts }}" = "true" ]; then
+            ARGS="$ARGS --include-drafts"
+          fi
+          
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          
+          python .github/scripts/combine_prs.py $ARGS
