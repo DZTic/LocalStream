@@ -88,6 +88,7 @@ import com.localstream.app.ui.theme.White
 import com.localstream.app.ui.theme.Zinc900
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -283,6 +284,17 @@ fun PlayerScreen(
                 viewModel.onPlayingStateChanged(isPlaying)
             }
 
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                val dur = exoPlayer.duration.coerceAtLeast(0L)
+                if (dur > 0L) {
+                    viewModel.onPositionChanged(exoPlayer.currentPosition.coerceAtLeast(0L), dur)
+                }
+            }
+
             override fun onTracksChanged(tracks: Tracks) {
                 val audioList = mutableListOf<AudioTrackUiState>()
                 val subList = mutableListOf<SubtitleTrackUiState>()
@@ -423,15 +435,15 @@ fun PlayerScreen(
         exoPlayer.playWhenReady = true
     }
 
-    LaunchedEffect(exoPlayer) {
-        while (true) {
-            if (isPlayerReady) {
+    LaunchedEffect(exoPlayer, isPlayerReady, uiState.isPlaying) {
+        if (isPlayerReady && uiState.isPlaying) {
+            while (isActive) {
                 viewModel.onPositionChanged(
                     positionMs = exoPlayer.currentPosition.coerceAtLeast(0L),
                     durationMs = exoPlayer.duration.coerceAtLeast(0L),
                 )
+                delay(250L)
             }
-            delay(500L)
         }
     }
 
