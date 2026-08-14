@@ -121,9 +121,6 @@ class SettingsViewModel(
                     tmdbTestResultFlow.value = error
                     tmdbTestSuccessFlow.value = false
                 }
-            } catch (e: Exception) {
-                tmdbTestResultFlow.value = e.message ?: "Erreur inattendue"
-                tmdbTestSuccessFlow.value = false
             } finally {
                 isTestingTmdbFlow.value = false
             }

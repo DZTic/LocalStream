@@ -21,6 +21,7 @@ interface TmdbApi {
         @Header(TmdbAuthInterceptor.HEADER_OVERRIDE_KEY) overrideKey: String? = null,
     ): TmdbSearchResponse
 
+    @Suppress("LongParameterList")
     @GET("search/movie")
     suspend fun searchMovie(
         @Query("api_key") apiKey: String = "",
