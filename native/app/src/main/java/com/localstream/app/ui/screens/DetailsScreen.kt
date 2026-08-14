@@ -25,12 +25,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -63,9 +63,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.localstream.app.LocalStreamApplication
+import com.localstream.app.domain.model.TmdbMetadata
 import com.localstream.app.domain.Formatters
 import com.localstream.app.domain.TitleCleaner
+import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.components.PlaylistBottomSheet
+import com.localstream.app.ui.details.DetailsUiState
 import com.localstream.app.ui.details.DetailsViewModel
 import com.localstream.app.ui.details.EpisodeUiState
 import com.localstream.app.ui.subtitles.SubtitlePickerSheet
@@ -80,8 +83,7 @@ import com.localstream.app.ui.theme.Zinc900
 
 private val WatchedGreen = Color(0xFF16A34A)
 
-@OptIn(ExperimentalLayoutApi::class)
-@Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
+@Suppress("FunctionNaming", "LongMethod")
 @Composable
 fun DetailsScreen(
     id: String,
@@ -105,7 +107,6 @@ fun DetailsScreen(
 
     var showPlaylistSheet by remember { mutableStateOf(false) }
     var showSubtitleSheet by remember { mutableStateOf(false) }
-    var isSynopsisExpanded by remember { mutableStateOf(false) }
 
     val videoGroup = uiState.videoGroup
     val meta = uiState.metadata
@@ -145,296 +146,53 @@ fun DetailsScreen(
     ) {
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             item {
-                // Header section with backdrop image & gradients
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp),
-                ) {
-                    val imageUrl = meta?.backdropUrl() ?: meta?.posterUrl()
-                    if (imageUrl != null) {
-                        AsyncImage(
-                            model = imageUrl,
-                            contentDescription = cleanTitle,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize().background(Zinc800))
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Black),
-                                ),
-                            ),
-                    )
-
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier
-                            .statusBarsPadding()
-                            .padding(12.dp)
-                            .align(Alignment.TopStart),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = White)
-                    }
-                }
+                DetailsBackdropHeader(
+                    meta = meta,
+                    cleanTitle = cleanTitle,
+                    onBack = onBack,
+                )
             }
 
             item {
-                // Title and badges
                 Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        val badgeText by remember(videoGroup?.isTvSeries, videoGroup?.isSeriesGroup) {
-                            derivedStateOf {
-                                when {
-                                    videoGroup?.isTvSeries == true -> "SÉRIE ORIGINALE"
-                                    videoGroup?.isSeriesGroup == true -> "SAGA / COLLECTION"
-                                    else -> "FILM"
-                                }
-                            }
-                        }
-                        Text(
-                            text = badgeText,
-                            color = Red600,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        meta?.releaseDate?.take(4)?.let { year ->
-                            Text(text = "• $year", color = Zinc300, style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = cleanTitle,
-                        color = White,
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Black,
+                    DetailsTitleAndBadges(
+                        videoGroup = videoGroup,
+                        meta = meta,
+                        cleanTitle = cleanTitle,
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Action buttons
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        val playVideoTarget = uiState.activeEpisodeName ?: videoGroup?.name ?: id
-                        val playLabel by remember(
-                            videoGroup?.isSeriesGroup,
-                            videoGroup?.isTvSeries,
-                            uiState.activeEpisodeLabel,
-                            uiState.activeEpisodeNumber,
-                            uiState.watchPositionMs,
-                        ) {
-                            derivedStateOf {
-                                when {
-                                    videoGroup?.isSeriesGroup == true || videoGroup?.isTvSeries == true -> {
-                                        val epLabel = uiState.activeEpisodeLabel ?: "Ép. ${uiState.activeEpisodeNumber ?: 1}"
-                                        if (uiState.watchPositionMs > 0L) {
-                                            "REPRENDRE $epLabel (${Formatters.formatDuration(uiState.watchPositionMs / 1000L)})"
-                                        } else {
-                                            "LECTURE $epLabel"
-                                        }
-                                    }
-                                    uiState.watchPositionMs > 0L -> {
-                                        "REPRENDRE À ${Formatters.formatDuration(uiState.watchPositionMs / 1000L)}"
-                                    }
-                                    else -> {
-                                        "LECTURE"
-                                    }
-                                }
-                            }
-                        }
-                        Button(
-                            onClick = { onPlayVideo(playVideoTarget) },
-                            colors = ButtonDefaults.buttonColors(containerColor = White, contentColor = Color.Black),
-                            shape = RoundedCornerShape(4.dp),
-                        ) {
-                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                            Text(text = playLabel, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
-                        }
-
-                        Button(
-                            onClick = detailsViewModel::toggleGroupWatched,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (uiState.isWatched) Red600 else Zinc800,
-                                contentColor = White,
-                            ),
-                            shape = RoundedCornerShape(4.dp),
-                        ) {
-                            Icon(Icons.Filled.Check, contentDescription = null)
-                            Text(
-                                text = if (uiState.isWatched) "VU" else "MARQUER VU",
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(start = 4.dp),
-                            )
-                        }
-
-                        Button(
-                            onClick = { showPlaylistSheet = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = Zinc800, contentColor = White),
-                            shape = RoundedCornerShape(4.dp),
-                        ) {
-                            Icon(Icons.Filled.PlaylistAdd, contentDescription = null)
-                            Text(text = "MA LISTE", modifier = Modifier.padding(start = 4.dp))
-                        }
-
-                        IconButton(
-                            onClick = detailsViewModel::refreshTmdbMetadata,
-                            enabled = !uiState.isLoadingTmdb,
-                        ) {
-                            Icon(
-                                Icons.Filled.Refresh,
-                                contentDescription = "Recharger TMDB",
-                                tint = if (uiState.isLoadingTmdb) Zinc500 else White,
-                            )
-                        }
-
-                        IconButton(onClick = { showSubtitleSheet = true }) {
-                            Icon(Icons.Filled.ClosedCaption, contentDescription = "Sous-titres", tint = White)
-                        }
-                    }
-
-                    // Loading indicator while refreshing TMDB
-                    if (uiState.isLoadingTmdb) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = Red600,
-                        )
-                    }
-
-                    // Success feedback after refresh
-                    if (uiState.refreshSuccess) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Métadonnées actualisées",
-                            color = Color(0xFF4CAF50),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-
-                    // Error message if refresh failed
-                    uiState.tmdbError?.let { error ->
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = error,
-                            color = Red600,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Synopsis
-                    meta?.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                        Column(modifier = Modifier.clickable { isSynopsisExpanded = !isSynopsisExpanded }) {
-                            Text(
-                                text = overview,
-                                color = Zinc300,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = if (isSynopsisExpanded) Int.MAX_VALUE else 3,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = if (isSynopsisExpanded) "RÉDUIRE" else "LIRE LA SUITE",
-                                color = Red600,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
+                    DetailsActionButtons(
+                        uiState = uiState,
+                        videoGroup = videoGroup,
+                        id = id,
+                        onPlayVideo = onPlayVideo,
+                        onToggleWatched = detailsViewModel::toggleGroupWatched,
+                        onShowPlaylistSheet = { showPlaylistSheet = true },
+                        onRefreshTmdb = detailsViewModel::refreshTmdbMetadata,
+                        onShowSubtitleSheet = { showSubtitleSheet = true },
+                    )
 
-                    // Tech metadata chips
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        videoGroup?.let { item ->
-                            val res = Formatters.getResolution(item.name)
-                            if (res.isNotBlank()) {
-                                Text(
-                                    text = res,
-                                    color = White,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier
-                                        .background(Red600, RoundedCornerShape(2.dp))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
-                            val ext = item.name.substringAfterLast('.', "").uppercase()
-                            if (ext.isNotBlank() && ext != item.name.uppercase()) {
-                                Text(
-                                    text = ext,
-                                    color = White,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier
-                                        .background(Zinc800, RoundedCornerShape(2.dp))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
-                            if (item.size > 0L) {
-                                Text(
-                                    text = Formatters.formatSize(item.size),
-                                    color = Zinc300,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier
-                                        .background(Zinc800, RoundedCornerShape(2.dp))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
-                        }
-                    }
+                    DetailsRefreshStatus(uiState = uiState)
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    DetailsSynopsisSection(overview = meta?.overview)
+
+                    DetailsTechMetadataChips(videoGroup = videoGroup)
 
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
 
-            // Episodes Section if Series
             if (uiState.episodes.isNotEmpty()) {
                 item {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        Text(
-                            text = "ÉPISODES",
-                            color = White,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Seasons bar if multiple
-                        if (uiState.availableSeasons.size > 1) {
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.padding(bottom = 12.dp),
-                            ) {
-                                items(uiState.availableSeasons) { seasonNum ->
-                                    FilterChip(
-                                        selected = uiState.selectedSeason == seasonNum,
-                                        onClick = { detailsViewModel.selectSeason(seasonNum) },
-                                        label = { Text("Saison $seasonNum") },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = Red600,
-                                            selectedLabelColor = White,
-                                            containerColor = Zinc800,
-                                            labelColor = White,
-                                        ),
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    DetailsEpisodesHeader(
+                        availableSeasons = uiState.availableSeasons,
+                        selectedSeason = uiState.selectedSeason,
+                        onSelectSeason = detailsViewModel::selectSeason,
+                    )
                 }
 
                 itemsIndexed(uiState.episodes, key = { _, ep -> ep.video.name }) { index, ep ->
@@ -446,6 +204,321 @@ fun DetailsScreen(
                         onToggleWatched = { detailsViewModel.toggleEpisodeWatched(ep.video.name) },
                         onToggleExpanded = { detailsViewModel.toggleEpisodeExpanded(ep.video.name) },
                         onResetProgress = { detailsViewModel.resetProgress(ep.video.name) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailsBackdropHeader(
+    meta: TmdbMetadata?,
+    cleanTitle: String,
+    onBack: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(300.dp),
+    ) {
+        val imageUrl = meta?.backdropUrl() ?: meta?.posterUrl()
+        if (imageUrl != null) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = cleanTitle,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize().background(Zinc800))
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Black),
+                    ),
+                ),
+        )
+
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .statusBarsPadding()
+                .padding(12.dp)
+                .align(Alignment.TopStart),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = White)
+        }
+    }
+}
+
+@Composable
+private fun DetailsTitleAndBadges(
+    videoGroup: VideoItem?,
+    meta: TmdbMetadata?,
+    cleanTitle: String,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        val badgeText by remember(videoGroup?.isTvSeries, videoGroup?.isSeriesGroup) {
+            derivedStateOf {
+                when {
+                    videoGroup?.isTvSeries == true -> "SÉRIE ORIGINALE"
+                    videoGroup?.isSeriesGroup == true -> "SAGA / COLLECTION"
+                    else -> "FILM"
+                }
+            }
+        }
+        Text(
+            text = badgeText,
+            color = Red600,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        meta?.releaseDate?.take(4)?.let { year ->
+            Text(text = "• $year", color = Zinc300, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        text = cleanTitle,
+        color = White,
+        style = MaterialTheme.typography.headlineLarge,
+        fontWeight = FontWeight.Black,
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Suppress("LongParameterList")
+@Composable
+private fun DetailsActionButtons(
+    uiState: DetailsUiState,
+    videoGroup: VideoItem?,
+    id: String,
+    onPlayVideo: (String) -> Unit,
+    onToggleWatched: () -> Unit,
+    onShowPlaylistSheet: () -> Unit,
+    onRefreshTmdb: () -> Unit,
+    onShowSubtitleSheet: () -> Unit,
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        val playVideoTarget = uiState.activeEpisodeName ?: videoGroup?.name ?: id
+        val playLabel by remember(
+            videoGroup?.isSeriesGroup,
+            videoGroup?.isTvSeries,
+            uiState.activeEpisodeLabel,
+            uiState.activeEpisodeNumber,
+            uiState.watchPositionMs,
+        ) {
+            derivedStateOf {
+                when {
+                    videoGroup?.isSeriesGroup == true || videoGroup?.isTvSeries == true -> {
+                        val epLabel = uiState.activeEpisodeLabel ?: "Ép. ${uiState.activeEpisodeNumber ?: 1}"
+                        if (uiState.watchPositionMs > 0L) {
+                            "REPRENDRE $epLabel (${Formatters.formatDuration(uiState.watchPositionMs / 1000L)})"
+                        } else {
+                            "LECTURE $epLabel"
+                        }
+                    }
+                    uiState.watchPositionMs > 0L -> {
+                        "REPRENDRE À ${Formatters.formatDuration(uiState.watchPositionMs / 1000L)}"
+                    }
+                    else -> {
+                        "LECTURE"
+                    }
+                }
+            }
+        }
+        Button(
+            onClick = { onPlayVideo(playVideoTarget) },
+            colors = ButtonDefaults.buttonColors(containerColor = White, contentColor = Color.Black),
+            shape = RoundedCornerShape(4.dp),
+        ) {
+            Icon(Icons.Filled.PlayArrow, contentDescription = null)
+            Text(text = playLabel, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
+        }
+
+        Button(
+            onClick = onToggleWatched,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (uiState.isWatched) Red600 else Zinc800,
+                contentColor = White,
+            ),
+            shape = RoundedCornerShape(4.dp),
+        ) {
+            Icon(Icons.Filled.Check, contentDescription = null)
+            Text(
+                text = if (uiState.isWatched) "VU" else "MARQUER VU",
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+
+        Button(
+            onClick = onShowPlaylistSheet,
+            colors = ButtonDefaults.buttonColors(containerColor = Zinc800, contentColor = White),
+            shape = RoundedCornerShape(4.dp),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null)
+            Text(text = "MA LISTE", modifier = Modifier.padding(start = 4.dp))
+        }
+
+        IconButton(
+            onClick = onRefreshTmdb,
+            enabled = !uiState.isLoadingTmdb,
+        ) {
+            Icon(
+                Icons.Filled.Refresh,
+                contentDescription = "Recharger TMDB",
+                tint = if (uiState.isLoadingTmdb) Zinc500 else White,
+            )
+        }
+
+        IconButton(onClick = onShowSubtitleSheet) {
+            Icon(Icons.Filled.ClosedCaption, contentDescription = "Sous-titres", tint = White)
+        }
+    }
+}
+
+@Composable
+private fun DetailsRefreshStatus(uiState: DetailsUiState) {
+    if (uiState.isLoadingTmdb) {
+        Spacer(modifier = Modifier.height(8.dp))
+        LinearProgressIndicator(
+            modifier = Modifier.fillMaxWidth(),
+            color = Red600,
+        )
+    }
+
+    if (uiState.refreshSuccess) {
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Métadonnées actualisées",
+            color = Color(0xFF4CAF50),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+
+    uiState.tmdbError?.let { error ->
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = error,
+            color = Red600,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+@Composable
+private fun DetailsSynopsisSection(overview: String?) {
+    var isSynopsisExpanded by remember { mutableStateOf(false) }
+    overview?.takeIf { it.isNotBlank() }?.let { text ->
+        Column(modifier = Modifier.clickable { isSynopsisExpanded = !isSynopsisExpanded }) {
+            Text(
+                text = text,
+                color = Zinc300,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = if (isSynopsisExpanded) Int.MAX_VALUE else 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = if (isSynopsisExpanded) "RÉDUIRE" else "LIRE LA SUITE",
+                color = Red600,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DetailsTechMetadataChips(videoGroup: VideoItem?) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        videoGroup?.let { item ->
+            val res = Formatters.getResolution(item.name)
+            if (res.isNotBlank()) {
+                Text(
+                    text = res,
+                    color = White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .background(Red600, RoundedCornerShape(2.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+            val ext = item.name.substringAfterLast('.', "").uppercase()
+            if (ext.isNotBlank() && ext != item.name.uppercase()) {
+                Text(
+                    text = ext,
+                    color = White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .background(Zinc800, RoundedCornerShape(2.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+            if (item.size > 0L) {
+                Text(
+                    text = Formatters.formatSize(item.size),
+                    color = Zinc300,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .background(Zinc800, RoundedCornerShape(2.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailsEpisodesHeader(
+    availableSeasons: List<Int>,
+    selectedSeason: Int,
+    onSelectSeason: (Int) -> Unit,
+) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Text(
+            text = "ÉPISODES",
+            color = White,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (availableSeasons.size > 1) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 12.dp),
+            ) {
+                items(availableSeasons) { seasonNum ->
+                    FilterChip(
+                        selected = selectedSeason == seasonNum,
+                        onClick = { onSelectSeason(seasonNum) },
+                        label = { Text("Saison $seasonNum") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Red600,
+                            selectedLabelColor = White,
+                            containerColor = Zinc800,
+                            labelColor = White,
+                        ),
                     )
                 }
             }
@@ -483,7 +556,6 @@ private fun EpisodeItemRow(
                     .fillMaxWidth()
                     .height(56.dp),
             ) {
-                // Episode thumbnail
                 Box(
                     modifier = Modifier
                         .size(width = 100.dp, height = 56.dp)
