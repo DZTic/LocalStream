@@ -38,9 +38,11 @@ import com.localstream.app.domain.model.MovieCollection
 import com.localstream.app.domain.model.SubtitleEntry
 import com.localstream.app.domain.model.VideoItem
 import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.Json
+import okhttp3.Cache
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.ResponseBody
@@ -72,7 +74,16 @@ open class AppContainer(
         appContext?.let { AppDatabase.getInstance(it) }
     }
 
-    private val okHttpClient: OkHttpClient by lazy { OkHttpClient.Builder().build() }
+    private val okHttpClient: OkHttpClient by lazy {
+        val builder = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+
+        appContext?.cacheDir?.let { cacheDir ->
+            builder.cache(Cache(File(cacheDir, "http_cache"), 50L * 1024 * 1024))
+        }
+        builder.build()
+    }
 
     private val tmdbApi: TmdbApi by lazy {
         if (appContext == null) NoOpTmdbApi() else Retrofit.Builder()
