@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.screens
+package com.localstream.app.ui.screens
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -44,6 +44,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -108,8 +109,10 @@ fun DetailsScreen(
 
     val videoGroup = uiState.videoGroup
     val meta = uiState.metadata
-    val cleanTitle = remember(videoGroup?.name) {
-        TitleCleaner.getCleanTitle(videoGroup?.seriesName ?: videoGroup?.name ?: id)
+    val cleanTitle by remember(videoGroup?.name, videoGroup?.seriesName, id) {
+        derivedStateOf {
+            TitleCleaner.getCleanTitle(videoGroup?.seriesName ?: videoGroup?.name ?: id)
+        }
     }
 
     if (showPlaylistSheet && videoGroup != null) {
@@ -189,10 +192,14 @@ fun DetailsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        val badgeText = when {
-                            videoGroup?.isTvSeries == true -> "SÉRIE ORIGINALE"
-                            videoGroup?.isSeriesGroup == true -> "SAGA / COLLECTION"
-                            else -> "FILM"
+                        val badgeText by remember(videoGroup?.isTvSeries, videoGroup?.isSeriesGroup) {
+                            derivedStateOf {
+                                when {
+                                    videoGroup?.isTvSeries == true -> "SÉRIE ORIGINALE"
+                                    videoGroup?.isSeriesGroup == true -> "SAGA / COLLECTION"
+                                    else -> "FILM"
+                                }
+                            }
                         }
                         Text(
                             text = badgeText,
@@ -221,20 +228,30 @@ fun DetailsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         val playVideoTarget = uiState.activeEpisodeName ?: videoGroup?.name ?: id
-                        val playLabel = when {
-                            videoGroup?.isSeriesGroup == true || videoGroup?.isTvSeries == true -> {
-                                val epLabel = uiState.activeEpisodeLabel ?: "Ép. ${uiState.activeEpisodeNumber ?: 1}"
-                                if (uiState.watchPositionMs > 0L) {
-                                    "REPRENDRE $epLabel (${Formatters.formatDuration(uiState.watchPositionMs / 1000L)})"
-                                } else {
-                                    "LECTURE $epLabel"
+                        val playLabel by remember(
+                            videoGroup?.isSeriesGroup,
+                            videoGroup?.isTvSeries,
+                            uiState.activeEpisodeLabel,
+                            uiState.activeEpisodeNumber,
+                            uiState.watchPositionMs,
+                        ) {
+                            derivedStateOf {
+                                when {
+                                    videoGroup?.isSeriesGroup == true || videoGroup?.isTvSeries == true -> {
+                                        val epLabel = uiState.activeEpisodeLabel ?: "Ép. ${uiState.activeEpisodeNumber ?: 1}"
+                                        if (uiState.watchPositionMs > 0L) {
+                                            "REPRENDRE $epLabel (${Formatters.formatDuration(uiState.watchPositionMs / 1000L)})"
+                                        } else {
+                                            "LECTURE $epLabel"
+                                        }
+                                    }
+                                    uiState.watchPositionMs > 0L -> {
+                                        "REPRENDRE À ${Formatters.formatDuration(uiState.watchPositionMs / 1000L)}"
+                                    }
+                                    else -> {
+                                        "LECTURE"
+                                    }
                                 }
-                            }
-                            uiState.watchPositionMs > 0L -> {
-                                "REPRENDRE À ${Formatters.formatDuration(uiState.watchPositionMs / 1000L)}"
-                            }
-                            else -> {
-                                "LECTURE"
                             }
                         }
                         Button(
