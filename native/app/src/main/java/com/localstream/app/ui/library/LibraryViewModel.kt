@@ -74,7 +74,7 @@ data class LibraryUiState(
  * (Phase 3), l'enrichissement TMDB (Phase 5) et observe l'état de visionnage
  * (Phase 4). Partagé entre les écrans via le scope de l'activité.
  */
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList")
 class LibraryViewModel(
     private val videoRepository: VideoRepository,
     private val watchStateRepository: WatchStateRepository,
