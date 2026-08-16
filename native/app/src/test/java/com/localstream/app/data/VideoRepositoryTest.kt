@@ -53,6 +53,30 @@ class VideoRepositoryTest {
         val emptyRepo = VideoRepository(FakeMediaScanner(emptyList()))
         assertEquals(0, emptyRepo.scanAndLoad().size)
     }
+
+    @Test
+    fun scanAndLoad_callsScanVideoFilesOnlyOnce() {
+        var scanCount = 0
+        val countingScanner = object : MediaScanner {
+            override fun scanVideoFiles(): List<VideoItem> {
+                scanCount++
+                return listOf(VideoItem(url = "file://test.mp4", name = "Test.mp4"))
+            }
+            override fun scanSubtitleFiles() = emptyList<SubtitleEntry>()
+            override fun scanAndGroup(
+                whitelistedVideos: Set<String>,
+                movieCollections: Map<String, MovieCollection>,
+                releaseDates: Map<String, String>,
+                rawVideos: List<VideoItem>?,
+            ): List<VideoItem> {
+                val list = rawVideos ?: scanVideoFiles()
+                return list
+            }
+        }
+        val repo = VideoRepository(countingScanner)
+        repo.scanAndLoad()
+        assertEquals(1, scanCount)
+    }
 }
 
 private class FakeMediaScanner(private val videos: List<VideoItem>) : MediaScanner {
@@ -62,8 +86,9 @@ private class FakeMediaScanner(private val videos: List<VideoItem>) : MediaScann
         whitelistedVideos: Set<String>,
         movieCollections: Map<String, MovieCollection>,
         releaseDates: Map<String, String>,
+        rawVideos: List<VideoItem>?,
     ): List<VideoItem> {
-        // Regroupement minimal pour les tests (utilise le VideoGrouper r\u00e9el)
-        return com.localstream.app.domain.VideoGrouper.groupVideos(videos, movieCollections, releaseDates, whitelistedVideos)
+        // Regroupement minimal pour les tests (utilise le VideoGrouper réel)
+        return com.localstream.app.domain.VideoGrouper.groupVideos(rawVideos ?: videos, movieCollections, releaseDates, whitelistedVideos)
     }
 }

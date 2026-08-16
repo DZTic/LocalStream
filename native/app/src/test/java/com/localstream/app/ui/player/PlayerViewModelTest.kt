@@ -447,6 +447,7 @@ class PlayerViewModelTest {
             whitelistedVideos: Set<String>,
             movieCollections: Map<String, MovieCollection>,
             releaseDates: Map<String, String>,
+            rawVideos: List<VideoItem>?,
         ): List<VideoItem> = grouped
     }
 

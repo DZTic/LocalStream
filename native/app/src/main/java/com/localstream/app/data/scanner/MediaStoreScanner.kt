@@ -172,7 +172,10 @@ class MediaStoreScanner(
             MediaStore.Files.FileColumns.DISPLAY_NAME
         )
 
-        val selection = "${MediaStore.Files.FileColumns.DATA} LIKE '%.srt' OR ${MediaStore.Files.FileColumns.DATA} LIKE '%.vtt'"
+        val selection = "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.srt' OR " +
+            "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.vtt' OR " +
+            "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.ass' OR " +
+            "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.ssa'"
 
         val cursor = resolver.query(
             MediaStore.Files.getContentUri("external"),
@@ -205,13 +208,14 @@ class MediaStoreScanner(
     override fun scanAndGroup(
         whitelistedVideos: Set<String>,
         movieCollections: Map<String, MovieCollection>,
-        releaseDates: Map<String, String>
+        releaseDates: Map<String, String>,
+        rawVideos: List<VideoItem>?,
     ): List<VideoItem> {
-        val rawVideos = scanVideoFiles()
+        val videos = rawVideos ?: scanVideoFiles()
         val subtitles = scanSubtitleFiles()
         val subIndex = VideoNameParser.buildSubtitleIndex(subtitles)
 
-        val videosWithSubtitles = rawVideos.map { video ->
+        val videosWithSubtitles = videos.map { video ->
             val folder = VideoNameParser.parentFolder(video.path)
             val matchedSub = VideoNameParser.matchSubtitle(subIndex, video.name, folder)
             if (matchedSub != null) {
