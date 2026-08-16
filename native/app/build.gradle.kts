@@ -18,6 +18,25 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        create("release") {
+            val releaseStoreFilePath = System.getenv("RELEASE_KEYSTORE_PATH")
+                ?: System.getenv("KEYSTORE_PATH")
+                ?: "${rootDir}/release.keystore"
+            val releaseStoreFile = file(releaseStoreFilePath)
+
+            if (releaseStoreFile.exists()) {
+                storeFile = releaseStoreFile
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: System.getenv("KEY_PASSWORD")
+            } else {
+                // Fallback vers le debug keystore si aucune clé release n'est fournie (permet le build local)
+                storeFile = file("${rootDir}/debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
     }
 
     defaultConfig {
@@ -35,6 +54,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -51,9 +71,18 @@ android {
         jvmTarget = "17"
     }
 
+    sourceSets {
+        getByName("androidTest").assets.srcDirs("$projectDir/schemas")
+        getByName("test").assets.srcDirs("$projectDir/schemas")
+    }
+
     buildFeatures {
         compose = true
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 detekt {
