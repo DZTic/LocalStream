@@ -23,6 +23,8 @@ object VideoFilterSorter {
         }
     }
 
+    private val HD_OR_4K_REGEX = Regex("1080p|720p|2160p|4k", RegexOption.IGNORE_CASE)
+
     private fun filterByResolution(videos: List<VideoItem>, opts: FilterSortOptions): List<VideoItem> {
         if (opts.filterResolution == ResolutionFilter.ALL) return videos
         return videos.filter { v ->
@@ -33,7 +35,7 @@ object VideoFilterSorter {
                 ResolutionFilter.TWO_K -> n.contains("1440p")
                 ResolutionFilter.ONE_THOUSAND_EIGHTY_P -> n.contains("1080p")
                 ResolutionFilter.SEVEN_HUNDRED_TWENTY_P -> n.contains("720p")
-                ResolutionFilter.SD -> !Regex("1080p|720p|2160p|4k", RegexOption.IGNORE_CASE).containsMatchIn(n)
+                ResolutionFilter.SD -> !HD_OR_4K_REGEX.containsMatchIn(n)
                 ResolutionFilter.ALL -> true
             }
         }
