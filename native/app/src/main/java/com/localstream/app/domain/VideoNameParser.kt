@@ -14,12 +14,16 @@ object VideoNameParser {
 
     val SEASON_EPISODE_REGEX = Regex("[sS](\\d+)(\\s*)[eE](\\d+)|(\\d+)(\\s*)x(\\d+)")
     private val SEASON_FOLDER_REGEX = Regex("Saison\\s*(\\d+)|Season\\s*(\\d+)|S(\\d+)", RegexOption.IGNORE_CASE)
+    private val EXTENSION_DOT_WORD_REGEX = Regex("\\.\\w+$")
+    private val SERIES_SEPARATORS_REGEX = Regex("[\\.\\-_/\\\\\\[\\]\\(\\)]")
+    private val SERIES_TRAILING_DASH_SPACE_REGEX = Regex("[\\s\\-]+$")
+    private val LEADING_DIGITS_REGEX = Regex("^(\\d+)")
 
     fun videoBaseName(fileName: String): String =
-        fileName.replace(Regex("\\.\\w+$"), "").lowercase()
+        fileName.replace(EXTENSION_DOT_WORD_REGEX, "").lowercase()
 
     fun subtitleBaseName(fileName: String): String =
-        fileName.replace(Regex("\\.\\w+$"), "").replace(LANG_SUFFIX_REGEX, "").lowercase()
+        fileName.replace(EXTENSION_DOT_WORD_REGEX, "").replace(LANG_SUFFIX_REGEX, "").lowercase()
 
     fun parentFolder(relativePath: String): String {
         val normalized = relativePath.replace('\\', '/').trimEnd('/')
@@ -34,9 +38,9 @@ object VideoNameParser {
             val sStr = if (groupValues[1].isNotEmpty()) groupValues[1] else groupValues[4]
             val eStr = if (groupValues[3].isNotEmpty()) groupValues[3] else groupValues[6]
             var seriesName = fileName.substring(0, match.range.first)
-                .replace(Regex("[\\.\\-_/\\\\\\[\\]\\(\\)]"), " ")
+                .replace(SERIES_SEPARATORS_REGEX, " ")
                 .trim()
-                .replace(Regex("[\\s\\-]+$"), "")
+                .replace(SERIES_TRAILING_DASH_SPACE_REGEX, "")
             if (seriesName.isEmpty()) seriesName = "Série Inconnue"
             return SeriesInfo(seriesName = seriesName, season = sStr.toIntOrNull(), episode = eStr.toIntOrNull())
         }
@@ -53,7 +57,7 @@ object VideoNameParser {
                     sMatch.groupValues[2].ifEmpty { sMatch.groupValues[3] }
                 }
                 val seriesName = if (pathParts.size >= 3) pathParts[pathParts.size - 3] else "Série Inconnue"
-                val epMatch = Regex("^(\\d+)").find(fileName)
+                val epMatch = LEADING_DIGITS_REGEX.find(fileName)
                 return SeriesInfo(
                     seriesName = seriesName,
                     season = sVal.toIntOrNull(),
