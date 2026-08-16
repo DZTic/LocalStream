@@ -42,7 +42,8 @@ class HistoryViewModel(
         container.settingsRepository.observeForceAvailable,
     ) { watchedSet: Set<String>, playbackMap: Map<String, PlaybackStateEntity>, diskVideos: List<VideoItem>, forceSet: Set<String> ->
         val allNames = (watchedSet + playbackMap.keys).distinct()
-        val diskVideoNames = diskVideos.map { it.name }.toSet()
+        val diskVideoMap = diskVideos.associateBy { it.name }
+        val diskVideoNames = diskVideoMap.keys
 
         val historyItems = allNames.map { name ->
             val pb = playbackMap[name]
@@ -51,7 +52,7 @@ class HistoryViewModel(
             val isForceAvailable = forceSet.contains(name)
             val effectiveAvailable = isDiskAvailable || isForceAvailable
 
-            val diskVideo = diskVideos.find { it.name == name }
+            val diskVideo = diskVideoMap[name]
             val durationMs = (diskVideo?.duration ?: 0L) * 1000L
             val positionMs = pb?.positionMs ?: 0L
             val progressPercent = if (durationMs > 0L) {
