@@ -15,6 +15,9 @@ interface TmdbMetadataDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMetadata(entity: TmdbMetadataEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMetadataList(entities: List<TmdbMetadataEntity>)
+
     @Query("DELETE FROM tmdb_metadata WHERE query_key = :queryKey")
     suspend fun deleteMetadata(queryKey: String)
 

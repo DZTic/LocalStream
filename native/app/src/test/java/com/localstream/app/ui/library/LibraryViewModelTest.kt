@@ -224,6 +224,9 @@ class LibraryViewModelTest {
         override suspend fun deleteByName(name: String) {
             items.value = items.value.filterNot { it.name == name }
         }
+        override suspend fun deleteByNames(names: List<String>) {
+            items.value = items.value.filterNot { it.name in names }
+        }
         override suspend fun deleteAll() {
             items.value = emptyList()
         }
@@ -255,6 +258,9 @@ class LibraryViewModelTest {
         override suspend fun getMetadata(queryKey: String): TmdbMetadataEntity? = items[queryKey]
         override suspend fun insertMetadata(entity: TmdbMetadataEntity) {
             items[entity.queryKey] = entity
+        }
+        override suspend fun insertMetadataList(entities: List<TmdbMetadataEntity>) {
+            entities.forEach { items[it.queryKey] = it }
         }
         override suspend fun deleteMetadata(queryKey: String) {
             items.remove(queryKey)

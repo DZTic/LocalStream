@@ -460,6 +460,11 @@ class PlayerViewModelTest {
             flow.value = map.values.toList()
         }
 
+        override suspend fun deleteByNames(names: List<String>) {
+            names.forEach { map.remove(it) }
+            flow.value = map.values.toList()
+        }
+
         override suspend fun deleteAll() {
             map.clear()
             flow.value = emptyList()

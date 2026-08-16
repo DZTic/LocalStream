@@ -167,6 +167,7 @@ private class FakeWatchedItemDao : WatchedItemDao {
     override suspend fun upsert(item: WatchedItemEntity) { store[item.name] = item }
     override suspend fun upsertAll(items: List<WatchedItemEntity>) { items.forEach { store[it.name] = it } }
     override suspend fun deleteByName(name: String) { store.remove(name) }
+    override suspend fun deleteByNames(names: List<String>) { names.forEach { store.remove(it) } }
     override suspend fun deleteAll() { store.clear() }
     override suspend fun findByName(name: String) = store[name]
 }
@@ -187,7 +188,12 @@ private class FakePlaylistDao : PlaylistDao {
     val playlists = mutableMapOf<String, PlaylistEntity>()
     val items = mutableListOf<PlaylistItemEntity>()
     override fun observePlaylists(): Flow<List<PlaylistEntity>> = flow { emit(playlists.values.toList()) }
+    override fun observePlaylistsWithItems(): Flow<List<com.localstream.app.data.db.entity.PlaylistWithItems>> = flow {
+        emit(playlists.values.map { p -> com.localstream.app.data.db.entity.PlaylistWithItems(p, items.filter { it.playlistId == p.id }) })
+    }
     override suspend fun getAllPlaylists() = playlists.values.toList()
+    override suspend fun getPlaylistsWithItems(): List<com.localstream.app.data.db.entity.PlaylistWithItems> =
+        playlists.values.map { p -> com.localstream.app.data.db.entity.PlaylistWithItems(p, items.filter { it.playlistId == p.id }) }
     override suspend fun upsertPlaylist(playlist: PlaylistEntity) { playlists[playlist.id] = playlist }
     override suspend fun upsertPlaylists(playlists: List<PlaylistEntity>) { playlists.forEach { this.playlists[it.id] = it } }
     override suspend fun deletePlaylist(id: String) { playlists.remove(id); items.removeAll { it.playlistId == id } }

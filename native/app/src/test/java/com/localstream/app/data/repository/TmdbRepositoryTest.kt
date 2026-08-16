@@ -474,6 +474,10 @@ class FakeTmdbMetadataDao : TmdbMetadataDao {
         map[entity.queryKey] = entity
     }
 
+    override suspend fun insertMetadataList(entities: List<TmdbMetadataEntity>) {
+        entities.forEach { map[it.queryKey] = it }
+    }
+
     override suspend fun deleteMetadata(queryKey: String) {
         map.remove(queryKey)
     }

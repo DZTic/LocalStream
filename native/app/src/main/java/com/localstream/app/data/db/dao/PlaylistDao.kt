@@ -9,6 +9,8 @@ import com.localstream.app.data.db.entity.PlaylistEntity
 import com.localstream.app.data.db.entity.PlaylistItemEntity
 import kotlinx.coroutines.flow.Flow
 
+import com.localstream.app.data.db.entity.PlaylistWithItems
+
 @Dao
 @Suppress("TooManyFunctions")
 interface PlaylistDao {
@@ -18,8 +20,16 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlist ORDER BY created_at ASC")
     fun observePlaylists(): Flow<List<PlaylistEntity>>
 
+    @Transaction
+    @Query("SELECT * FROM playlist ORDER BY created_at ASC")
+    fun observePlaylistsWithItems(): Flow<List<PlaylistWithItems>>
+
     @Query("SELECT * FROM playlist ORDER BY created_at ASC")
     suspend fun getAllPlaylists(): List<PlaylistEntity>
+
+    @Transaction
+    @Query("SELECT * FROM playlist ORDER BY created_at ASC")
+    suspend fun getPlaylistsWithItems(): List<PlaylistWithItems>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertPlaylist(playlist: PlaylistEntity)

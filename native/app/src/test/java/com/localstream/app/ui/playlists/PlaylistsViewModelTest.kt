@@ -25,6 +25,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -106,7 +107,13 @@ class PlaylistsViewModelTest {
         private val items = mutableListOf<PlaylistItemEntity>()
 
         override fun observePlaylists(): Flow<List<PlaylistEntity>> = playlists
+        override fun observePlaylistsWithItems(): Flow<List<com.localstream.app.data.db.entity.PlaylistWithItems>> =
+            playlists.map { list ->
+                list.map { p -> com.localstream.app.data.db.entity.PlaylistWithItems(p, items.filter { it.playlistId == p.id }) }
+            }
         override suspend fun getAllPlaylists(): List<PlaylistEntity> = playlists.value
+        override suspend fun getPlaylistsWithItems(): List<com.localstream.app.data.db.entity.PlaylistWithItems> =
+            playlists.value.map { p -> com.localstream.app.data.db.entity.PlaylistWithItems(p, items.filter { it.playlistId == p.id }) }
         override suspend fun upsertPlaylist(playlist: PlaylistEntity) {
             playlists.value = playlists.value.filterNot { it.id == playlist.id } + playlist
         }
