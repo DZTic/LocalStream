@@ -422,6 +422,19 @@ class PlayerViewModelTest {
         assertEquals(ep2.name, state.nextVideo?.name)
     }
 
+    @Test
+    fun `onPositionChanged updates positionMs StateFlow`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        backgroundScope.launch { viewModel.positionMs.collect {} }
+        advanceUntilIdle()
+
+        viewModel.onPositionChanged(positionMs = 42000L, durationMs = 100000L)
+        advanceUntilIdle()
+
+        assertEquals(42000L, viewModel.positionMs.value)
+    }
+
     // -------- Fakes --------
 
     private class FakeScanner(

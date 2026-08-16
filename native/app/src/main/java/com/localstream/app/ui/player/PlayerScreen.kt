@@ -605,7 +605,7 @@ fun PlayerScreen(
             playbackSpeed = uiState.playbackSpeed,
             isPlaying = uiState.isPlaying,
             hasNextVideo = uiState.nextVideo != null,
-            positionMs = uiState.positionMs,
+            positionMsFlow = viewModel.positionMs,
             durationMs = uiState.durationMs,
             onBack = onBack,
             onOpenTracks = { showTracksSheet = true },
