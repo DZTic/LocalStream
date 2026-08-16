@@ -90,6 +90,9 @@ class PlayerViewModel(
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
+    private val _positionMs = MutableStateFlow(0L)
+    val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
+
     private data class SavePositionRequest(
         val videoName: String,
         val positionMs: Long,
@@ -144,6 +147,7 @@ class PlayerViewModel(
                 val pct = state?.progressPct ?: 0.0
                 val pos = if (isFinished(isWatched, pct, rawPos, targetVideo.duration * 1000L)) 0L else rawPos
 
+                _positionMs.value = pos
                 _uiState.update {
                     it.copy(
                         initialPositionMs = pos,
@@ -174,6 +178,7 @@ class PlayerViewModel(
                 0L
             }
 
+            _positionMs.value = pos
             _uiState.update {
                 it.copy(
                     initialPositionMs = pos,
@@ -258,9 +263,9 @@ class PlayerViewModel(
     }
 
     fun onPositionChanged(positionMs: Long, durationMs: Long) {
-        _uiState.update { state ->
-            val newDur = if (durationMs > 0L) durationMs else state.durationMs
-            state.copy(positionMs = positionMs, durationMs = newDur)
+        _positionMs.value = positionMs
+        if (durationMs > 0L && durationMs != _uiState.value.durationMs) {
+            _uiState.update { it.copy(durationMs = durationMs) }
         }
         val video = _uiState.value.currentVideo ?: return
 
@@ -288,7 +293,7 @@ class PlayerViewModel(
 
     private fun saveCurrentPosition() {
         val video = _uiState.value.currentVideo ?: return
-        val pos = _uiState.value.positionMs
+        val pos = _positionMs.value
         val dur = _uiState.value.durationMs
         if (pos > 0L) {
             viewModelScope.launch {
@@ -414,8 +419,10 @@ class PlayerViewModel(
     }
 
     fun seekBy(deltaMs: Long) {
-        val state = _uiState.value
-        val newPos = (state.positionMs + deltaMs).coerceIn(0L, state.durationMs.coerceAtLeast(1L))
+        val curPos = _positionMs.value
+        val dur = _uiState.value.durationMs
+        val newPos = (curPos + deltaMs).coerceIn(0L, dur.coerceAtLeast(1L))
+        _positionMs.value = newPos
         val type = if (deltaMs >= 0) FeedbackType.SEEK_FORWARD else FeedbackType.SEEK_REWIND
         val text = if (deltaMs >= 0) "+10s" else "-10s"
         _uiState.update {
@@ -523,6 +530,7 @@ class PlayerViewModel(
                 0L
             }
 
+            _positionMs.value = pos
             _uiState.update {
                 it.copy(
                     initialPositionMs = pos,

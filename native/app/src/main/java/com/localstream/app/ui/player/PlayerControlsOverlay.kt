@@ -11,6 +11,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
+
 @Composable
 fun PlayerControlsOverlay(
     isVisible: Boolean,
@@ -20,7 +24,6 @@ fun PlayerControlsOverlay(
     playbackSpeed: Float,
     isPlaying: Boolean,
     hasNextVideo: Boolean,
-    positionMs: Long,
     durationMs: Long,
     onBack: () -> Unit,
     onOpenTracks: () -> Unit,
@@ -34,7 +37,16 @@ fun PlayerControlsOverlay(
     onToggleLock: () -> Unit,
     onEnterPip: () -> Unit,
     modifier: Modifier = Modifier,
+    positionMs: Long = 0L,
+    positionMsFlow: StateFlow<Long>? = null,
 ) {
+    val currentPosition = if (positionMsFlow != null) {
+        val pos by positionMsFlow.collectAsStateWithLifecycle()
+        pos
+    } else {
+        positionMs
+    }
+
     AnimatedVisibility(
         visible = isVisible && !isLocked,
         enter = fadeIn(),
@@ -68,7 +80,7 @@ fun PlayerControlsOverlay(
             )
 
             BottomPlayerBar(
-                positionMs = positionMs,
+                positionMs = currentPosition,
                 durationMs = durationMs,
                 isLocked = isLocked,
                 onSeek = onSeek,

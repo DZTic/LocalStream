@@ -100,12 +100,6 @@ fun BottomPlayerBar(
             }
         }
 
-        val sliderValue = if (durationMs > 0L) {
-            displayPos.coerceIn(0L, durationMs).toFloat()
-        } else {
-            0f
-        }
-
         Slider(
             value = sliderValue,
             onValueChange = {
