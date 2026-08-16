@@ -106,6 +106,9 @@ class HistoryViewModelTest {
         override suspend fun deleteByName(name: String) {
             items.value = items.value.filterNot { it.name == name }
         }
+        override suspend fun deleteByNames(names: List<String>) {
+            items.value = items.value.filterNot { it.name in names }
+        }
         override suspend fun deleteAll() { items.value = emptyList() }
         override suspend fun findByName(name: String): WatchedItemEntity? = items.value.find { it.name == name }
     }

@@ -47,6 +47,7 @@ class NoOpWatchedItemDao : WatchedItemDao {
     override suspend fun upsert(item: WatchedItemEntity) {}
     override suspend fun upsertAll(items: List<WatchedItemEntity>) {}
     override suspend fun deleteByName(name: String) {}
+    override suspend fun deleteByNames(names: List<String>) {}
     override suspend fun deleteAll() {}
     override suspend fun findByName(name: String): WatchedItemEntity? = null
 }
@@ -67,6 +68,7 @@ class NoOpPlaybackStateDao : PlaybackStateDao {
 class NoOpTmdbMetadataDao : TmdbMetadataDao {
     override suspend fun getMetadata(queryKey: String): TmdbMetadataEntity? = null
     override suspend fun insertMetadata(entity: TmdbMetadataEntity) {}
+    override suspend fun insertMetadataList(entities: List<TmdbMetadataEntity>) {}
     override suspend fun deleteMetadata(queryKey: String) {}
     override suspend fun clearAll() {}
     override suspend fun getAll(): List<TmdbMetadataEntity> = emptyList()
@@ -75,7 +77,9 @@ class NoOpTmdbMetadataDao : TmdbMetadataDao {
 @Suppress("EmptyFunctionBlock")
 class NoOpPlaylistDao : PlaylistDao {
     override fun observePlaylists(): Flow<List<PlaylistEntity>> = MutableStateFlow(emptyList())
+    override fun observePlaylistsWithItems(): Flow<List<com.localstream.app.data.db.entity.PlaylistWithItems>> = MutableStateFlow(emptyList())
     override suspend fun getAllPlaylists(): List<PlaylistEntity> = emptyList()
+    override suspend fun getPlaylistsWithItems(): List<com.localstream.app.data.db.entity.PlaylistWithItems> = emptyList()
     override suspend fun upsertPlaylist(playlist: PlaylistEntity) {}
     override suspend fun upsertPlaylists(playlists: List<PlaylistEntity>) {}
     override suspend fun deletePlaylist(id: String) {}

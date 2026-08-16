@@ -3,43 +3,29 @@ package com.localstream.app.data.repository
 import com.localstream.app.data.db.dao.PlaylistDao
 import com.localstream.app.data.db.entity.PlaylistEntity
 import com.localstream.app.data.db.entity.PlaylistItemEntity
+import com.localstream.app.data.db.entity.PlaylistWithItems
 import com.localstream.app.domain.model.PlaylistInfo
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import java.util.UUID
 
 /**
  * Repository de gestion des playlists utilisateur.
  *
  * Toutes les mutations sont suspendues.
- * [observePlaylists] expose un Flow de [PlaylistInfo] reconstitu\u00e9 depuis les deux tables Room.
+ * [observePlaylists] expose un Flow de [PlaylistInfo] reconstitué depuis les deux tables Room.
  */
 class PlaylistRepository(private val playlistDao: PlaylistDao) {
 
-    /** Flow reactif : liste compl\u00e8te des playlists avec leurs vid\u00e9os ordonn\u00e9es. */
+    /** Flow réactif : liste complète des playlists avec leurs vidéos ordonnées en une seule requête. */
     val observePlaylists: Flow<List<PlaylistInfo>> =
-        combine(
-            playlistDao.observePlaylists(),
-            // On observe les items globaux via getAllItems dans un flow d\u00e9di\u00e9 (simple polling n'est
-            // pas id\u00e9al ; remplacer par une requ\u00eate GROUP BY en Phase 8 si besoin de perf).
-            playlistDao.observePlaylists(), // second slot — force re-collect quand les playlists changent
-        ) { playlists, _ ->
-            buildPlaylistInfoList(playlists)
-        }
-
-    private suspend fun buildPlaylistInfoList(playlists: List<PlaylistEntity>): List<PlaylistInfo> =
-        playlists.map { entity ->
-            val items = playlistDao.getItems(entity.id)
-            PlaylistInfo(
-                id = entity.id,
-                name = entity.name,
-                videoNames = items.sortedBy { it.position }.map { it.videoName },
-            )
+        playlistDao.observePlaylistsWithItems().map { list ->
+            list.map { it.toPlaylistInfo() }
         }
 
     suspend fun getAllPlaylists(): List<PlaylistInfo> {
-        val entities = playlistDao.getAllPlaylists()
-        return buildPlaylistInfoList(entities)
+        val list = playlistDao.getPlaylistsWithItems()
+        return list.map { it.toPlaylistInfo() }
     }
 
     suspend fun createPlaylist(name: String): PlaylistInfo {
@@ -83,3 +69,10 @@ class PlaylistRepository(private val playlistDao: PlaylistDao) {
         playlistDao.upsertPlaylist(existing.copy(name = newName))
     }
 }
+
+private fun PlaylistWithItems.toPlaylistInfo(): PlaylistInfo =
+    PlaylistInfo(
+        id = playlist.id,
+        name = playlist.name,
+        videoNames = items.sortedBy { it.position }.map { it.videoName },
+    )

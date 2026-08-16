@@ -4,16 +4,24 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+import androidx.room.Index
+
 /**
  * Table Room : progression de lecture.
- * Fusionne les trois cl\u00e9s localStorage : watchProgress, watchPositions et recentlyWatched.
+ * Fusionne les trois clés localStorage : watchProgress, watchPositions et recentlyWatched.
  *
- * - [progressPct]  : pourcentage (0.0 – 100.0), \u00e9quivalent "watchProgress"
- * - [positionMs]   : position en millisecondes, \u00e9quivalent "watchPositions"
- * - [lastPlayedAt] : timestamp ms, permet de r\u00e9construire "recentlyWatched" par tri DESC
- * - [mediaStoreId] : nullable, fiabilise la cl\u00e9 \u00e0 terme (renommage de fichier)
+ * - [progressPct]  : pourcentage (0.0 – 100.0), équivalent "watchProgress"
+ * - [positionMs]   : position en millisecondes, équivalent "watchPositions"
+ * - [lastPlayedAt] : timestamp ms, permet de reconstruire "recentlyWatched" par tri DESC
+ * - [mediaStoreId] : nullable, fiabilise la clé à terme (renommage de fichier)
  */
-@Entity(tableName = "playback_state")
+@Entity(
+    tableName = "playback_state",
+    indices = [
+        Index(value = ["last_played_at"]),
+        Index(value = ["progress_pct"]),
+    ],
+)
 data class PlaybackStateEntity(
     @PrimaryKey
     @ColumnInfo(name = "name") val name: String,

@@ -68,7 +68,10 @@ class WatchStateRepository(
                 }
             )
         } else {
-            episodes.forEach { ep -> watchedItemDao.deleteByName(ep.name) }
+            val names = episodes.map { it.name }
+            if (names.isNotEmpty()) {
+                watchedItemDao.deleteByNames(names)
+            }
         }
     }
 
