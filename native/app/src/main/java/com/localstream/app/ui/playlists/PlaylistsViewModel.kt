@@ -33,8 +33,9 @@ class PlaylistsViewModel(
         container.videoRepository.observeVideos,
     ) { playlists, selectedId, videos ->
         val selected = playlists.find { it.id == selectedId }
+        val videoMap = videos.associateBy { it.name }
         val playlistVideos = selected?.videoNames?.mapNotNull { name ->
-            videos.find { it.name == name }
+            videoMap[name]
         } ?: emptyList()
 
         PlaylistsUiState(
