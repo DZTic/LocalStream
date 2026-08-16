@@ -74,13 +74,14 @@ data class LibraryUiState(
  * (Phase 3), l'enrichissement TMDB (Phase 5) et observe l'état de visionnage
  * (Phase 4). Partagé entre les écrans via le scope de l'activité.
  */
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList")
 class LibraryViewModel(
     private val videoRepository: VideoRepository,
     private val watchStateRepository: WatchStateRepository,
     private val tmdbRepository: TmdbRepository,
     private val settingsRepository: SettingsRepository,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val computationDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val metadataChunkSize: Int = DEFAULT_METADATA_CHUNK_SIZE,
 ) : ViewModel() {
 
@@ -119,7 +120,9 @@ class LibraryViewModel(
                 // Cache Room d'abord : les affiches s'affichent immédiatement.
                 val cached = loadCachedMetadata(grouped)
                 if (cached.isNotEmpty()) {
-                    _uiState.update { it.copy(metadata = it.metadata + cached).withDerived() }
+                    withContext(computationDispatcher) {
+                        _uiState.update { it.withMetadataUpdate(cached) }
+                    }
                 }
 
                 if (hasKey) {
@@ -134,10 +137,12 @@ class LibraryViewModel(
         }
     }
 
-    private fun publishVideos(grouped: List<VideoItem>) {
+    private suspend fun publishVideos(grouped: List<VideoItem>) {
         val durations = videoRepository.getRawVideos().associate { it.name to it.duration }
-        _uiState.update {
-            it.copy(videos = grouped, videoDurations = durations).withDerived()
+        withContext(computationDispatcher) {
+            _uiState.update {
+                it.copy(videos = grouped, videoDurations = durations).withDerived()
+            }
         }
     }
 
@@ -198,7 +203,9 @@ class LibraryViewModel(
             }.filterNotNull()
             if (results.isNotEmpty()) {
                 val additions = results.associate { it.queryKey to it }
-                _uiState.update { it.copy(metadata = it.metadata + additions).withDerived() }
+                withContext(computationDispatcher) {
+                    _uiState.update { it.withMetadataUpdate(additions) }
+                }
             }
         }
     }
@@ -305,6 +312,44 @@ class LibraryViewModel(
         return copy(
             filteredSorted = filtered,
             searchResults = VideoUiSelectors.filterByQuery(filtered, _searchQuery.value),
+        )
+    }
+
+    /**
+     * Met à jour les métadonnées sans ré-exécuter filterAndSort si le tri et les filtres
+     * actifs ne dépendent pas des métadonnées (évite 20 tris complets lors du streaming TMDB).
+     */
+    private fun LibraryUiState.withMetadataUpdate(additions: Map<String, TmdbMetadata>): LibraryUiState {
+        val newMetadata = metadata + additions
+        val needsFilterSort = filterGenre != null || sortBy == SortBy.DATE
+        val newFilteredSorted = if (needsFilterSort) {
+            val newReleaseDates = newMetadata.mapNotNull { (key, meta) ->
+                meta.releaseDate?.takeIf { it.isNotBlank() }?.let { key to it }
+            }.toMap()
+            val newVideoGenres = newMetadata.mapValues { it.value.genreIds }
+            VideoFilterSorter.filterAndSortVideos(
+                videos,
+                FilterSortOptions(
+                    sortBy = sortBy,
+                    filterGenre = filterGenre,
+                    filterResolution = filterResolution,
+                    releaseDates = newReleaseDates,
+                    videoGenres = newVideoGenres,
+                    videoDurations = videoDurations,
+                    watchedVideos = watched,
+                ),
+            )
+        } else {
+            filteredSorted
+        }
+        return copy(
+            metadata = newMetadata,
+            filteredSorted = newFilteredSorted,
+            searchResults = if (needsFilterSort) {
+                VideoUiSelectors.filterByQuery(newFilteredSorted, _searchQuery.value)
+            } else {
+                searchResults
+            },
         )
     }
 

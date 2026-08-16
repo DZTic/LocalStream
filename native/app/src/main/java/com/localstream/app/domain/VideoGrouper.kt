@@ -53,12 +53,15 @@ object VideoGrouper {
         return video.copy(season = sStr.toIntOrNull(), episode = eStr.toIntOrNull())
     }
 
+    private val SERIES_SEPARATORS_REGEX = Regex("[\\.\\-_/\\\\\\[\\]\\(\\)]")
+    private val SERIES_TRAILING_DASH_SPACE_REGEX = Regex("[\\s\\-]+$")
+
     private fun resolveSeriesName(video: VideoItem, match: MatchResult?): String {
         val sName = video.seriesName ?: if (match != null) {
             video.name.substring(0, match.range.first)
-                .replace(Regex("[\\.\\-_/\\\\\\[\\]\\(\\)]"), " ")
+                .replace(SERIES_SEPARATORS_REGEX, " ")
                 .trim()
-                .replace(Regex("[\\s\\-]+$"), "")
+                .replace(SERIES_TRAILING_DASH_SPACE_REGEX, "")
         } else {
             TitleCleaner.getCleanTitle(video.name)
         }

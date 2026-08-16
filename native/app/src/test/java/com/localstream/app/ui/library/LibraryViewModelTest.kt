@@ -27,6 +27,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -83,6 +85,7 @@ class LibraryViewModelTest {
             tmdbRepository = tmdbRepository,
             settingsRepository = SettingsRepository(),
             ioDispatcher = testDispatcher,
+            computationDispatcher = testDispatcher,
         )
     }
 
@@ -180,6 +183,21 @@ class LibraryViewModelTest {
         assertEquals(listOf("Avatar.2009.2160p.mkv"), playbackDao.deletedNames)
     }
 
+    @Test
+    fun `HomeViewModel derive les rows sur le computationDispatcher sans jank`() = runTest(testDispatcher) {
+        val homeVm = com.localstream.app.ui.home.HomeViewModel(
+            libraryUiState = viewModel.uiState,
+            computationDispatcher = testDispatcher,
+        )
+        backgroundScope.launch { homeVm.uiState.collect() }
+        viewModel.refreshLibrary()
+        advanceUntilIdle()
+
+        val homeState = homeVm.uiState.value
+        assertTrue(homeState.hasContent)
+        assertEquals(3, homeState.alphabetical.size)
+    }
+
     // -------- Fakes --------
 
     private class FakeScanner(
@@ -192,6 +210,7 @@ class LibraryViewModelTest {
             whitelistedVideos: Set<String>,
             movieCollections: Map<String, MovieCollection>,
             releaseDates: Map<String, String>,
+            rawVideos: List<VideoItem>?,
         ): List<VideoItem> = groupedVideos
     }
 
@@ -205,6 +224,9 @@ class LibraryViewModelTest {
         override suspend fun upsertAll(items: List<WatchedItemEntity>) = items.forEach { upsert(it) }
         override suspend fun deleteByName(name: String) {
             items.value = items.value.filterNot { it.name == name }
+        }
+        override suspend fun deleteByNames(names: List<String>) {
+            items.value = items.value.filterNot { it.name in names }
         }
         override suspend fun deleteAll() {
             items.value = emptyList()
@@ -237,6 +259,9 @@ class LibraryViewModelTest {
         override suspend fun getMetadata(queryKey: String): TmdbMetadataEntity? = items[queryKey]
         override suspend fun insertMetadata(entity: TmdbMetadataEntity) {
             items[entity.queryKey] = entity
+        }
+        override suspend fun insertMetadataList(entities: List<TmdbMetadataEntity>) {
+            entities.forEach { items[it.queryKey] = it }
         }
         override suspend fun deleteMetadata(queryKey: String) {
             items.remove(queryKey)

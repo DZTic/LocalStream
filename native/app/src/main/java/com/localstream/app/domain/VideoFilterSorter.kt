@@ -23,6 +23,8 @@ object VideoFilterSorter {
         }
     }
 
+    private val HD_OR_4K_REGEX = Regex("1080p|720p|2160p|4k", RegexOption.IGNORE_CASE)
+
     private fun filterByResolution(videos: List<VideoItem>, opts: FilterSortOptions): List<VideoItem> {
         if (opts.filterResolution == ResolutionFilter.ALL) return videos
         return videos.filter { v ->
@@ -33,20 +35,58 @@ object VideoFilterSorter {
                 ResolutionFilter.TWO_K -> n.contains("1440p")
                 ResolutionFilter.ONE_THOUSAND_EIGHTY_P -> n.contains("1080p")
                 ResolutionFilter.SEVEN_HUNDRED_TWENTY_P -> n.contains("720p")
-                ResolutionFilter.SD -> !Regex("1080p|720p|2160p|4k", RegexOption.IGNORE_CASE).containsMatchIn(n)
+                ResolutionFilter.SD -> !HD_OR_4K_REGEX.containsMatchIn(n)
                 ResolutionFilter.ALL -> true
             }
         }
     }
 
     private fun sortVideos(videos: List<VideoItem>, opts: FilterSortOptions): List<VideoItem> {
-        return videos.sortedWith { a, b ->
-            val aWatched = isItemWatched(a, opts.watchedVideos)
-            val bWatched = isItemWatched(b, opts.watchedVideos)
+        val watchedCache = videos.associateWith { isItemWatched(it, opts.watchedVideos) }
+        val watchedComparator = Comparator<VideoItem> { a, b ->
+            val aWatched = watchedCache[a] ?: false
+            val bWatched = watchedCache[b] ?: false
             if (aWatched != bWatched) {
                 if (aWatched) 1 else -1
             } else {
-                compareItemsByCriteria(a, b, opts)
+                0
+            }
+        }
+        val criteriaComparator = getCriteriaComparator(videos, opts)
+        return videos.sortedWith(watchedComparator.then(criteriaComparator))
+    }
+
+    private fun getCriteriaComparator(
+        videos: List<VideoItem>,
+        opts: FilterSortOptions,
+    ): Comparator<VideoItem> {
+        return when (opts.sortBy) {
+            SortBy.ALPHA -> {
+                val alphaCache = videos.associateWith { if (it.isSeriesGroup) it.seriesName.orEmpty() else it.name }
+                compareBy { alphaCache[it].orEmpty() }
+            }
+            SortBy.DATE -> {
+                val dateCache = videos.associateWith {
+                    val lookup = if (it.isSeriesGroup) it.seriesName.orEmpty() else it.name
+                    opts.releaseDates[lookup] ?: it.lastModified.toString()
+                }
+                compareByDescending { dateCache[it].orEmpty() }
+            }
+            SortBy.SIZE -> {
+                val sizeCache = videos.associateWith {
+                    if (it.isSeriesGroup) it.episodes.orEmpty().sumOf { ep -> ep.size } else it.size
+                }
+                compareByDescending { sizeCache[it] ?: 0L }
+            }
+            SortBy.DURATION -> {
+                val durationCache = videos.associateWith {
+                    if (it.isSeriesGroup) {
+                        it.episodes.orEmpty().sumOf { ep -> opts.videoDurations[ep.name] ?: 0L }
+                    } else {
+                        opts.videoDurations[it.name] ?: 0L
+                    }
+                }
+                compareByDescending { durationCache[it] ?: 0L }
             }
         }
     }
@@ -57,41 +97,6 @@ object VideoFilterSorter {
         } else {
             watchedVideos[v.name] == true
         }
-    }
-
-    private fun compareItemsByCriteria(a: VideoItem, b: VideoItem, opts: FilterSortOptions): Int {
-        return when (opts.sortBy) {
-            SortBy.ALPHA -> compareAlpha(a, b)
-            SortBy.DATE -> compareDate(a, b, opts.releaseDates)
-            SortBy.SIZE -> compareSize(a, b)
-            SortBy.DURATION -> compareDuration(a, b, opts.videoDurations)
-        }
-    }
-
-    private fun compareAlpha(a: VideoItem, b: VideoItem): Int {
-        val nameA = if (a.isSeriesGroup) a.seriesName ?: "" else a.name
-        val nameB = if (b.isSeriesGroup) b.seriesName ?: "" else b.name
-        return nameA.compareTo(nameB)
-    }
-
-    private fun compareDate(a: VideoItem, b: VideoItem, releaseDates: Map<String, String>): Int {
-        val lookupA = if (a.isSeriesGroup) a.seriesName ?: "" else a.name
-        val lookupB = if (b.isSeriesGroup) b.seriesName ?: "" else b.name
-        val dateA = releaseDates[lookupA] ?: a.lastModified.toString()
-        val dateB = releaseDates[lookupB] ?: b.lastModified.toString()
-        return dateB.compareTo(dateA)
-    }
-
-    private fun compareSize(a: VideoItem, b: VideoItem): Int {
-        val sizeA = if (a.isSeriesGroup) a.episodes.orEmpty().sumOf { it.size } else a.size
-        val sizeB = if (b.isSeriesGroup) b.episodes.orEmpty().sumOf { it.size } else b.size
-        return sizeB.compareTo(sizeA)
-    }
-
-    private fun compareDuration(a: VideoItem, b: VideoItem, videoDurations: Map<String, Long>): Int {
-        val durA = if (a.isSeriesGroup) a.episodes.orEmpty().sumOf { videoDurations[it.name] ?: 0L } else videoDurations[a.name] ?: 0L
-        val durB = if (b.isSeriesGroup) b.episodes.orEmpty().sumOf { videoDurations[it.name] ?: 0L } else videoDurations[b.name] ?: 0L
-        return durB.compareTo(durA)
     }
 }
 

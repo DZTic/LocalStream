@@ -87,4 +87,31 @@ class MediaStoreScannerTest {
         }
         assertEquals(2, result.size)
     }
+
+    @Test
+    fun scanSubtitleFiles_findsAssAndSsa() {
+        File(tempDir, "Anime.ass").createNewFile()
+        File(tempDir, "Anime.ssa").createNewFile()
+
+        val scanner = MediaStoreScanner(context = null, customDirectories = listOf(tempDir))
+        val subs = scanner.scanSubtitleFiles()
+
+        assertEquals(2, subs.size)
+        assertTrue(subs.any { it.name == "Anime.ass" })
+        assertTrue(subs.any { it.name == "Anime.ssa" })
+    }
+
+    @Test
+    fun scanAndGroup_withRawVideos_reusesPassedVideos() {
+        val preScanned = listOf(
+            VideoItem(url = "file://custom/Item1.mkv", name = "Item1.mkv"),
+            VideoItem(url = "file://custom/Item2.mkv", name = "Item2.mkv"),
+        )
+        val scanner = MediaStoreScanner(context = null, customDirectories = listOf(tempDir))
+        val result = scanner.scanAndGroup(rawVideos = preScanned)
+
+        assertEquals(2, result.size)
+        assertTrue(result.any { it.name == "Item1.mkv" })
+        assertTrue(result.any { it.name == "Item2.mkv" })
+    }
 }

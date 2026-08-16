@@ -73,9 +73,22 @@ class WatchedItemDaoTest {
     private fun runBlocking(block: suspend () -> Unit) {
         kotlinx.coroutines.runBlocking { block() }
     }
+
+    @Test
+    fun deleteByNames_removesMultipleItems() = runBlocking {
+        dao.upsert(WatchedItemEntity("Film1.mp4", watched = true))
+        dao.upsert(WatchedItemEntity("Film2.mp4", watched = true))
+        dao.upsert(WatchedItemEntity("Film3.mp4", watched = true))
+
+        dao.deleteByNames(listOf("Film1.mp4", "Film2.mp4"))
+
+        val remaining = dao.getAllWatchedItems()
+        assertEquals(1, remaining.size)
+        assertEquals("Film3.mp4", remaining.first().name)
+    }
 }
 
-// -------- Impl\u00e9mentation en m\u00e9moire --------
+// -------- Implémentation en mémoire --------
 
 private class InMemoryWatchedItemDao : WatchedItemDao {
     private val store = mutableMapOf<String, WatchedItemEntity>()
@@ -93,6 +106,10 @@ private class InMemoryWatchedItemDao : WatchedItemDao {
     }
 
     override suspend fun deleteByName(name: String) { store.remove(name) }
+
+    override suspend fun deleteByNames(names: List<String>) {
+        names.forEach { store.remove(it) }
+    }
 
     override suspend fun deleteAll() { store.clear() }
 

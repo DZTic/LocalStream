@@ -33,6 +33,7 @@ class VideoRepository(
             whitelistedVideos = whitelistedVideos,
             movieCollections = movieCollections,
             releaseDates = releaseDates,
+            rawVideos = rawVideos,
         )
         _videosFlow.value = groupedVideos
         return groupedVideos

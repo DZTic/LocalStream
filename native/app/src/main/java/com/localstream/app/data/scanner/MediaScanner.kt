@@ -13,6 +13,7 @@ interface MediaScanner {
     fun scanAndGroup(
         whitelistedVideos: Set<String> = emptySet(),
         movieCollections: Map<String, MovieCollection> = emptyMap(),
-        releaseDates: Map<String, String> = emptyMap()
+        releaseDates: Map<String, String> = emptyMap(),
+        rawVideos: List<VideoItem>? = null,
     ): List<VideoItem>
 }

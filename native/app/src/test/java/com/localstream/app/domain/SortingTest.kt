@@ -46,5 +46,34 @@ class SortingTest {
         assertEquals(1, res.size)
         assertEquals("Film.1080p.mkv", res[0].name)
     }
+
+    @Test
+    fun filterAndSortVideos_sortsByDateDescending() {
+        val opts = baseOpts.copy(
+            sortBy = SortBy.DATE,
+            releaseDates = mapOf("Old.mkv" to "2010-01-01", "New.mkv" to "2024-05-01"),
+        )
+        val res = VideoFilterSorter.filterAndSortVideos(listOf(v("Old.mkv"), v("New.mkv")), opts)
+        assertEquals(listOf("New.mkv", "Old.mkv"), res.map { it.name })
+    }
+
+    @Test
+    fun filterAndSortVideos_sortsBySizeDescending() {
+        val opts = baseOpts.copy(sortBy = SortBy.SIZE)
+        val small = v("Small.mkv").copy(size = 100L)
+        val large = v("Large.mkv").copy(size = 5000L)
+        val res = VideoFilterSorter.filterAndSortVideos(listOf(small, large), opts)
+        assertEquals(listOf("Large.mkv", "Small.mkv"), res.map { it.name })
+    }
+
+    @Test
+    fun filterAndSortVideos_sortsByDurationDescending() {
+        val opts = baseOpts.copy(
+            sortBy = SortBy.DURATION,
+            videoDurations = mapOf("Short.mkv" to 60L, "Long.mkv" to 3600L),
+        )
+        val res = VideoFilterSorter.filterAndSortVideos(listOf(v("Short.mkv"), v("Long.mkv")), opts)
+        assertEquals(listOf("Long.mkv", "Short.mkv"), res.map { it.name })
+    }
 }
 

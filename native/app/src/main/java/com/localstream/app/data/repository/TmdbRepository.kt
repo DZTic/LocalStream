@@ -277,7 +277,7 @@ open class TmdbRepository(
                     tmdbApi.getSeason(tvId, seasonNum, apiKey)
                 }
                 val now = System.currentTimeMillis()
-                for (epDto in seasonDetails.episodes) {
+                val entities = seasonDetails.episodes.map { epDto ->
                     val epKey = "${lookupName}_s${epDto.seasonNumber}_e${epDto.episodeNumber}"
                     val episode = TmdbEpisode(
                         epKey = epKey,
@@ -287,13 +287,14 @@ open class TmdbRepository(
                         seasonNumber = epDto.seasonNumber,
                         episodeNumber = epDto.episodeNumber,
                     )
-                    tmdbMetadataDao.insertMetadata(
-                        TmdbMetadataEntity(
-                            queryKey = epKey,
-                            json = json.encodeToString(episode),
-                            fetchedAt = now,
-                        )
+                    TmdbMetadataEntity(
+                        queryKey = epKey,
+                        json = json.encodeToString(episode),
+                        fetchedAt = now,
                     )
+                }
+                if (entities.isNotEmpty()) {
+                    tmdbMetadataDao.insertMetadataList(entities)
                 }
             } catch (_: Exception) {
             }

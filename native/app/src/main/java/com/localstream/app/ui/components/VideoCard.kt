@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.components
+package com.localstream.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -42,6 +43,8 @@ import com.localstream.app.ui.theme.Zinc800
 
 private val WatchedGreen = Color(0xFF16A34A) // green-600 Tailwind
 private val ProgressTrack = Color(0xFF52525B) // zinc-600 Tailwind
+private val DesaturatedColorFilter: ColorFilter =
+    ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.25f) })
 
 /**
  * Carte d'affiche vidéo (équivalent Compose de `VideoCard.tsx`) :
@@ -63,8 +66,12 @@ fun VideoCard(
     modifier: Modifier = Modifier,
     episodeLabel: String? = null,
 ) {
-    val title = VideoUiSelectors.displayTitle(video)
-    val resolution = Formatters.getResolution(video.name)
+    val title = remember(video.name, video.seriesName, video.isSeriesGroup) {
+        VideoUiSelectors.displayTitle(video)
+    }
+    val resolution = remember(video.name) {
+        Formatters.getResolution(video.name)
+    }
 
     Column(modifier = modifier) {
         Box(
@@ -201,11 +208,7 @@ private fun PosterImage(
             model = posterUrl,
             contentDescription = title,
             contentScale = ContentScale.Crop,
-            colorFilter = if (isWatched) {
-                ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.25f) })
-            } else {
-                null
-            },
+            colorFilter = if (isWatched) DesaturatedColorFilter else null,
             modifier = Modifier
                 .fillMaxSize()
                 .then(dimmed),

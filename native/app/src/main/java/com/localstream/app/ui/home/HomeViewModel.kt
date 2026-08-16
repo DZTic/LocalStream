@@ -10,8 +10,11 @@ import com.localstream.app.domain.model.TmdbMetadata
 import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.library.LibraryUiState
 import com.localstream.app.ui.library.LibraryViewModel
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
@@ -43,10 +46,12 @@ data class HomeUiState(
  */
 class HomeViewModel(
     libraryUiState: StateFlow<LibraryUiState>,
+    computationDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     val uiState: StateFlow<HomeUiState> = libraryUiState
         .map { deriveHomeUiState(it) }
+        .flowOn(computationDispatcher)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),

@@ -92,6 +92,7 @@ class HistoryViewModelTest {
             whitelistedVideos: Set<String>,
             movieCollections: Map<String, MovieCollection>,
             releaseDates: Map<String, String>,
+            rawVideos: List<VideoItem>?,
         ): List<VideoItem> = emptyList()
     }
 
@@ -105,6 +106,9 @@ class HistoryViewModelTest {
         override suspend fun upsertAll(items: List<WatchedItemEntity>) = items.forEach { upsert(it) }
         override suspend fun deleteByName(name: String) {
             items.value = items.value.filterNot { it.name == name }
+        }
+        override suspend fun deleteByNames(names: List<String>) {
+            items.value = items.value.filterNot { it.name in names }
         }
         override suspend fun deleteAll() { items.value = emptyList() }
         override suspend fun findByName(name: String): WatchedItemEntity? = items.value.find { it.name == name }

@@ -8,10 +8,17 @@ import kotlin.math.pow
 object TitleCleaner {
     private val YEAR_IN_PAREN_REGEX = Regex("[\\(\\[]((?:19|20)\\d{2})[\\)\\]]")
     private val YEAR_REGEX = Regex("(?:^|[\\s\\._\\-\\(\\[])((?:19|20)\\d{2})(?=[\\s\\._\\-\\)\\]]|$)")
+    private val EXTENSION_REGEX = Regex("\\.[^/.]+$")
+    private val SEASON_EPISODE_CLEAN_REGEX = Regex("[sS]\\d+(\\s*)?([eE]\\d+)?|(\\d+)(\\s*)?x(\\d+).*", RegexOption.IGNORE_CASE)
+    private val YEAR_SUFFIX_REGEX = Regex("(?<=\\w|\\s|\\.|\\-|_|\\()\\s*[\\(\\.\\[\\-_]?(19|20)\\d{2}.*")
+    private val SEPARATORS_REGEX = Regex("[\\.\\-_]")
+    private val TAGS_REGEX = Regex("1080p|720p|2160p|4k|bluray|webrip|hdtv|x264|x265|hevc|vostfr|french|truefrench", RegexOption.IGNORE_CASE)
+    private val OPEN_BRACKET_END_REGEX = Regex("[\\(\\[\\{]\\s*$")
+    private val TRAILING_SYMBOLS_REGEX = Regex("[\\s\\-\\.\\(\\)\\[\\]\\{\\}]+$")
 
     @Suppress("ReturnCount")
     fun extractYear(filename: String): Int? {
-        val nameWithoutExt = filename.replace(Regex("\\.[^/.]+$"), "")
+        val nameWithoutExt = filename.replace(EXTENSION_REGEX, "")
         val parenMatch = YEAR_IN_PAREN_REGEX.find(nameWithoutExt)
         if (parenMatch != null) {
             return parenMatch.groupValues[1].toIntOrNull()
@@ -21,22 +28,21 @@ object TitleCleaner {
     }
 
     fun getCleanTitle(filename: String): String {
-        var title = filename.replace(Regex("\\.[^/.]+$"), "")
-        title = title.replace(Regex("[sS]\\d+(\\s*)?([eE]\\d+)?|(\\d+)(\\s*)?x(\\d+).*", RegexOption.IGNORE_CASE), "")
-        title = title.replace(Regex("(?<=\\w|\\s|\\.|\\-|_|\\()\\s*[\\(\\.\\[\\-_]?(19|20)\\d{2}.*"), "")
-        title = title.replace(Regex("[\\.\\-_]"), " ")
-        title = title.replace(
-            Regex("1080p|720p|2160p|4k|bluray|webrip|hdtv|x264|x265|hevc|vostfr|french|truefrench", RegexOption.IGNORE_CASE),
-            ""
-        )
+        var title = filename.replace(EXTENSION_REGEX, "")
+        title = title.replace(SEASON_EPISODE_CLEAN_REGEX, "")
+        title = title.replace(YEAR_SUFFIX_REGEX, "")
+        title = title.replace(SEPARATORS_REGEX, " ")
+        title = title.replace(TAGS_REGEX, "")
         return title.trim()
-            .replace(Regex("[\\(\\[\\{]\\s*$"), "")
-            .replace(Regex("[\\s\\-\\.\\(\\)\\[\\]\\{\\}]+$"), "")
+            .replace(OPEN_BRACKET_END_REGEX, "")
+            .replace(TRAILING_SYMBOLS_REGEX, "")
             .trim()
     }
 }
 
 object Formatters {
+    private val TRAILING_ZEROS_REGEX = Regex("\\.?0+$")
+
     private val suspectPaths = listOf(
         "/dcim/", "/camera/", "/whatsapp/", "/snapchat/", "/instagram/",
         "/telegram/", "/signal/", "/viber/", "/messenger/", "/tiktok/",
@@ -65,7 +71,7 @@ object Formatters {
         val sizes = arrayOf("B", "KB", "MB", "GB", "TB")
         val i = floor(ln(bytes.toDouble()) / ln(k)).toInt()
         val value = bytes / k.pow(i.toDouble())
-        val formatted = String.format(Locale.US, "%.2f", value).replace(Regex("\\.?0+$"), "")
+        val formatted = String.format(Locale.US, "%.2f", value).replace(TRAILING_ZEROS_REGEX, "")
         return "$formatted ${sizes[i]}"
     }
 

@@ -23,6 +23,7 @@ import com.localstream.app.data.remote.tmdb.dto.TmdbSearchResponse
 import com.localstream.app.data.remote.tmdb.dto.TmdbSeasonDetailsDto
 import com.localstream.app.data.repository.OpenSubtitlesRepository
 import com.localstream.app.data.repository.PlaylistRepository
+import kotlinx.coroutines.flow.map
 import com.localstream.app.data.repository.SettingsRepository
 import com.localstream.app.data.repository.TmdbRepository
 import com.localstream.app.data.repository.VideoRepository
@@ -179,6 +180,7 @@ class DetailsViewModelTest {
             whitelistedVideos: Set<String>,
             movieCollections: Map<String, MovieCollection>,
             releaseDates: Map<String, String>,
+            rawVideos: List<VideoItem>?,
         ): List<VideoItem> = groupedVideos
     }
 
@@ -192,6 +194,9 @@ class DetailsViewModelTest {
         override suspend fun upsertAll(items: List<WatchedItemEntity>) = items.forEach { upsert(it) }
         override suspend fun deleteByName(name: String) {
             items.value = items.value.filterNot { it.name == name }
+        }
+        override suspend fun deleteByNames(names: List<String>) {
+            items.value = items.value.filterNot { it.name in names }
         }
         override suspend fun deleteAll() { items.value = emptyList() }
         override suspend fun findByName(name: String): WatchedItemEntity? = items.value.find { it.name == name }
@@ -218,7 +223,13 @@ class DetailsViewModelTest {
         private val items = mutableListOf<PlaylistItemEntity>()
 
         override fun observePlaylists(): Flow<List<PlaylistEntity>> = playlists
+        override fun observePlaylistsWithItems(): Flow<List<com.localstream.app.data.db.entity.PlaylistWithItems>> =
+            playlists.map { list ->
+                list.map { p -> com.localstream.app.data.db.entity.PlaylistWithItems(p, items.filter { it.playlistId == p.id }) }
+            }
         override suspend fun getAllPlaylists(): List<PlaylistEntity> = playlists.value
+        override suspend fun getPlaylistsWithItems(): List<com.localstream.app.data.db.entity.PlaylistWithItems> =
+            playlists.value.map { p -> com.localstream.app.data.db.entity.PlaylistWithItems(p, items.filter { it.playlistId == p.id }) }
         override suspend fun upsertPlaylist(playlist: PlaylistEntity) {
             playlists.value = playlists.value.filterNot { it.id == playlist.id } + playlist
         }
@@ -258,6 +269,7 @@ class DetailsViewModelTest {
         private val items = mutableMapOf<String, TmdbMetadataEntity>()
         override suspend fun getMetadata(queryKey: String): TmdbMetadataEntity? = items[queryKey]
         override suspend fun insertMetadata(entity: TmdbMetadataEntity) { items[entity.queryKey] = entity }
+        override suspend fun insertMetadataList(entities: List<TmdbMetadataEntity>) { entities.forEach { items[it.queryKey] = it } }
         override suspend fun deleteMetadata(queryKey: String) { items.remove(queryKey) }
         override suspend fun clearAll() = items.clear()
         override suspend fun getAll(): List<TmdbMetadataEntity> = items.values.toList()

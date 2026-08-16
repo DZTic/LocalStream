@@ -422,6 +422,19 @@ class PlayerViewModelTest {
         assertEquals(ep2.name, state.nextVideo?.name)
     }
 
+    @Test
+    fun `onPositionChanged updates positionMs StateFlow`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        backgroundScope.launch { viewModel.positionMs.collect {} }
+        advanceUntilIdle()
+
+        viewModel.onPositionChanged(positionMs = 42000L, durationMs = 100000L)
+        advanceUntilIdle()
+
+        assertEquals(42000L, viewModel.positionMs.value)
+    }
+
     // -------- Fakes --------
 
     private class FakeScanner(
@@ -434,6 +447,7 @@ class PlayerViewModelTest {
             whitelistedVideos: Set<String>,
             movieCollections: Map<String, MovieCollection>,
             releaseDates: Map<String, String>,
+            rawVideos: List<VideoItem>?,
         ): List<VideoItem> = grouped
     }
 
@@ -457,6 +471,11 @@ class PlayerViewModelTest {
 
         override suspend fun deleteByName(name: String) {
             map.remove(name)
+            flow.value = map.values.toList()
+        }
+
+        override suspend fun deleteByNames(names: List<String>) {
+            names.forEach { map.remove(it) }
             flow.value = map.values.toList()
         }
 

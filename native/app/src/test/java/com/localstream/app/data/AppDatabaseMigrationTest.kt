@@ -39,4 +39,32 @@ class AppDatabaseMigrationTest {
         assertTrue(sql.contains("`fetched_at` INTEGER NOT NULL"))
         assertTrue(sql.contains("PRIMARY KEY(`query_key`)"))
     }
+
+    @Test
+    fun migration2To3_hasCorrectVersions() {
+        assertEquals(2, AppDatabase.MIGRATION_2_3.startVersion)
+        assertEquals(3, AppDatabase.MIGRATION_2_3.endVersion)
+    }
+
+    @Test
+    fun migration2To3_executesCreateIndicesOnPlaybackState() {
+        val executedQueries = mutableListOf<String>()
+
+        val dbProxy = Proxy.newProxyInstance(
+            SupportSQLiteDatabase::class.java.classLoader,
+            arrayOf(SupportSQLiteDatabase::class.java),
+        ) { _, method, args ->
+            if (method.name == "execSQL" && args != null && args.isNotEmpty()) {
+                executedQueries.add(args[0].toString())
+            }
+            null
+        } as SupportSQLiteDatabase
+
+        AppDatabase.MIGRATION_2_3.migrate(dbProxy)
+
+        assertEquals(2, executedQueries.size)
+        assertTrue(executedQueries.any { it.contains("CREATE INDEX IF NOT EXISTS `index_playback_state_last_played_at`") })
+        assertTrue(executedQueries.any { it.contains("CREATE INDEX IF NOT EXISTS `index_playback_state_progress_pct`") })
+    }
 }
+

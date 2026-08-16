@@ -40,3 +40,15 @@ data class PlaylistItemEntity(
     /** Position 0-based dans la playlist. */
     @ColumnInfo(name = "position") val position: Int = 0,
 )
+
+/**
+ * Relation 1:N entre une Playlist et ses items pour chargement optimisé sans N+1.
+ */
+data class PlaylistWithItems(
+    @androidx.room.Embedded val playlist: PlaylistEntity,
+    @androidx.room.Relation(
+        parentColumn = "id",
+        entityColumn = "playlist_id",
+    )
+    val items: List<PlaylistItemEntity> = emptyList(),
+)

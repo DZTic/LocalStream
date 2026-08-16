@@ -27,6 +27,9 @@ interface WatchedItemDao {
     @Query("DELETE FROM watched_items WHERE name = :name")
     suspend fun deleteByName(name: String)
 
+    @Query("DELETE FROM watched_items WHERE name IN (:names)")
+    suspend fun deleteByNames(names: List<String>)
+
     @Query("DELETE FROM watched_items")
     suspend fun deleteAll()
 
