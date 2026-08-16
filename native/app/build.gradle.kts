@@ -51,9 +51,18 @@ android {
         jvmTarget = "17"
     }
 
+    sourceSets {
+        getByName("androidTest").assets.srcDirs("$projectDir/schemas")
+        getByName("test").assets.srcDirs("$projectDir/schemas")
+    }
+
     buildFeatures {
         compose = true
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 detekt {

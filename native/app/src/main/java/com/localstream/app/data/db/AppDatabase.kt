@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.localstream.app.data.db.dao.PlaybackStateDao
 import com.localstream.app.data.db.dao.PlaylistDao
 import com.localstream.app.data.db.dao.TmdbMetadataDao
@@ -29,7 +31,7 @@ import com.localstream.app.data.db.entity.WatchedItemEntity
         TmdbMetadataEntity::class,
     ],
     version = 2,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
 
@@ -41,6 +43,21 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         private const val DB_NAME = "localstream.db"
 
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `tmdb_metadata` (
+                        `query_key` TEXT NOT NULL,
+                        `json` TEXT NOT NULL,
+                        `fetched_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`query_key`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -51,7 +68,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DB_NAME,
                 )
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(MIGRATION_1_2)
                     .build()
                     .also { INSTANCE = it }
             }
