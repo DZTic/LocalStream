@@ -27,6 +27,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -83,6 +85,7 @@ class LibraryViewModelTest {
             tmdbRepository = tmdbRepository,
             settingsRepository = SettingsRepository(),
             ioDispatcher = testDispatcher,
+            computationDispatcher = testDispatcher,
         )
     }
 
@@ -178,6 +181,21 @@ class LibraryViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf("Avatar.2009.2160p.mkv"), playbackDao.deletedNames)
+    }
+
+    @Test
+    fun `HomeViewModel derive les rows sur le computationDispatcher sans jank`() = runTest(testDispatcher) {
+        val homeVm = com.localstream.app.ui.home.HomeViewModel(
+            libraryUiState = viewModel.uiState,
+            computationDispatcher = testDispatcher,
+        )
+        backgroundScope.launch { homeVm.uiState.collect() }
+        viewModel.refreshLibrary()
+        advanceUntilIdle()
+
+        val homeState = homeVm.uiState.value
+        assertTrue(homeState.hasContent)
+        assertEquals(3, homeState.alphabetical.size)
     }
 
     // -------- Fakes --------
