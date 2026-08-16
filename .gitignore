@@ -25,6 +25,9 @@ android/local.properties
 android/app/build/
 android/app/src/main/assets/public/
 android/.kotlin/
+*.jks
+release.keystore
+native/release.keystore
 
 .gradle-home/
 .claude/
