@@ -88,32 +88,85 @@ fun HomeScreen(
                         onOpenDetails = onOpenDetails,
                     )
                 }
-                item(key = "rows", contentType = "rows") {
-                    // Chevauchement du bas du hero (-mt-12 du web).
-                    Column(modifier = Modifier.offset(y = (-24).dp)) {
-                        if (uiState.showTmdbBanner) {
-                            TmdbBanner(
-                                onConfigure = onConfigureTmdb,
-                                onDismiss = onDismissTmdbBanner,
-                            )
-                        }
-                        if (uiState.continueWatching.isNotEmpty()) {
-                            HomeRow(
-                                title = "Continuer la lecture",
-                                items = uiState.continueWatching,
-                                uiState = uiState,
-                                showResetProgress = true,
-                                onOpenDetails = onOpenDetails,
-                                onResetProgress = onResetProgress,
-                            )
-                        }
-                        HomeRow("Nouveautés", uiState.recentAdditions, uiState, false, onOpenDetails, onResetProgress)
-                        HomeRow("Recommandations", uiState.recommendations, uiState, false, onOpenDetails, onResetProgress)
-                        HomeRow("Séries", uiState.series, uiState, false, onOpenDetails, onResetProgress)
-                        HomeRow("Films", uiState.movies, uiState, false, onOpenDetails, onResetProgress)
-                        HomeRow("De A à Z", uiState.alphabetical, uiState, false, onOpenDetails, onResetProgress)
-                        Spacer(modifier = Modifier.height(24.dp))
+                if (uiState.showTmdbBanner) {
+                    item(key = "tmdb_banner", contentType = "banner") {
+                        TmdbBanner(
+                            onConfigure = onConfigureTmdb,
+                            onDismiss = onDismissTmdbBanner,
+                            modifier = Modifier.offset(y = (-24).dp),
+                        )
                     }
+                }
+                if (uiState.continueWatching.isNotEmpty()) {
+                    item(key = "row_continue_watching", contentType = "row") {
+                        HomeRow(
+                            title = "Continuer la lecture",
+                            items = uiState.continueWatching,
+                            uiState = uiState,
+                            showResetProgress = true,
+                            onOpenDetails = onOpenDetails,
+                            onResetProgress = onResetProgress,
+                            modifier = Modifier.offset(y = (-24).dp),
+                        )
+                    }
+                }
+                item(key = "row_recent", contentType = "row") {
+                    HomeRow(
+                        title = "Nouveautés",
+                        items = uiState.recentAdditions,
+                        uiState = uiState,
+                        showResetProgress = false,
+                        onOpenDetails = onOpenDetails,
+                        onResetProgress = onResetProgress,
+                        modifier = Modifier.offset(y = (-24).dp),
+                    )
+                }
+                item(key = "row_recommendations", contentType = "row") {
+                    HomeRow(
+                        title = "Recommandations",
+                        items = uiState.recommendations,
+                        uiState = uiState,
+                        showResetProgress = false,
+                        onOpenDetails = onOpenDetails,
+                        onResetProgress = onResetProgress,
+                        modifier = Modifier.offset(y = (-24).dp),
+                    )
+                }
+                item(key = "row_series", contentType = "row") {
+                    HomeRow(
+                        title = "Séries",
+                        items = uiState.series,
+                        uiState = uiState,
+                        showResetProgress = false,
+                        onOpenDetails = onOpenDetails,
+                        onResetProgress = onResetProgress,
+                        modifier = Modifier.offset(y = (-24).dp),
+                    )
+                }
+                item(key = "row_movies", contentType = "row") {
+                    HomeRow(
+                        title = "Films",
+                        items = uiState.movies,
+                        uiState = uiState,
+                        showResetProgress = false,
+                        onOpenDetails = onOpenDetails,
+                        onResetProgress = onResetProgress,
+                        modifier = Modifier.offset(y = (-24).dp),
+                    )
+                }
+                item(key = "row_alphabetical", contentType = "row") {
+                    HomeRow(
+                        title = "De A à Z",
+                        items = uiState.alphabetical,
+                        uiState = uiState,
+                        showResetProgress = false,
+                        onOpenDetails = onOpenDetails,
+                        onResetProgress = onResetProgress,
+                        modifier = Modifier.offset(y = (-24).dp),
+                    )
+                }
+                item(key = "bottom_spacer", contentType = "spacer") {
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
@@ -139,6 +192,7 @@ private fun HomeRow(
     showResetProgress: Boolean,
     onOpenDetails: (VideoItem) -> Unit,
     onResetProgress: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     VideoRow(
         title = title,
@@ -149,6 +203,7 @@ private fun HomeRow(
         showResetProgress = showResetProgress,
         onOpenDetails = onOpenDetails,
         onResetProgress = onResetProgress,
+        modifier = modifier,
     )
 }
 
