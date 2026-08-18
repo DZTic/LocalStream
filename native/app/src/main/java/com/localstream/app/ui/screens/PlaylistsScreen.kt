@@ -179,7 +179,11 @@ fun PlaylistsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(16.dp),
                 ) {
-                    items(uiState.selectedPlaylistVideos, key = { it.name }) { video ->
+                    items(
+                        items = uiState.selectedPlaylistVideos,
+                        key = { it.name },
+                        contentType = { "video_card" },
+                    ) { video ->
                         val meta = uiState.metadata[video.name]
                         VideoCard(
                             video = video,
@@ -229,7 +233,11 @@ fun PlaylistsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.padding(16.dp),
                 ) {
-                    items(uiState.playlists, key = { it.id }) { playlist ->
+                    items(
+                        items = uiState.playlists,
+                        key = { it.id },
+                        contentType = { "playlist_card" },
+                    ) { playlist ->
                         PlaylistCard(
                             playlist = playlist,
                             onClick = { viewModel.selectPlaylist(playlist.id) },

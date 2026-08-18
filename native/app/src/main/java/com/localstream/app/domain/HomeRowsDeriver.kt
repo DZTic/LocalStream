@@ -1,8 +1,10 @@
-﻿package com.localstream.app.domain
+package com.localstream.app.domain
 
+import androidx.compose.runtime.Immutable
 import com.localstream.app.domain.model.VideoItem
 
 /** Ensemble des rows de la page d'accueil, dans l'ordre d'affichage exact. */
+@Immutable
 data class HomeRows(
     val heroCandidates: List<VideoItem>,
     val continueWatching: List<VideoItem>,

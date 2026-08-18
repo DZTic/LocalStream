@@ -1,5 +1,6 @@
 package com.localstream.app.ui.home
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.stateIn
  * État de l'écran d'accueil : les rows dans l'ordre exact du web plus les
  * données d'affichage (métadonnées, vu/progression, bannière TMDB).
  */
+@Immutable
 data class HomeUiState(
     val isLoading: Boolean = true,
     val isFetchingMetadata: Boolean = false,

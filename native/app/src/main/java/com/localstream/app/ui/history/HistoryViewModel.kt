@@ -1,5 +1,6 @@
 package com.localstream.app.ui.history
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+@Immutable
 data class HistoryItemUiState(
     val videoName: String,
     val cleanTitle: String,
@@ -26,6 +28,7 @@ data class HistoryItemUiState(
     val metadata: TmdbMetadata? = null,
 )
 
+@Immutable
 data class HistoryUiState(
     val items: List<HistoryItemUiState> = emptyList(),
     val isLoading: Boolean = false,

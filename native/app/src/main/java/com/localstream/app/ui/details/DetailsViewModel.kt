@@ -1,5 +1,6 @@
-﻿package com.localstream.app.ui.details
+package com.localstream.app.ui.details
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+@Immutable
 data class EpisodeUiState(
     val video: VideoItem,
     val tmdbEpisode: TmdbEpisode? = null,
@@ -29,6 +31,7 @@ data class EpisodeUiState(
     val fallbackImageUrl: String? = null,
 )
 
+@Immutable
 data class DetailsUiState(
     val videoGroup: VideoItem? = null,
     val metadata: TmdbMetadata? = null,

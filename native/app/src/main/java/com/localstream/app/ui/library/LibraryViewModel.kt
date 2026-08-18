@@ -1,5 +1,6 @@
 package com.localstream.app.ui.library
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -41,6 +42,7 @@ import kotlinx.coroutines.withContext
  * (VideoFilterSorter, Phase 2) ; [metadata] = métadonnées TMDB indexées par clé
  * de lookup (nom de série pour les groupes, nom de fichier sinon).
  */
+@Immutable
 data class LibraryUiState(
     val isScanning: Boolean = false,
     val hasScanned: Boolean = false,
