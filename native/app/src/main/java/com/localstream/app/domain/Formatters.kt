@@ -82,16 +82,18 @@ object Formatters {
         return if (h > 0) "${h}h ${m}m" else "${m}m"
     }
 
-    fun getResolution(name: String): String {
-        val n = name.lowercase()
-        return when {
-            n.contains("2160p") || n.contains("4k") || n.contains("uhd") -> "4K"
-            n.contains("1440p") -> "2K"
-            n.contains("1080p") || n.contains("fhd") -> "1080p"
-            n.contains("720p") || n.contains("hd") -> "720p"
-            n.contains("480p") || n.contains("sd") -> "SD"
-            else -> ""
-        }
+    fun getResolution(name: String): String = when {
+        name.contains("2160p", ignoreCase = true) ||
+            name.contains("4k", ignoreCase = true) ||
+            name.contains("uhd", ignoreCase = true) -> "4K"
+        name.contains("1440p", ignoreCase = true) -> "2K"
+        name.contains("1080p", ignoreCase = true) ||
+            name.contains("fhd", ignoreCase = true) -> "1080p"
+        name.contains("720p", ignoreCase = true) ||
+            name.contains("hd", ignoreCase = true) -> "720p"
+        name.contains("480p", ignoreCase = true) ||
+            name.contains("sd", ignoreCase = true) -> "SD"
+        else -> ""
     }
 
     fun isPersonalVideo(name: String, path: String): Boolean {

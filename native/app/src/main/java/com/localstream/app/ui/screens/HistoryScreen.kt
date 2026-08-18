@@ -43,9 +43,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -178,7 +178,11 @@ fun HistoryScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.padding(16.dp),
             ) {
-                items(uiState.items, key = { it.videoName }) { item ->
+                items(
+                    items = uiState.items,
+                    key = { it.videoName },
+                    contentType = { "history_card" },
+                ) { item ->
                     HistoryItemCard(
                         item = item,
                         onClick = { onOpenDetails(item.videoName) },
@@ -199,13 +203,11 @@ private fun HistoryItemCard(
     onRemove: () -> Unit,
     onToggleForceAvailable: () -> Unit,
 ) {
-    val alpha = if (item.isAvailableOnDisk) 1f else 0.5f
-
     Card(
         colors = CardDefaults.cardColors(containerColor = Zinc900),
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(alpha)
+            .graphicsLayer { alpha = if (item.isAvailableOnDisk) 1f else 0.5f }
             .clickable(onClick = onClick),
     ) {
         Column {

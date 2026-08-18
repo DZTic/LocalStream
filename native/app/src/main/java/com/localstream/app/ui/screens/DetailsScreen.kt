@@ -195,7 +195,11 @@ fun DetailsScreen(
                     )
                 }
 
-                itemsIndexed(uiState.episodes, key = { _, ep -> ep.video.name }) { index, ep ->
+                itemsIndexed(
+                    items = uiState.episodes,
+                    key = { _, ep -> ep.video.name },
+                    contentType = { _, _ -> "episode_row" },
+                ) { index, ep ->
                     EpisodeItemRow(
                         ep = ep,
                         seasonNum = uiState.selectedSeason,

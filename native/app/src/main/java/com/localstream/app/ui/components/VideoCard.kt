@@ -22,11 +22,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -66,7 +66,7 @@ fun VideoCard(
     modifier: Modifier = Modifier,
     episodeLabel: String? = null,
 ) {
-    val title = remember(video.name, video.seriesName, video.isSeriesGroup) {
+    val title = remember(video.name, video.seriesName, video.isSeriesGroup, video.cleanTitle) {
         VideoUiSelectors.displayTitle(video)
     }
     val resolution = remember(video.name) {
@@ -202,7 +202,7 @@ private fun PosterImage(
     title: String,
     isWatched: Boolean,
 ) {
-    val dimmed = if (isWatched) Modifier.alpha(0.5f) else Modifier
+    val dimmed = Modifier.graphicsLayer { alpha = if (isWatched) 0.5f else 1f }
     if (posterUrl != null) {
         AsyncImage(
             model = posterUrl,

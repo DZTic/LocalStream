@@ -1,4 +1,4 @@
-﻿package com.localstream.app.ui.components
+package com.localstream.app.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -38,6 +38,7 @@ fun VideoGrid(
         items(
             items = videos,
             key = { it.nativeUri?.takeIf(String::isNotEmpty) ?: it.path.ifEmpty { it.name } },
+            contentType = { "video_card" },
         ) { video ->
             VideoCard(
                 video = video,
