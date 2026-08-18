@@ -68,7 +68,6 @@ fun SettingsScreen(
     onLogoClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
-    onYouTubeClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val container = (context.applicationContext as LocalStreamApplication).container
@@ -97,7 +96,6 @@ fun SettingsScreen(
             onLogoClick = onLogoClick,
             onSearchClick = onSearchClick,
             onSettingsClick = onSettingsClick,
-            onYouTubeClick = onYouTubeClick,
         )
 
         Column(

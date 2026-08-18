@@ -46,7 +46,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,16 +79,13 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.localstream.app.LocalStreamApplication
-import com.localstream.app.domain.YoutubeUtils
 import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.theme.Black
 import com.localstream.app.ui.theme.Red600
 import com.localstream.app.ui.theme.White
 import com.localstream.app.ui.theme.Zinc900
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 private const val CONTROLS_TIMEOUT_MS = 4000L
@@ -110,14 +106,6 @@ fun PlayerScreen(
     val activity = context as? Activity
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val youtubeId = remember(uiState.currentVideo) {
-        val video = uiState.currentVideo
-        if (video != null) {
-            YoutubeUtils.extractVideoId(video.url)
-                ?: YoutubeUtils.extractVideoId(video.name)
-                ?: YoutubeUtils.extractVideoId(video.path)
-        } else null
-    }
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     }
@@ -189,7 +177,6 @@ fun PlayerScreen(
     }
 
     var showTracksSheet by remember { mutableStateOf(false) }
-    var playbackAttempt by remember { mutableIntStateOf(0) }
 
     val subtitleFilePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -392,19 +379,9 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(uiState.currentVideo, youtubeId, playbackAttempt) {
+    LaunchedEffect(uiState.currentVideo) {
         val video = uiState.currentVideo ?: return@LaunchedEffect
-        val uri = if (youtubeId != null) {
-            viewModel.setBuffering(true)
-            runCatching {
-                withContext(Dispatchers.IO) { YoutubeStreamExtractor.extract(video.url) }
-            }.onFailure { error ->
-                viewModel.setBuffering(false)
-                viewModel.setErrorMessage("Impossible d'extraire le flux YouTube : ${error.message}")
-            }.getOrNull()?.let(Uri::parse) ?: return@LaunchedEffect
-        } else {
-            extractUri(video) ?: return@LaunchedEffect
-        }
+        val uri = extractUri(video) ?: return@LaunchedEffect
 
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
@@ -574,13 +551,9 @@ fun PlayerScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = {
-                            if (youtubeId != null) {
-                                playbackAttempt++
-                            } else {
-                                viewModel.retryPlayback()
-                                exoPlayer.prepare()
-                                exoPlayer.play()
-                            }
+                            viewModel.retryPlayback()
+                            exoPlayer.prepare()
+                            exoPlayer.play()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Red600),
                     ) {
@@ -679,11 +652,7 @@ private fun launchExternalPlayer(context: Context, video: VideoItem, packageName
     val uri = extractUri(video) ?: return
 
     val intent = Intent(Intent.ACTION_VIEW).apply {
-        if (isYouTubeUrl(uri.toString()) || isYouTubeUrl(video.name)) {
-            data = uri
-        } else {
-            setDataAndType(uri, "video/*")
-        }
+        setDataAndType(uri, "video/*")
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         if (packageName.isNotBlank()) {
             setPackage(packageName)
@@ -694,11 +663,7 @@ private fun launchExternalPlayer(context: Context, video: VideoItem, packageName
         context.startActivity(intent)
     } catch (_: Exception) {
         val fallbackIntent = Intent(Intent.ACTION_VIEW).apply {
-            if (isYouTubeUrl(uri.toString()) || isYouTubeUrl(video.name)) {
-                data = uri
-            } else {
-                setDataAndType(uri, "video/*")
-            }
+            setDataAndType(uri, "video/*")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         try {
@@ -718,11 +683,6 @@ private fun extractUri(video: VideoItem?): Uri? {
         return Uri.parse(video.path)
     }
     return null
-}
-
-private fun isYouTubeUrl(urlStr: String?): Boolean {
-    if (urlStr.isNullOrBlank()) return false
-    return urlStr.contains("youtube.com") || urlStr.contains("youtu.be")
 }
 
 private fun enterPipMode(activity: Activity?) {
