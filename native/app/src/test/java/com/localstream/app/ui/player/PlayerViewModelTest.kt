@@ -8,7 +8,6 @@ import com.localstream.app.data.repository.VideoRepository
 import com.localstream.app.data.repository.WatchStateRepository
 import com.localstream.app.data.scanner.MediaScanner
 import com.localstream.app.di.AppContainer
-import com.localstream.app.domain.YoutubeUtils
 import com.localstream.app.domain.model.MovieCollection
 import com.localstream.app.domain.model.SubtitleEntry
 import com.localstream.app.domain.model.VideoItem
@@ -90,28 +89,6 @@ class PlayerViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
-    }
-
-    @Test
-    fun `PlayerViewModel correctly loads YouTube URL and restores saved position`() = runTest {
-        val ytUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-        val watchKey = YoutubeUtils.buildWatchStateKey("dQw4w9WgXcQ")
-        playbackDao.upsert(PlaybackStateEntity(name = watchKey, progressPct = 40.0, positionMs = 120000L))
-
-        val viewModel = PlayerViewModel(ytUrl, container)
-        backgroundScope.launch { viewModel.uiState.collect {} }
-        advanceUntilIdle()
-
-        val state = viewModel.uiState.value
-        assertNotNull(state.currentVideo)
-        assertEquals(watchKey, state.currentVideo?.name)
-        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", state.currentVideo?.url)
-        assertEquals(120000L, state.initialPositionMs)
-
-        viewModel.onPositionChanged(positionMs = 150000L, durationMs = 300000L)
-        advanceUntilIdle()
-
-        assertEquals(150000L, playbackDao.findByName(watchKey)?.positionMs)
     }
 
     @Test

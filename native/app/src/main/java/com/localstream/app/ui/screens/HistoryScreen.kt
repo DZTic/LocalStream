@@ -71,7 +71,6 @@ fun HistoryScreen(
     onSearchClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onOpenDetails: (String) -> Unit = {},
-    onYouTubeClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val container = (context.applicationContext as LocalStreamApplication).container
@@ -134,7 +133,6 @@ fun HistoryScreen(
             onLogoClick = onLogoClick,
             onSearchClick = onSearchClick,
             onSettingsClick = onSettingsClick,
-            onYouTubeClick = onYouTubeClick,
         )
 
         Row(

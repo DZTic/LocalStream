@@ -71,8 +71,7 @@ fun SearchScreen(
         )
 
         val trimmedQuery = query.trim()
-        val isUrl = trimmedQuery.startsWith("http://") || trimmedQuery.startsWith("https://") ||
-                trimmedQuery.contains("youtube.com") || trimmedQuery.contains("youtu.be")
+        val isUrl = trimmedQuery.startsWith("http://") || trimmedQuery.startsWith("https://")
 
         if (isUrl) {
             Card(
@@ -97,7 +96,7 @@ fun SearchScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = if (trimmedQuery.contains("youtube") || trimmedQuery.contains("youtu.be")) "Lancer la vidéo YouTube" else "Lancer le flux vidéo",
+                            text = "Lancer le flux vidéo",
                             color = White,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodyLarge,

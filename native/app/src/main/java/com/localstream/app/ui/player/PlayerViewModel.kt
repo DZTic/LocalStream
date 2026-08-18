@@ -6,7 +6,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.localstream.app.di.AppContainer
-import com.localstream.app.domain.YoutubeUtils
 import com.localstream.app.domain.model.VideoItem
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
@@ -130,34 +129,6 @@ class PlayerViewModel(
     private fun loadVideoDetails() {
         viewModelScope.launch {
             val decodedName = decodeUri(videoName)
-            val youtubeId = YoutubeUtils.extractVideoId(decodedName) ?: YoutubeUtils.extractVideoId(videoName)
-
-            if (youtubeId != null) {
-                val watchKey = YoutubeUtils.buildWatchStateKey(youtubeId)
-                val targetVideo = VideoItem(
-                    name = watchKey,
-                    url = YoutubeUtils.buildYoutubeUrl(youtubeId),
-                    path = "youtube:$youtubeId",
-                    type = "video/youtube",
-                )
-                val watchedMap = container.watchStateRepository.getWatchedMap()
-                val isWatched = watchedMap[targetVideo.name] == true
-                val state = container.watchStateRepository.getPlaybackState(targetVideo.name)
-                val rawPos = state?.positionMs ?: 0L
-                val pct = state?.progressPct ?: 0.0
-                val pos = if (isFinished(isWatched, pct, rawPos, targetVideo.duration * 1000L)) 0L else rawPos
-
-                _positionMs.value = pos
-                _uiState.update {
-                    it.copy(
-                        initialPositionMs = pos,
-                        positionMs = pos,
-                        currentVideo = targetVideo,
-                    )
-                }
-                return@launch
-            }
-
             val allRaw = container.videoRepository.getRawVideos()
             val allGrouped = container.videoRepository.getGroupedVideos()
 

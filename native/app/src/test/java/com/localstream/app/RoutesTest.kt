@@ -23,8 +23,8 @@ class RoutesTest {
 
     @Test
     fun player_buildsRouteWithEncodedParam() {
-        val url = "https://youtu.be/abc=123?x=y"
-        assertEquals("player/https%3A%2F%2Fyoutu.be%2Fabc%3D123%3Fx%3Dy", Routes.player(url))
+        val url = "https://example.com/video?abc=123&x=y"
+        assertEquals("player/https%3A%2F%2Fexample.com%2Fvideo%3Fabc%3D123%26x%3Dy", Routes.player(url))
     }
 
     @Test

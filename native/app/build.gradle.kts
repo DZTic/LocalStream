@@ -133,7 +133,6 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.media3.common)
-    implementation(libs.youtubedl.android)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

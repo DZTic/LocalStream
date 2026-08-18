@@ -64,7 +64,6 @@ fun PlaylistsScreen(
     onSearchClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onOpenDetails: (String) -> Unit = {},
-    onYouTubeClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val container = (context.applicationContext as LocalStreamApplication).container
@@ -127,7 +126,6 @@ fun PlaylistsScreen(
             onLogoClick = onLogoClick,
             onSearchClick = onSearchClick,
             onSettingsClick = onSettingsClick,
-            onYouTubeClick = onYouTubeClick,
         )
 
         val selected = uiState.selectedPlaylist

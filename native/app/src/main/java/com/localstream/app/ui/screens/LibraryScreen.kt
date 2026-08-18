@@ -36,7 +36,6 @@ fun LibraryScreen(
     onLogoClick: () -> Unit,
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onYouTubeClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -47,7 +46,6 @@ fun LibraryScreen(
             onLogoClick = onLogoClick,
             onSearchClick = onSearchClick,
             onSettingsClick = onSettingsClick,
-            onYouTubeClick = onYouTubeClick,
         )
 
         LibraryFilterBar(
