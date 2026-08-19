@@ -15,21 +15,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.localstream.app.domain.VideoUiSelectors
 import com.localstream.app.domain.model.TmdbMetadata
+import com.localstream.app.domain.model.VideoDisplayData
 import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.theme.White
 
 /**
  * Carrousel horizontal d'affiches (équivalent Compose de `VideoRow.tsx`).
- * Clés stables pour éviter les recompositions inutiles au fil des mises à jour.
+ * Clés stables pour éviter les recompositions inutiles au fil des mises à jour,
+ * et utilisation de [VideoDisplayData] (@Immutable) pour restaurer le skipping Compose.
  */
 @Suppress("LongParameterList", "FunctionNaming")
 @Composable
 fun VideoRow(
     title: String,
     items: List<VideoItem>,
-    metadata: Map<String, TmdbMetadata>,
-    watched: Map<String, Boolean>,
-    progress: Map<String, Double>,
+    displayData: VideoDisplayData,
     showResetProgress: Boolean,
     onOpenDetails: (VideoItem) -> Unit,
     onResetProgress: (String) -> Unit,
@@ -56,10 +56,10 @@ fun VideoRow(
             ) { video ->
                 VideoCard(
                     video = video,
-                    posterUrl = VideoUiSelectors.posterUrl(video, metadata),
-                    isWatched = VideoUiSelectors.isWatched(video, watched),
-                    progress = VideoUiSelectors.progressOf(video, progress),
-                    episodeLabel = VideoUiSelectors.activeEpisodeLabel(video, progress, watched),
+                    posterUrl = VideoUiSelectors.posterUrl(video, displayData),
+                    isWatched = VideoUiSelectors.isWatched(video, displayData),
+                    progress = VideoUiSelectors.progressOf(video, displayData),
+                    episodeLabel = VideoUiSelectors.activeEpisodeLabel(video, displayData),
                     showResetProgress = showResetProgress,
                     onClick = { onOpenDetails(video) },
                     onResetProgress = { onResetProgress(video.name) },
@@ -68,4 +68,31 @@ fun VideoRow(
             }
         }
     }
+}
+
+/**
+ * Surcharge de compatibilité pour [VideoRow].
+ */
+@Suppress("LongParameterList", "FunctionNaming")
+@Composable
+fun VideoRow(
+    title: String,
+    items: List<VideoItem>,
+    metadata: Map<String, TmdbMetadata>,
+    watched: Map<String, Boolean>,
+    progress: Map<String, Double>,
+    showResetProgress: Boolean,
+    onOpenDetails: (VideoItem) -> Unit,
+    onResetProgress: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    VideoRow(
+        title = title,
+        items = items,
+        displayData = VideoDisplayData(metadata = metadata, watched = watched, progress = progress),
+        showResetProgress = showResetProgress,
+        onOpenDetails = onOpenDetails,
+        onResetProgress = onResetProgress,
+        modifier = modifier,
+    )
 }

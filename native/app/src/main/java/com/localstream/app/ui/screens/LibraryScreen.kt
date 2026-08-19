@@ -81,9 +81,7 @@ fun LibraryScreen(
         } else {
             VideoGrid(
                 videos = uiState.filteredSorted,
-                metadata = uiState.metadata,
-                watched = uiState.watched,
-                progress = uiState.progress,
+                displayData = uiState.displayData,
                 onOpenDetails = onOpenDetails,
             )
         }

@@ -18,6 +18,7 @@ import com.localstream.app.domain.model.MovieCollection
 import com.localstream.app.domain.model.ResolutionFilter
 import com.localstream.app.domain.model.SortBy
 import com.localstream.app.domain.model.TmdbMetadata
+import com.localstream.app.domain.model.VideoDisplayData
 import com.localstream.app.domain.model.VideoItem
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
@@ -39,8 +40,7 @@ import kotlinx.coroutines.withContext
 /**
  * État de la bibliothèque partagé par les écrans Accueil / Recherche / Bibliothèque.
  * [videos] = groupé (séries + sagas) ; [filteredSorted] = après tri/filtres
- * (VideoFilterSorter, Phase 2) ; [metadata] = métadonnées TMDB indexées par clé
- * de lookup (nom de série pour les groupes, nom de fichier sinon).
+ * (VideoFilterSorter, Phase 2) ; [displayData] = métadonnées TMDB, visionnage et progression (@Immutable).
  */
 @Immutable
 data class LibraryUiState(
@@ -49,10 +49,8 @@ data class LibraryUiState(
     val isFetchingMetadata: Boolean = false,
     val videos: List<VideoItem> = emptyList(),
     val filteredSorted: List<VideoItem> = emptyList(),
-    val metadata: Map<String, TmdbMetadata> = emptyMap(),
+    val displayData: VideoDisplayData = VideoDisplayData(),
     val videoDurations: Map<String, Long> = emptyMap(),
-    val watched: Map<String, Boolean> = emptyMap(),
-    val progress: Map<String, Double> = emptyMap(),
     val sortBy: SortBy = SortBy.ALPHA,
     val filterGenre: Int? = null,
     val filterResolution: ResolutionFilter = ResolutionFilter.ALL,
@@ -60,6 +58,10 @@ data class LibraryUiState(
     val hasTmdbKey: Boolean = false,
     val tmdbBannerDismissed: Boolean = false,
 ) {
+    val metadata: Map<String, TmdbMetadata> get() = displayData.metadata
+    val watched: Map<String, Boolean> get() = displayData.watched
+    val progress: Map<String, Double> get() = displayData.progress
+
     /** Dates de sortie par clé de lookup (tri par date). */
     val releaseDates: Map<String, String>
         get() = metadata.mapNotNull { (key, meta) ->
@@ -193,9 +195,18 @@ class LibraryViewModel(
         }
     }
 
-    /** Récupère les métadonnées par paquets et publie chaque paquet dès réception. */
+    /**
+     * Récupère les métadonnées par paquets en tâche de fond et débounce/accumule
+     * les émissions d'état pour éviter de reconstruire l'arbre UI et d'inonder
+     * le thread principal pendant le scroll initial.
+     */
     private suspend fun fetchMetadataIntoState(videos: List<VideoItem>) {
-        for (chunk in videos.chunked(metadataChunkSize)) {
+        val pendingAdditions = mutableMapOf<String, TmdbMetadata>()
+        var lastEmitTime = System.currentTimeMillis()
+        val chunks = videos.chunked(metadataChunkSize)
+        val totalChunks = chunks.size
+
+        chunks.forEachIndexed { index, chunk ->
             val results = coroutineScope {
                 chunk.map { video ->
                     async(ioDispatcher) {
@@ -203,10 +214,21 @@ class LibraryViewModel(
                     }
                 }.awaitAll()
             }.filterNotNull()
+
             if (results.isNotEmpty()) {
-                val additions = results.associate { it.queryKey to it }
+                results.associateTo(pendingAdditions) { it.queryKey to it }
+            }
+
+            val isLast = index == totalChunks - 1
+            val now = System.currentTimeMillis()
+            val timeSinceLastEmit = now - lastEmitTime
+
+            if (pendingAdditions.isNotEmpty() && (timeSinceLastEmit >= METADATA_EMIT_DEBOUNCE_MS || isLast)) {
+                val additionsToEmit = pendingAdditions.toMap()
+                pendingAdditions.clear()
+                lastEmitTime = now
                 withContext(computationDispatcher) {
-                    _uiState.update { it.withMetadataUpdate(additions) }
+                    _uiState.update { it.withMetadataUpdate(additionsToEmit) }
                 }
             }
         }
@@ -217,12 +239,12 @@ class LibraryViewModel(
     private fun observeWatchState() {
         viewModelScope.launch {
             watchStateRepository.watchedItems.collect { watched ->
-                _uiState.update { it.copy(watched = watched).withDerived() }
+                _uiState.update { it.copy(displayData = it.displayData.copy(watched = watched)).withDerived() }
             }
         }
         viewModelScope.launch {
             watchStateRepository.activePlaybackStates.collect { progress ->
-                _uiState.update { it.copy(progress = progress).withDerived() }
+                _uiState.update { it.copy(displayData = it.displayData.copy(progress = progress)).withDerived() }
             }
         }
     }
@@ -322,13 +344,13 @@ class LibraryViewModel(
      * actifs ne dépendent pas des métadonnées (évite 20 tris complets lors du streaming TMDB).
      */
     private fun LibraryUiState.withMetadataUpdate(additions: Map<String, TmdbMetadata>): LibraryUiState {
-        val newMetadata = metadata + additions
+        val newDisplayData = displayData.copy(metadata = displayData.metadata + additions)
         val needsFilterSort = filterGenre != null || sortBy == SortBy.DATE
         val newFilteredSorted = if (needsFilterSort) {
-            val newReleaseDates = newMetadata.mapNotNull { (key, meta) ->
+            val newReleaseDates = newDisplayData.metadata.mapNotNull { (key, meta) ->
                 meta.releaseDate?.takeIf { it.isNotBlank() }?.let { key to it }
             }.toMap()
-            val newVideoGenres = newMetadata.mapValues { it.value.genreIds }
+            val newVideoGenres = newDisplayData.metadata.mapValues { it.value.genreIds }
             VideoFilterSorter.filterAndSortVideos(
                 videos,
                 FilterSortOptions(
@@ -345,7 +367,7 @@ class LibraryViewModel(
             filteredSorted
         }
         return copy(
-            metadata = newMetadata,
+            displayData = newDisplayData,
             filteredSorted = newFilteredSorted,
             searchResults = if (needsFilterSort) {
                 VideoUiSelectors.filterByQuery(newFilteredSorted, _searchQuery.value)
@@ -359,6 +381,7 @@ class LibraryViewModel(
         const val DEFAULT_METADATA_CHUNK_SIZE = 8
         const val WIFI_METADATA_CHUNK_SIZE = 16
         const val MOBILE_METADATA_CHUNK_SIZE = 4
+        const val METADATA_EMIT_DEBOUNCE_MS = 300L
         private const val SEARCH_DEBOUNCE_MS = 250L
 
         fun factory(container: AppContainer): ViewModelProvider.Factory = viewModelFactory {

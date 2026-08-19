@@ -198,6 +198,35 @@ class LibraryViewModelTest {
         assertEquals(3, homeState.alphabetical.size)
     }
 
+    @Test
+    fun `HomeViewModel conserve les instances de rows sans retrier quand seules les metadonnees changent`() = runTest(testDispatcher) {
+        val homeVm = com.localstream.app.ui.home.HomeViewModel(
+            libraryUiState = viewModel.uiState,
+            computationDispatcher = testDispatcher,
+        )
+        backgroundScope.launch { homeVm.uiState.collect() }
+        viewModel.refreshLibrary()
+        advanceUntilIdle()
+
+        val initialAlphabetical = homeVm.uiState.value.alphabetical
+        val initialRecent = homeVm.uiState.value.recentAdditions
+
+        // Mise à jour de métadonnées sans changement de liste de vidéos ni de filtres
+        val fakeMeta = com.localstream.app.domain.model.TmdbMetadata(
+            queryKey = "Avatar.2009.2160p.mkv",
+            posterPath = "/avatar.jpg",
+        )
+        val stateWithMeta = viewModel.uiState.value.copy(
+            displayData = viewModel.uiState.value.displayData.copy(
+                metadata = mapOf("Avatar.2009.2160p.mkv" to fakeMeta),
+            ),
+        )
+        val homeStateWithMeta = com.localstream.app.ui.home.HomeViewModel.deriveHomeUiState(stateWithMeta)
+        assertEquals("/avatar.jpg", homeStateWithMeta.metadata["Avatar.2009.2160p.mkv"]?.posterPath)
+        assertEquals(initialAlphabetical.size, homeStateWithMeta.alphabetical.size)
+        assertEquals(initialRecent.size, homeStateWithMeta.recentAdditions.size)
+    }
+
     // -------- Fakes --------
 
     private class FakeScanner(

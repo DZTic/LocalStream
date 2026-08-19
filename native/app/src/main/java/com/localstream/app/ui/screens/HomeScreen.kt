@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.localstream.app.domain.model.VideoDisplayData
 import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.components.HeroSection
 import com.localstream.app.ui.components.TopBar
@@ -101,7 +102,7 @@ fun HomeScreen(
                         HomeRow(
                             title = "Continuer la lecture",
                             items = uiState.continueWatching,
-                            uiState = uiState,
+                            displayData = uiState.displayData,
                             showResetProgress = true,
                             onOpenDetails = onOpenDetails,
                             onResetProgress = onResetProgress,
@@ -113,7 +114,7 @@ fun HomeScreen(
                     HomeRow(
                         title = "Nouveautés",
                         items = uiState.recentAdditions,
-                        uiState = uiState,
+                        displayData = uiState.displayData,
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
@@ -124,7 +125,7 @@ fun HomeScreen(
                     HomeRow(
                         title = "Recommandations",
                         items = uiState.recommendations,
-                        uiState = uiState,
+                        displayData = uiState.displayData,
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
@@ -135,7 +136,7 @@ fun HomeScreen(
                     HomeRow(
                         title = "Séries",
                         items = uiState.series,
-                        uiState = uiState,
+                        displayData = uiState.displayData,
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
@@ -146,7 +147,7 @@ fun HomeScreen(
                     HomeRow(
                         title = "Films",
                         items = uiState.movies,
-                        uiState = uiState,
+                        displayData = uiState.displayData,
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
@@ -157,7 +158,7 @@ fun HomeScreen(
                     HomeRow(
                         title = "De A à Z",
                         items = uiState.alphabetical,
-                        uiState = uiState,
+                        displayData = uiState.displayData,
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
@@ -186,7 +187,7 @@ fun HomeScreen(
 private fun HomeRow(
     title: String,
     items: List<VideoItem>,
-    uiState: HomeUiState,
+    displayData: VideoDisplayData,
     showResetProgress: Boolean,
     onOpenDetails: (VideoItem) -> Unit,
     onResetProgress: (String) -> Unit,
@@ -195,9 +196,7 @@ private fun HomeRow(
     VideoRow(
         title = title,
         items = items,
-        metadata = uiState.metadata,
-        watched = uiState.watched,
-        progress = uiState.progress,
+        displayData = displayData,
         showResetProgress = showResetProgress,
         onOpenDetails = onOpenDetails,
         onResetProgress = onResetProgress,

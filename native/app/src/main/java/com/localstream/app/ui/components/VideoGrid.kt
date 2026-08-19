@@ -11,20 +11,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.localstream.app.domain.VideoUiSelectors
 import com.localstream.app.domain.model.TmdbMetadata
+import com.localstream.app.domain.model.VideoDisplayData
 import com.localstream.app.domain.model.VideoItem
 
 /**
  * Grille adaptative d'affiches (réf. grilles de `SearchScreen.tsx` /
  * `LibraryScreen.tsx` : 2 à 6 colonnes selon la largeur, minSize ~110 dp).
- * Clés stables pour limiter les recompositions.
+ * Clés stables pour limiter les recompositions et utilisation de [VideoDisplayData]
+ * (@Immutable) pour restaurer le skipping Compose.
  */
 @Suppress("LongParameterList", "FunctionNaming")
 @Composable
 fun VideoGrid(
     videos: List<VideoItem>,
-    metadata: Map<String, TmdbMetadata>,
-    watched: Map<String, Boolean>,
-    progress: Map<String, Double>,
+    displayData: VideoDisplayData,
     onOpenDetails: (VideoItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -42,14 +42,35 @@ fun VideoGrid(
         ) { video ->
             VideoCard(
                 video = video,
-                posterUrl = VideoUiSelectors.posterUrl(video, metadata),
-                isWatched = VideoUiSelectors.isWatched(video, watched),
-                progress = VideoUiSelectors.progressOf(video, progress),
-                episodeLabel = VideoUiSelectors.activeEpisodeLabel(video, progress, watched),
+                posterUrl = VideoUiSelectors.posterUrl(video, displayData),
+                isWatched = VideoUiSelectors.isWatched(video, displayData),
+                progress = VideoUiSelectors.progressOf(video, displayData),
+                episodeLabel = VideoUiSelectors.activeEpisodeLabel(video, displayData),
                 showResetProgress = false,
                 onClick = { onOpenDetails(video) },
                 onResetProgress = {},
             )
         }
     }
+}
+
+/**
+ * Surcharge de compatibilité pour [VideoGrid].
+ */
+@Suppress("LongParameterList", "FunctionNaming")
+@Composable
+fun VideoGrid(
+    videos: List<VideoItem>,
+    metadata: Map<String, TmdbMetadata>,
+    watched: Map<String, Boolean>,
+    progress: Map<String, Double>,
+    onOpenDetails: (VideoItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    VideoGrid(
+        videos = videos,
+        displayData = VideoDisplayData(metadata = metadata, watched = watched, progress = progress),
+        onOpenDetails = onOpenDetails,
+        modifier = modifier,
+    )
 }

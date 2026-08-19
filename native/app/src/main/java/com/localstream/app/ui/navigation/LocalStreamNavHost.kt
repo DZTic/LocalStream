@@ -164,9 +164,7 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
                 SearchScreen(
                     query = query,
                     results = uiState.searchResults,
-                    metadata = uiState.metadata,
-                    watched = uiState.watched,
-                    progress = uiState.progress,
+                    displayData = uiState.displayData,
                     onQueryChange = libraryViewModel::onSearchChange,
                     onOpenDetails = openDetails,
                     onBack = { navController.popBackStack() },
