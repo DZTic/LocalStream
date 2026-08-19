@@ -1,6 +1,7 @@
 package com.localstream.app.domain
 
 import com.localstream.app.domain.model.TmdbMetadata
+import com.localstream.app.domain.model.VideoDisplayData
 import com.localstream.app.domain.model.VideoItem
 
 /**
@@ -8,6 +9,12 @@ import com.localstream.app.domain.model.VideoItem
  * Portage exact de la logique de `VideoRow.tsx` / `VideoCard.tsx` (Phase 0).
  */
 object VideoUiSelectors {
+
+    /**
+     * "Vu" d'un item via [VideoDisplayData].
+     */
+    fun isWatched(video: VideoItem, displayData: VideoDisplayData): Boolean =
+        isWatched(video, displayData.watched)
 
     /**
      * "Vu" d'un item : pour un groupe (série/saga), tous les épisodes doivent
@@ -27,6 +34,12 @@ object VideoUiSelectors {
     }
 
     /**
+     * Progression affichée (0-100) via [VideoDisplayData].
+     */
+    fun progressOf(video: VideoItem, displayData: VideoDisplayData): Double =
+        progressOf(video, displayData.progress)
+
+    /**
      * Progression affichée (0-100) : pour un groupe, la progression est stockée
      * par épisode — on retient celle du premier épisode en cours (0 < p < 100).
      */
@@ -42,6 +55,12 @@ object VideoUiSelectors {
         }
         return progress[video.name] ?: 0.0
     }
+
+    /**
+     * Identifie l'épisode actif via [VideoDisplayData].
+     */
+    fun getActiveEpisode(video: VideoItem, displayData: VideoDisplayData): VideoItem? =
+        getActiveEpisode(video, displayData.progress, displayData.watched)
 
     /**
      * Identifie l'épisode actif (en cours de lecture, ou le prochain non vu) d'une série.
@@ -78,6 +97,12 @@ object VideoUiSelectors {
     }
 
     /**
+     * Libellé d'épisode actif via [VideoDisplayData].
+     */
+    fun activeEpisodeLabel(video: VideoItem, displayData: VideoDisplayData): String? =
+        activeEpisodeLabel(video, displayData.progress, displayData.watched)
+
+    /**
      * Retourne le libellé de l'épisode actif pour l'affichage sur la carte.
      */
     @Suppress("ReturnCount")
@@ -105,6 +130,12 @@ object VideoUiSelectors {
      * (équivalent du `posterKey` web).
      */
     fun metadataKey(video: VideoItem): String = video.seriesName ?: video.name
+
+    /**
+     * URL d'affiche via [VideoDisplayData].
+     */
+    fun posterUrl(video: VideoItem, displayData: VideoDisplayData): String? =
+        posterUrl(video, displayData.metadata)
 
     /**
      * URL d'affiche avec fallback automatique pour les sagas/groupes si l'affiche

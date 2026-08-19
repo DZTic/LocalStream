@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.localstream.app.domain.model.TmdbMetadata
+import com.localstream.app.domain.model.VideoDisplayData
 import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.components.VideoGrid
 import com.localstream.app.ui.theme.Red600
@@ -55,9 +56,7 @@ import com.localstream.app.ui.theme.Zinc900
 fun SearchScreen(
     query: String,
     results: List<VideoItem>,
-    metadata: Map<String, TmdbMetadata>,
-    watched: Map<String, Boolean>,
-    progress: Map<String, Double>,
+    displayData: VideoDisplayData,
     onQueryChange: (String) -> Unit,
     onOpenDetails: (VideoItem) -> Unit,
     onBack: () -> Unit,
@@ -137,13 +136,37 @@ fun SearchScreen(
         } else {
             VideoGrid(
                 videos = results,
-                metadata = metadata,
-                watched = watched,
-                progress = progress,
+                displayData = displayData,
                 onOpenDetails = onOpenDetails,
             )
         }
     }
+}
+
+/**
+ * Surcharge de compatibilité pour [SearchScreen].
+ */
+@Composable
+fun SearchScreen(
+    query: String,
+    results: List<VideoItem>,
+    metadata: Map<String, TmdbMetadata>,
+    watched: Map<String, Boolean>,
+    progress: Map<String, Double>,
+    onQueryChange: (String) -> Unit,
+    onOpenDetails: (VideoItem) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SearchScreen(
+        query = query,
+        results = results,
+        displayData = VideoDisplayData(metadata = metadata, watched = watched, progress = progress),
+        onQueryChange = onQueryChange,
+        onOpenDetails = onOpenDetails,
+        onBack = onBack,
+        modifier = modifier,
+    )
 }
 
 @Composable

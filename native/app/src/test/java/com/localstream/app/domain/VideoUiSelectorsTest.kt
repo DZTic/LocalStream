@@ -1,4 +1,4 @@
-﻿package com.localstream.app.domain
+package com.localstream.app.domain
 
 import com.localstream.app.domain.model.VideoItem
 import org.junit.Assert.assertEquals
@@ -85,5 +85,17 @@ class VideoUiSelectorsTest {
         assertEquals(listOf(film), VideoUiSelectors.filterByQuery(videos, "film.2024"))
         assertTrue(VideoUiSelectors.filterByQuery(videos, "   ").isEmpty())
         assertTrue(VideoUiSelectors.filterByQuery(videos, "inconnu").isEmpty())
+    }
+
+    @Test
+    fun `selectors avec VideoDisplayData fonctionnent identiquement aux maps directes`() {
+        val displayData = com.localstream.app.domain.model.VideoDisplayData(
+            metadata = mapOf("Film.2024.1080p.mkv" to com.localstream.app.domain.model.TmdbMetadata(queryKey = "Film.2024.1080p.mkv", posterPath = "/poster.jpg")),
+            watched = mapOf("Film.2024.1080p.mkv" to true),
+            progress = mapOf("Film.2024.1080p.mkv" to 50.0),
+        )
+        assertTrue(VideoUiSelectors.isWatched(film, displayData))
+        assertEquals(50.0, VideoUiSelectors.progressOf(film, displayData), 0.001)
+        assertEquals("https://image.tmdb.org/t/p/w500/poster.jpg", VideoUiSelectors.posterUrl(film, displayData))
     }
 }
