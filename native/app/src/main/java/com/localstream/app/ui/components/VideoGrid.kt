@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.localstream.app.domain.VideoUiSelectors
@@ -40,6 +41,7 @@ fun VideoGrid(
             key = { it.nativeUri?.takeIf(String::isNotEmpty) ?: it.path.ifEmpty { it.name } },
             contentType = { "video_card" },
         ) { video ->
+            val onItemClick = remember(video, onOpenDetails) { { onOpenDetails(video) } }
             VideoCard(
                 video = video,
                 posterUrl = VideoUiSelectors.posterUrl(video, displayData),
@@ -47,7 +49,7 @@ fun VideoGrid(
                 progress = VideoUiSelectors.progressOf(video, displayData),
                 episodeLabel = VideoUiSelectors.activeEpisodeLabel(video, displayData),
                 showResetProgress = false,
-                onClick = { onOpenDetails(video) },
+                onClick = onItemClick,
                 onResetProgress = {},
             )
         }

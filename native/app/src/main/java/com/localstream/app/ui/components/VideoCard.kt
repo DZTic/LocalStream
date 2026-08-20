@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import coil.size.Precision
 import com.localstream.app.domain.Formatters
 import com.localstream.app.domain.VideoUiSelectors
 import com.localstream.app.domain.model.VideoItem
@@ -207,6 +208,10 @@ private fun PosterImage(
         val imageRequest = remember(posterUrl) {
             ImageRequest.Builder(context)
                 .data(posterUrl)
+                .size(width = 300, height = 450)
+                .precision(Precision.INEXACT)
+                .memoryCacheKey(posterUrl)
+                .diskCacheKey(posterUrl)
                 .crossfade(false)
                 .build()
         }

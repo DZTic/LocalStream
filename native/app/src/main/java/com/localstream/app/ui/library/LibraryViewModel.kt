@@ -106,9 +106,12 @@ class LibraryViewModel(
 
     // -------- Pipeline scan + métadonnées --------
 
-    /** Lance le scan complet si aucun n'est en cours (appelé une fois la permission accordée). */
-    fun refreshLibrary() {
+    /** Lance le scan si nécessaire (ou forcé par l'utilisateur). */
+    fun refreshLibrary(forceRefresh: Boolean = false) {
         if (scanJob?.isActive == true) return
+        if (!forceRefresh && _uiState.value.hasScanned && _uiState.value.videos.isNotEmpty()) {
+            return
+        }
         scanJob = viewModelScope.launch {
             _uiState.update { it.copy(isScanning = true) }
             try {
@@ -117,12 +120,15 @@ class LibraryViewModel(
                 _uiState.update { it.copy(hasTmdbKey = hasKey) }
 
                 val grouped = withContext(ioDispatcher) {
-                    videoRepository.scanAndLoad(whitelistedVideos = whitelist)
+                    videoRepository.scanAndLoad(
+                        whitelistedVideos = whitelist,
+                        forceRefresh = forceRefresh,
+                    )
                 }
                 publishVideos(grouped)
 
-                // Cache Room d'abord : les affiches s'affichent immédiatement.
-                val cached = loadCachedMetadata(grouped)
+                // Cache Room / Mémoire en un seul appel global : affichage immédiat en RAM
+                val cached = loadCachedMetadata()
                 if (cached.isNotEmpty()) {
                     withContext(computationDispatcher) {
                         _uiState.update { it.withMetadataUpdate(cached) }
@@ -150,12 +156,9 @@ class LibraryViewModel(
         }
     }
 
-    private suspend fun loadCachedMetadata(videos: List<VideoItem>): Map<String, TmdbMetadata> =
+    private suspend fun loadCachedMetadata(): Map<String, TmdbMetadata> =
         withContext(ioDispatcher) {
-            videos.mapNotNull { video ->
-                val key = VideoUiSelectors.metadataKey(video)
-                tmdbRepository.getCachedMetadata(key)?.let { key to it }
-            }.toMap()
+            tmdbRepository.getAllCachedMetadata()
         }
 
     /**
@@ -199,11 +202,18 @@ class LibraryViewModel(
      * Récupère les métadonnées par paquets en tâche de fond et débounce/accumule
      * les émissions d'état pour éviter de reconstruire l'arbre UI et d'inonder
      * le thread principal pendant le scroll initial.
+     * Ignore les vidéos qui ont déjà leurs métadonnées en mémoire.
      */
     private suspend fun fetchMetadataIntoState(videos: List<VideoItem>) {
+        val currentMeta = _uiState.value.metadata
+        val missingVideos = videos.filter { video ->
+            VideoUiSelectors.metadataKey(video) !in currentMeta
+        }
+        if (missingVideos.isEmpty()) return
+
         val pendingAdditions = mutableMapOf<String, TmdbMetadata>()
         var lastEmitTime = System.currentTimeMillis()
-        val chunks = videos.chunked(metadataChunkSize)
+        val chunks = missingVideos.chunked(metadataChunkSize)
         val totalChunks = chunks.size
 
         chunks.forEachIndexed { index, chunk ->

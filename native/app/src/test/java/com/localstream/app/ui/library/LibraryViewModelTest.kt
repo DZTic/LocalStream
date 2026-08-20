@@ -227,6 +227,19 @@ class LibraryViewModelTest {
         assertEquals(initialRecent.size, homeStateWithMeta.recentAdditions.size)
     }
 
+    @Test
+    fun `refreshLibrary ne re-scanne pas inutilement quand la bibliotheque est deja chargee en memoire`() = runTest(testDispatcher) {
+        viewModel.refreshLibrary()
+        advanceUntilIdle()
+        assertEquals(3, viewModel.uiState.value.videos.size)
+        assertTrue(viewModel.uiState.value.hasScanned)
+
+        // Deuxième appel sans forceRefresh -> ne relance pas le scan
+        viewModel.refreshLibrary(forceRefresh = false)
+        advanceUntilIdle()
+        assertEquals(3, viewModel.uiState.value.videos.size)
+    }
+
     // -------- Fakes --------
 
     private class FakeScanner(
