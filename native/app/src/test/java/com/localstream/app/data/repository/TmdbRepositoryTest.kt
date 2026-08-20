@@ -456,6 +456,53 @@ class TmdbRepositoryTest {
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is IllegalArgumentException)
     }
+
+    @Test
+    fun testPrewarmCachePopulatesMemoryCache() = runTest {
+        val metaJson = """
+            {"queryKey":"Inception","tmdbId":27205,"title":"Inception","overview":"A thief...","genreIds":[28,878]}
+        """.trimIndent()
+        fakeDao.insertMetadata(
+            TmdbMetadataEntity(
+                queryKey = "Inception",
+                json = metaJson,
+                fetchedAt = System.currentTimeMillis(),
+            )
+        )
+
+        repository.prewarmCache()
+        val allCached = repository.getAllCachedMetadata()
+        assertEquals(1, allCached.size)
+        assertEquals("Inception", allCached["Inception"]?.title)
+
+        // Effacer le fake DAO pour vérifier que la lecture se fait 100% en RAM
+        fakeDao.clearAll()
+        val cachedFromMemory = repository.getCachedMetadata("Inception")
+        assertNotNull(cachedFromMemory)
+        assertEquals("Inception", cachedFromMemory?.title)
+    }
+
+    @Test
+    fun testClearCacheEmptiesMemoryCache() = runTest {
+        val metaJson = """
+            {"queryKey":"Interstellar","tmdbId":157336,"title":"Interstellar","overview":"A team...","genreIds":[12,18,878]}
+        """.trimIndent()
+        fakeDao.insertMetadata(
+            TmdbMetadataEntity(
+                queryKey = "Interstellar",
+                json = metaJson,
+                fetchedAt = System.currentTimeMillis(),
+            )
+        )
+
+        repository.prewarmCache()
+        val before = repository.getCachedMetadata("Interstellar")
+        assertNotNull(before)
+
+        repository.clearCache()
+        val after = repository.getCachedMetadata("Interstellar")
+        assertTrue(after == null)
+    }
 }
 
 class FakeSettingsRepository(var key: String = "test_api_key") : SettingsRepository() {

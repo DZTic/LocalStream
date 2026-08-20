@@ -27,7 +27,11 @@ class VideoRepository(
         movieCollections: Map<String, MovieCollection> = emptyMap(),
         releaseDates: Map<String, String> = emptyMap(),
         whitelistedVideos: Set<String> = emptySet(),
+        forceRefresh: Boolean = false,
     ): List<VideoItem> {
+        if (!forceRefresh && groupedVideos.isNotEmpty()) {
+            return groupedVideos
+        }
         rawVideos = mediaScanner.scanVideoFiles()
         groupedVideos = mediaScanner.scanAndGroup(
             whitelistedVideos = whitelistedVideos,

@@ -114,12 +114,11 @@ class HomeViewModel(
         .flowOn(computationDispatcher)
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+            started = SharingStarted.Lazily,
             initialValue = HomeUiState(),
         )
 
     companion object {
-        private const val STOP_TIMEOUT_MS = 5_000L
 
         /** Projection pure LibraryUiState → HomeUiState (testable sans Android). */
         fun deriveHomeUiState(state: LibraryUiState): HomeUiState {

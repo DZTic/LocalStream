@@ -7,9 +7,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,7 +47,9 @@ fun VideoRow(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
+        val rowState = rememberLazyListState()
         LazyRow(
+            state = rowState,
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -54,6 +58,8 @@ fun VideoRow(
                 key = { it.nativeUri?.takeIf(String::isNotEmpty) ?: it.path.ifEmpty { it.name } },
                 contentType = { "video_card" },
             ) { video ->
+                val onItemClick = remember(video, onOpenDetails) { { onOpenDetails(video) } }
+                val onResetClick = remember(video.name, onResetProgress) { { onResetProgress(video.name) } }
                 VideoCard(
                     video = video,
                     posterUrl = VideoUiSelectors.posterUrl(video, displayData),
@@ -61,8 +67,8 @@ fun VideoRow(
                     progress = VideoUiSelectors.progressOf(video, displayData),
                     episodeLabel = VideoUiSelectors.activeEpisodeLabel(video, displayData),
                     showResetProgress = showResetProgress,
-                    onClick = { onOpenDetails(video) },
-                    onResetProgress = { onResetProgress(video.name) },
+                    onClick = onItemClick,
+                    onResetProgress = onResetClick,
                     modifier = Modifier.width(112.dp),
                 )
             }
