@@ -34,6 +34,16 @@ import com.localstream.app.ui.theme.White
 import com.localstream.app.ui.theme.Zinc500
 import com.localstream.app.ui.theme.Zinc900
 
+private val SortByOptions = listOf(SortBy.ALPHA, SortBy.DATE, SortBy.SIZE, SortBy.DURATION)
+private val GenreOptions = listOf<Int?>(null) + TmdbGenre.entries.map { it.id as Int? }
+private val ResolutionOptions = listOf(
+    ResolutionFilter.ALL,
+    ResolutionFilter.FOUR_K,
+    ResolutionFilter.ONE_THOUSAND_EIGHTY_P,
+    ResolutionFilter.SEVEN_HUNDRED_TWENTY_P,
+    ResolutionFilter.SD,
+)
+
 /**
  * Barre de tri et de filtres de la bibliothèque (équivalent Compose de
  * `FilterBar.tsx`) : tri (A-Z, date, taille, durée), genre TMDB et qualité
@@ -60,27 +70,21 @@ fun LibraryFilterBar(
         FilterMenuChip(
             label = "Trier",
             value = sortByLabel(sortBy),
-            items = listOf(SortBy.ALPHA, SortBy.DATE, SortBy.SIZE, SortBy.DURATION),
+            items = SortByOptions,
             itemLabel = { sortByLabel(it) },
             onSelect = onSortBy,
         )
         FilterMenuChip(
             label = "Genre",
             value = filterGenre?.let { TmdbGenre.getGenreName(it) } ?: "Tous les genres",
-            items = listOf<Int?>(null) + TmdbGenre.entries.map { it.id as Int? },
+            items = GenreOptions,
             itemLabel = { it?.let(TmdbGenre::getGenreName) ?: "Tous les genres" },
             onSelect = onFilterGenre,
         )
         FilterMenuChip(
             label = "Qualité",
             value = resolutionLabel(filterResolution),
-            items = listOf(
-                ResolutionFilter.ALL,
-                ResolutionFilter.FOUR_K,
-                ResolutionFilter.ONE_THOUSAND_EIGHTY_P,
-                ResolutionFilter.SEVEN_HUNDRED_TWENTY_P,
-                ResolutionFilter.SD,
-            ),
+            items = ResolutionOptions,
             itemLabel = { resolutionLabel(it) },
             onSelect = onFilterResolution,
         )

@@ -106,6 +106,13 @@ fun HeroSection(
     }
 }
 
+private val HeroVerticalGradient = Brush.verticalGradient(
+    colors = listOf(Color.Transparent, Color.Black),
+)
+private val HeroHorizontalGradient = Brush.horizontalGradient(
+    colors = listOf(Color.Black, Color.Black.copy(alpha = 0.6f), Color.Transparent),
+)
+
 @Composable
 private fun HeroContent(
     hero: VideoItem,
@@ -120,6 +127,7 @@ private fun HeroContent(
             val imageRequest = remember(imageUrl) {
                 ImageRequest.Builder(context)
                     .data(imageUrl)
+                    .allowHardware(true)
                     .crossfade(false)
                     .build()
             }
@@ -141,20 +149,12 @@ private fun HeroContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black),
-                    ),
-                ),
+                .background(HeroVerticalGradient),
         )
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(Color.Black, Color.Black.copy(alpha = 0.6f), Color.Transparent),
-                    ),
-                ),
+                .background(HeroHorizontalGradient),
         )
 
         Column(

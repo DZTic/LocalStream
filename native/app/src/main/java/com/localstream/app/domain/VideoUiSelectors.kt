@@ -22,15 +22,16 @@ object VideoUiSelectors {
      */
     @Suppress("ReturnCount")
     fun isWatched(video: VideoItem, watched: Map<String, Boolean>): Boolean {
-        if (video.isSeriesGroup) {
-            val episodes = video.episodes ?: return false
-            if (episodes.isEmpty()) return false
-            for (i in episodes.indices) {
-                if (watched[episodes[i].name] != true) return false
-            }
-            return true
+        if (!video.isSeriesGroup) {
+            return watched[video.name] == true
         }
-        return watched[video.name] == true
+        if (watched.isEmpty()) return false
+        val episodes = video.episodes ?: return false
+        if (episodes.isEmpty()) return false
+        for (i in episodes.indices) {
+            if (watched[episodes[i].name] != true) return false
+        }
+        return true
     }
 
     /**
@@ -45,15 +46,16 @@ object VideoUiSelectors {
      */
     @Suppress("ReturnCount")
     fun progressOf(video: VideoItem, progress: Map<String, Double>): Double {
-        if (video.isSeriesGroup) {
-            val episodes = video.episodes ?: return 0.0
-            for (i in episodes.indices) {
-                val p = progress[episodes[i].name] ?: 0.0
-                if (p > 0.0 && p < 100.0) return p
-            }
-            return 0.0
+        if (!video.isSeriesGroup) {
+            return progress[video.name] ?: 0.0
         }
-        return progress[video.name] ?: 0.0
+        if (progress.isEmpty()) return 0.0
+        val episodes = video.episodes ?: return 0.0
+        for (i in episodes.indices) {
+            val p = progress[episodes[i].name] ?: 0.0
+            if (p > 0.0 && p < 100.0) return p
+        }
+        return 0.0
     }
 
     /**
@@ -114,6 +116,13 @@ object VideoUiSelectors {
     ): String? {
         val episodes = video.episodes ?: return null
         if (!video.isSeriesGroup || episodes.isEmpty()) return null
+
+        if (watched.isEmpty() && progress.isEmpty()) {
+            val first = episodes[0]
+            val epNum = first.episode ?: 1
+            val seasonNum = first.season ?: 1
+            return "S$seasonNum:E$epNum"
+        }
 
         var firstUnwatched: VideoItem? = null
         var firstUnwatchedIndex = -1

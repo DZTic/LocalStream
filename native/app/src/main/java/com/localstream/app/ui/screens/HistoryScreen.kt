@@ -225,6 +225,7 @@ private fun HistoryItemCard(
                     val imageRequest = remember(posterUrl) {
                         ImageRequest.Builder(context)
                             .data(posterUrl)
+                            .allowHardware(true)
                             .crossfade(false)
                             .build()
                     }

@@ -30,14 +30,21 @@ object VideoGrouper {
         videos.forEach { video ->
             val match = VideoNameParser.SEASON_EPISODE_REGEX.find(video.name)
             if (match != null || !video.seriesName.isNullOrEmpty()) {
-                val updatedVideo = extractSeriesFields(video, match)
+                val updatedVideo = extractSeriesFields(video, match).let { ep ->
+                    ep.copy(
+                        cleanTitle = ep.cleanTitle ?: TitleCleaner.getCleanTitle(ep.name),
+                        resolution = ep.resolution.ifEmpty { Formatters.getResolution(ep.name) },
+                        year = ep.year ?: TitleCleaner.extractYear(ep.name),
+                    )
+                }
                 val finalName = resolveSeriesName(updatedVideo, match)
                 groups.getOrPut(finalName) { mutableListOf() }.add(updatedVideo)
             } else {
                 standalone.add(
                     video.copy(
-                        cleanTitle = TitleCleaner.getCleanTitle(video.name),
-                        year = video.year ?: TitleCleaner.extractYear(video.name)
+                        cleanTitle = video.cleanTitle ?: TitleCleaner.getCleanTitle(video.name),
+                        resolution = video.resolution.ifEmpty { Formatters.getResolution(video.name) },
+                        year = video.year ?: TitleCleaner.extractYear(video.name),
                     )
                 )
             }
@@ -75,6 +82,7 @@ object VideoGrouper {
                 if (sComp != 0) sComp else (a.episode ?: 0).compareTo(b.episode ?: 0)
             }
             val first = sorted.first()
+            val maxRes = sorted.map { it.resolution }.firstOrNull { it.isNotEmpty() } ?: ""
             VideoItem(
                 url = first.url,
                 name = seriesName,
@@ -83,7 +91,9 @@ object VideoGrouper {
                 isSeriesGroup = true,
                 isTvSeries = true,
                 episodes = sorted,
-                seriesName = seriesName
+                seriesName = seriesName,
+                cleanTitle = seriesName,
+                resolution = maxRes,
             )
         }
     }
@@ -118,6 +128,7 @@ object VideoGrouper {
                     if (dComp != 0) dComp else a.name.compareTo(b.name)
                 }
                 val first = sorted.first()
+                val sagaRes = sorted.map { it.resolution }.firstOrNull { it.isNotEmpty() } ?: first.resolution
                 sagas.add(
                     first.copy(
                         name = colName,
@@ -125,7 +136,9 @@ object VideoGrouper {
                         isSeriesGroup = true,
                         isTvSeries = false,
                         episodes = sorted,
-                        seriesName = colName
+                        seriesName = colName,
+                        cleanTitle = colName,
+                        resolution = sagaRes,
                     )
                 )
             } else {

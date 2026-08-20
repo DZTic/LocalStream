@@ -6,6 +6,7 @@ import android.database.Cursor
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import com.localstream.app.domain.Formatters
 import com.localstream.app.domain.TitleCleaner
 import com.localstream.app.domain.VideoGrouper
 import com.localstream.app.domain.VideoNameParser
@@ -146,6 +147,8 @@ class MediaStoreScanner(
         val contentUri = "content://media/external/video/media/$id"
         val seriesInfo = VideoNameParser.parseSeriesInfo(name, path)
         val extractedYear = TitleCleaner.extractYear(name)
+        val cleanTitle = TitleCleaner.getCleanTitle(name)
+        val resolution = Formatters.getResolution(name)
 
         return VideoItem(
             url = contentUri,
@@ -158,6 +161,8 @@ class MediaStoreScanner(
             seriesName = seriesInfo.seriesName,
             season = seriesInfo.season,
             episode = seriesInfo.episode,
+            cleanTitle = cleanTitle,
+            resolution = resolution,
             year = extractedYear
         )
     }
@@ -241,6 +246,8 @@ class MediaStoreScanner(
                 .map { file ->
                     val seriesInfo = VideoNameParser.parseSeriesInfo(file.name, file.absolutePath)
                     val extractedYear = TitleCleaner.extractYear(file.name)
+                    val cleanTitle = TitleCleaner.getCleanTitle(file.name)
+                    val resolution = Formatters.getResolution(file.name)
                     VideoItem(
                         url = "file://${file.absolutePath}",
                         name = file.name,
@@ -251,6 +258,8 @@ class MediaStoreScanner(
                         seriesName = seriesInfo.seriesName,
                         season = seriesInfo.season,
                         episode = seriesInfo.episode,
+                        cleanTitle = cleanTitle,
+                        resolution = resolution,
                         year = extractedYear
                     )
                 }.toList()

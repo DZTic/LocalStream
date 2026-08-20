@@ -35,6 +35,10 @@ import com.localstream.app.R
 import com.localstream.app.ui.theme.Red600
 import com.localstream.app.ui.theme.White
 
+private val TopBarGradient = Brush.verticalGradient(
+    colors = listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent),
+)
+
 /**
  * Barre supérieure (équivalent Compose de `AppHeader.tsx`) : logo "LOCALSTREAM"
  * rouge (retour accueil + reset des filtres), indicateur de chargement TMDB,
@@ -64,11 +68,7 @@ fun TopBar(
                     .graphicsLayer {
                         alpha = (1f - backgroundAlphaProvider()).coerceIn(0f, 1f)
                     }
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent),
-                        ),
-                    ),
+                    .background(TopBarGradient),
             )
         }
 

@@ -22,6 +22,7 @@ data class VideoItem(
     val isTvSeries: Boolean = false,
     val episodes: List<VideoItem>? = null,
     val cleanTitle: String? = null,
+    val resolution: String = "",
     val year: Int? = null,
     /** ID MediaStore : null si inconnu. Sert à fiabiliser la clé d'identité à terme. */
     val mediaStoreId: Long? = null,
