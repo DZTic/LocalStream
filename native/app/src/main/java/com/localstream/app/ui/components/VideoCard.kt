@@ -43,6 +43,8 @@ import com.localstream.app.ui.theme.Zinc800
 
 private val WatchedGreen = Color(0xFF16A34A) // green-600 Tailwind
 private val ProgressTrack = Color(0xFF52525B) // zinc-600 Tailwind
+private val CardShape = RoundedCornerShape(6.dp)
+private val BadgeShape = RoundedCornerShape(4.dp)
 
 /**
  * Carte d'affiche vidéo (équivalent Compose de `VideoCard.tsx`) :
@@ -76,7 +78,7 @@ fun VideoCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(CardShape)
                 .background(Zinc800)
                 .clickable(onClick = onClick),
         ) {
@@ -200,7 +202,6 @@ private fun PosterImage(
     title: String,
     isWatched: Boolean,
 ) {
-    val dimmed = Modifier.graphicsLayer { alpha = if (isWatched) 0.5f else 1f }
     if (posterUrl != null) {
         val context = LocalContext.current
         val imageRequest = remember(posterUrl) {
@@ -215,13 +216,13 @@ private fun PosterImage(
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
-                .then(dimmed),
+                .graphicsLayer { alpha = if (isWatched) 0.5f else 1f },
         )
     } else {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(dimmed)
+                .graphicsLayer { alpha = if (isWatched) 0.5f else 1f }
                 .padding(12.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -251,7 +252,7 @@ private fun Badge(
         fontSize = 9.sp,
         fontWeight = FontWeight.Bold,
         modifier = modifier
-            .background(background, RoundedCornerShape(4.dp))
+            .background(background, BadgeShape)
             .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }

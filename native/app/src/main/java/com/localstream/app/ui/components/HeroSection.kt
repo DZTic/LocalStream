@@ -70,18 +70,16 @@ fun HeroSection(
     onPlay: (VideoItem) -> Unit,
     onOpenDetails: (VideoItem) -> Unit,
     modifier: Modifier = Modifier,
-    isScrolling: Boolean = false,
+    @Suppress("UnusedParameter") isScrolling: Boolean = false,
 ) {
     if (candidates.isEmpty()) return
 
     var heroIndex by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(candidates.size, isScrolling) {
+    LaunchedEffect(candidates.size) {
         if (candidates.size <= 1) return@LaunchedEffect
         while (true) {
             delay(HERO_ROTATION_MS)
-            if (!isScrolling) {
-                heroIndex += 1
-            }
+            heroIndex += 1
         }
     }
 
@@ -93,11 +91,7 @@ fun HeroSection(
 
     Crossfade(
         targetState = hero,
-        animationSpec = if (isScrolling) {
-            tween(durationMillis = 0)
-        } else {
-            tween(durationMillis = HERO_FADE_MS)
-        },
+        animationSpec = tween(durationMillis = HERO_FADE_MS),
         modifier = modifier
             .fillMaxWidth()
             .height(heroHeight),
