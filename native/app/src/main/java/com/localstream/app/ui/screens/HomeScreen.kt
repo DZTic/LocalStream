@@ -1,14 +1,13 @@
 package com.localstream.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -65,10 +64,16 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
-    val topBarSolid by remember {
+    val isScrolling by remember {
+        derivedStateOf { listState.isScrollInProgress }
+    }
+    val topBarAlpha by remember {
         derivedStateOf {
-            listState.firstVisibleItemIndex > 0 ||
-                listState.firstVisibleItemScrollOffset > TOPBAR_SOLID_OFFSET_PX
+            if (listState.firstVisibleItemIndex > 0) {
+                1f
+            } else {
+                (listState.firstVisibleItemScrollOffset / TOPBAR_SOLID_OFFSET_PX.toFloat()).coerceIn(0f, 1f)
+            }
         }
     }
 
@@ -79,6 +84,8 @@ fun HomeScreen(
             else -> LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
                 item(key = "hero", contentType = "hero") {
                     HeroSection(
@@ -86,6 +93,7 @@ fun HomeScreen(
                         metadata = uiState.metadata,
                         onPlay = onPlay,
                         onOpenDetails = onOpenDetails,
+                        isScrolling = isScrolling,
                     )
                 }
                 if (uiState.showTmdbBanner) {
@@ -93,12 +101,11 @@ fun HomeScreen(
                         TmdbBanner(
                             onConfigure = onConfigureTmdb,
                             onDismiss = onDismissTmdbBanner,
-                            modifier = Modifier.offset(y = (-24).dp),
                         )
                     }
                 }
                 if (uiState.continueWatching.isNotEmpty()) {
-                    item(key = "row_continue_watching", contentType = "row") {
+                    item(key = "row_continue_watching", contentType = "row_continue_watching") {
                         HomeRow(
                             title = "Continuer la lecture",
                             items = uiState.continueWatching,
@@ -106,11 +113,10 @@ fun HomeScreen(
                             showResetProgress = true,
                             onOpenDetails = onOpenDetails,
                             onResetProgress = onResetProgress,
-                            modifier = Modifier.offset(y = (-24).dp),
                         )
                     }
                 }
-                item(key = "row_recent", contentType = "row") {
+                item(key = "row_recent", contentType = "row_recent") {
                     HomeRow(
                         title = "Nouveautés",
                         items = uiState.recentAdditions,
@@ -118,10 +124,9 @@ fun HomeScreen(
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
-                        modifier = Modifier.offset(y = (-24).dp),
                     )
                 }
-                item(key = "row_recommendations", contentType = "row") {
+                item(key = "row_recommendations", contentType = "row_recommendations") {
                     HomeRow(
                         title = "Recommandations",
                         items = uiState.recommendations,
@@ -129,10 +134,9 @@ fun HomeScreen(
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
-                        modifier = Modifier.offset(y = (-24).dp),
                     )
                 }
-                item(key = "row_series", contentType = "row") {
+                item(key = "row_series", contentType = "row_series") {
                     HomeRow(
                         title = "Séries",
                         items = uiState.series,
@@ -140,10 +144,9 @@ fun HomeScreen(
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
-                        modifier = Modifier.offset(y = (-24).dp),
                     )
                 }
-                item(key = "row_movies", contentType = "row") {
+                item(key = "row_movies", contentType = "row_movies") {
                     HomeRow(
                         title = "Films",
                         items = uiState.movies,
@@ -151,10 +154,9 @@ fun HomeScreen(
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
-                        modifier = Modifier.offset(y = (-24).dp),
                     )
                 }
-                item(key = "row_alphabetical", contentType = "row") {
+                item(key = "row_alphabetical", contentType = "row_alphabetical") {
                     HomeRow(
                         title = "De A à Z",
                         items = uiState.alphabetical,
@@ -162,17 +164,14 @@ fun HomeScreen(
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
-                        modifier = Modifier.offset(y = (-24).dp),
                     )
-                }
-                item(key = "bottom_spacer", contentType = "spacer") {
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
 
         TopBar(
-            solid = topBarSolid || !uiState.hasContent,
+            solid = !uiState.hasContent,
+            backgroundAlpha = if (!uiState.hasContent) 1f else topBarAlpha,
             showSearch = uiState.hasContent,
             isFetchingMetadata = uiState.isFetchingMetadata,
             onLogoClick = onLogoClick,

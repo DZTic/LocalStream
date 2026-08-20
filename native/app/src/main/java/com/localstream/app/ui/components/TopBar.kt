@@ -24,9 +24,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,9 +40,8 @@ import com.localstream.app.ui.theme.White
  * rouge (retour accueil + reset des filtres), indicateur de chargement TMDB,
  * recherche, réglages.
  *
- * [solid] : fond noir opaque (écrans Recherche/Bibliothèque) ; sinon dégradé
- * noir à transparent au-dessus du hero, qui devient opaque au scroll (géré par
- * l'appelant via [solid] dérivé du LazyListState).
+ * [solid] : fond noir opaque (écrans Recherche/Bibliothèque).
+ * [backgroundAlpha] : opacité du fond noir (au-dessus du hero ou au scroll).
  */
 @Composable
 fun TopBar(
@@ -53,60 +52,75 @@ fun TopBar(
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
+    backgroundAlpha: Float = if (solid) 1f else 0f,
 ) {
-    val background = if (solid) {
-        Modifier.background(Color.Black)
-    } else {
-        Modifier.background(
-            Brush.verticalGradient(
-                colors = listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent),
-            ),
-        )
-    }
+    Box(modifier = modifier.fillMaxWidth()) {
+        // Dégradé de base sous le hero quand la top bar n'est pas totalement opaque
+        if (!solid && backgroundAlpha < 1f) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent),
+                        ),
+                    ),
+            )
+        }
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(background)
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "LOCALSTREAM",
-            color = Red600,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = (-0.5).sp,
-            modifier = Modifier.clickable(onClick = onLogoClick),
-        )
+        // Fond noir opaque ou progressif via graphicsLayer (évite de réallouer / recomposer le contenu)
+        if (solid || backgroundAlpha > 0f) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer { alpha = if (solid) 1f else backgroundAlpha }
+                    .background(Color.Black),
+            )
+        }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (isFetchingMetadata) {
-                SpinningRefreshIcon()
-            }
-            if (showSearch) {
-                IconButton(onClick = onSearchClick) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "LOCALSTREAM",
+                color = Red600,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = (-0.5).sp,
+                modifier = Modifier.clickable(onClick = onLogoClick),
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isFetchingMetadata) {
+                    SpinningRefreshIcon()
+                }
+                if (showSearch) {
+                    IconButton(onClick = onSearchClick) {
+                        Icon(
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = "Rechercher",
+                            tint = White,
+                        )
+                    }
+                }
+                IconButton(onClick = onSettingsClick) {
                     Icon(
-                        imageVector = Icons.Filled.Search,
-                        contentDescription = "Rechercher",
+                        imageVector = Icons.Filled.Settings,
+                        contentDescription = stringResource(R.string.settings_title),
                         tint = White,
                     )
                 }
-            }
-            IconButton(onClick = onSettingsClick) {
-                Icon(
-                    imageVector = Icons.Filled.Settings,
-                    contentDescription = stringResource(R.string.settings_title),
-                    tint = White,
-                )
             }
         }
     }
 }
 
-/** Indicateur de r?cup?ration TMDB en cours (RefreshCw anim? du web). */
+/** Indicateur de récupération TMDB en cours (RefreshCw animé du web). */
 @Composable
 private fun SpinningRefreshIcon() {
     val transition = rememberInfiniteTransition(label = "tmdb-refresh")
@@ -119,11 +133,11 @@ private fun SpinningRefreshIcon() {
     Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
         Icon(
             imageVector = Icons.Filled.Refresh,
-            contentDescription = "R?cup?ration des m?tadonn?es TMDB en cours",
+            contentDescription = "Récupération des métadonnées TMDB en cours",
             tint = Red600,
             modifier = Modifier
                 .size(18.dp)
-                .rotate(angle),
+                .graphicsLayer { rotationZ = angle },
         )
     }
 }
