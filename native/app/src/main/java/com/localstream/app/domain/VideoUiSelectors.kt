@@ -104,8 +104,9 @@ object VideoUiSelectors {
 
     /**
      * Retourne le libellé de l'épisode actif pour l'affichage sur la carte.
+     * Algorithme optimisé en une seule passe sans allocations intermédiaires ni scans multiples.
      */
-    @Suppress("ReturnCount")
+    @Suppress("ReturnCount", "CyclomaticComplexMethod")
     fun activeEpisodeLabel(
         video: VideoItem,
         progress: Map<String, Double>,
@@ -113,13 +114,56 @@ object VideoUiSelectors {
     ): String? {
         val episodes = video.episodes ?: return null
         if (!video.isSeriesGroup || episodes.isEmpty()) return null
-        val activeEp = getActiveEpisode(video, progress, watched) ?: return null
-        val label = formatEpisodeLabel(video, activeEp)
-        val p = progress[activeEp.name] ?: 0.0
-        val epWatched = watched[activeEp.name] == true
+
+        var firstUnwatched: VideoItem? = null
+        var firstUnwatchedIndex = -1
+        var inProgressEp: VideoItem? = null
+        var inProgressEpIndex = -1
+        var hasAnyWatched = false
+
+        for (i in episodes.indices) {
+            val ep = episodes[i]
+            val isEpWatched = watched[ep.name] == true
+            if (isEpWatched) {
+                hasAnyWatched = true
+            } else {
+                val p = progress[ep.name] ?: 0.0
+                if (p > 0.0 && inProgressEp == null) {
+                    inProgressEp = ep
+                    inProgressEpIndex = i
+                }
+                if (firstUnwatched == null) {
+                    firstUnwatched = ep
+                    firstUnwatchedIndex = i
+                }
+            }
+        }
+
+        val activeEp: VideoItem
+        val activeIdx: Int
+        val isProgressActive: Boolean
+
+        if (inProgressEp != null) {
+            activeEp = inProgressEp
+            activeIdx = inProgressEpIndex
+            isProgressActive = true
+        } else if (firstUnwatched != null) {
+            activeEp = firstUnwatched
+            activeIdx = firstUnwatchedIndex
+            isProgressActive = false
+        } else {
+            activeEp = episodes[0]
+            activeIdx = 0
+            isProgressActive = false
+        }
+
+        val epNum = activeEp.episode ?: (activeIdx + 1)
+        val seasonNum = activeEp.season ?: 1
+        val label = "S${seasonNum}:E${epNum}"
+
         return when {
-            p > 0.0 && !epWatched -> "En cours : $label"
-            episodes.any { watched[it.name] == true } -> "Prochain : $label"
+            isProgressActive -> "En cours : $label"
+            hasAnyWatched -> "Prochain : $label"
             else -> label
         }
     }

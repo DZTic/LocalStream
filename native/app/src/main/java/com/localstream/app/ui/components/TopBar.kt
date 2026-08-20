@@ -41,7 +41,8 @@ import com.localstream.app.ui.theme.White
  * recherche, réglages.
  *
  * [solid] : fond noir opaque (écrans Recherche/Bibliothèque).
- * [backgroundAlpha] : opacité du fond noir (au-dessus du hero ou au scroll).
+ * [backgroundAlphaProvider] : lambda retournant l'opacité du fond noir lue uniquement
+ * en phase de dessin GPU (graphicsLayer), sans déclencher de recomposition Compose au scroll.
  */
 @Composable
 fun TopBar(
@@ -52,14 +53,17 @@ fun TopBar(
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
-    backgroundAlpha: Float = if (solid) 1f else 0f,
+    backgroundAlphaProvider: () -> Float,
 ) {
     Box(modifier = modifier.fillMaxWidth()) {
-        // Dégradé de base sous le hero quand la top bar n'est pas totalement opaque
-        if (!solid && backgroundAlpha < 1f) {
+        // Dégradé de base sous le hero quand la top bar n'est pas totalement opaque (phase de dessin)
+        if (!solid) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
+                    .graphicsLayer {
+                        alpha = (1f - backgroundAlphaProvider()).coerceIn(0f, 1f)
+                    }
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent),
@@ -69,14 +73,14 @@ fun TopBar(
         }
 
         // Fond noir opaque ou progressif via graphicsLayer (évite de réallouer / recomposer le contenu)
-        if (solid || backgroundAlpha > 0f) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .graphicsLayer { alpha = if (solid) 1f else backgroundAlpha }
-                    .background(Color.Black),
-            )
-        }
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer {
+                    alpha = if (solid) 1f else backgroundAlphaProvider().coerceIn(0f, 1f)
+                }
+                .background(Color.Black),
+        )
 
         Row(
             modifier = Modifier
@@ -118,6 +122,30 @@ fun TopBar(
             }
         }
     }
+}
+
+/** Surcharge de compatibilité recevant un Float statique. */
+@Composable
+fun TopBar(
+    solid: Boolean,
+    showSearch: Boolean,
+    isFetchingMetadata: Boolean,
+    onLogoClick: () -> Unit,
+    onSearchClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    backgroundAlpha: Float = if (solid) 1f else 0f,
+) {
+    TopBar(
+        solid = solid,
+        showSearch = showSearch,
+        isFetchingMetadata = isFetchingMetadata,
+        onLogoClick = onLogoClick,
+        onSearchClick = onSearchClick,
+        onSettingsClick = onSettingsClick,
+        modifier = modifier,
+        backgroundAlphaProvider = { backgroundAlpha },
+    )
 }
 
 /** Indicateur de récupération TMDB en cours (RefreshCw animé du web). */

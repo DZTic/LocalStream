@@ -23,9 +23,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -64,18 +61,6 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
-    val isScrolling by remember {
-        derivedStateOf { listState.isScrollInProgress }
-    }
-    val topBarAlpha by remember {
-        derivedStateOf {
-            if (listState.firstVisibleItemIndex > 0) {
-                1f
-            } else {
-                (listState.firstVisibleItemScrollOffset / TOPBAR_SOLID_OFFSET_PX.toFloat()).coerceIn(0f, 1f)
-            }
-        }
-    }
 
     Box(modifier = modifier.fillMaxSize()) {
         when {
@@ -93,7 +78,6 @@ fun HomeScreen(
                         metadata = uiState.metadata,
                         onPlay = onPlay,
                         onOpenDetails = onOpenDetails,
-                        isScrolling = isScrolling,
                     )
                 }
                 if (uiState.showTmdbBanner) {
@@ -171,7 +155,13 @@ fun HomeScreen(
 
         TopBar(
             solid = !uiState.hasContent,
-            backgroundAlpha = if (!uiState.hasContent) 1f else topBarAlpha,
+            backgroundAlphaProvider = {
+                if (!uiState.hasContent || listState.firstVisibleItemIndex > 0) {
+                    1f
+                } else {
+                    (listState.firstVisibleItemScrollOffset / TOPBAR_SOLID_OFFSET_PX.toFloat()).coerceIn(0f, 1f)
+                }
+            },
             showSearch = uiState.hasContent,
             isFetchingMetadata = uiState.isFetchingMetadata,
             onLogoClick = onLogoClick,
