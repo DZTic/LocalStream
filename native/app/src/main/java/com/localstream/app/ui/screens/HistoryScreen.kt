@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.localstream.app.LocalStreamApplication
 import com.localstream.app.ui.components.TopBar
 import com.localstream.app.ui.history.HistoryItemUiState
@@ -220,8 +221,15 @@ private fun HistoryItemCard(
             ) {
                 val posterUrl = item.metadata?.posterUrl()
                 if (posterUrl != null) {
+                    val context = LocalContext.current
+                    val imageRequest = remember(posterUrl) {
+                        ImageRequest.Builder(context)
+                            .data(posterUrl)
+                            .crossfade(false)
+                            .build()
+                    }
                     AsyncImage(
-                        model = posterUrl,
+                        model = imageRequest,
                         contentDescription = item.cleanTitle,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),

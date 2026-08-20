@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.localstream.app.LocalStreamApplication
 import com.localstream.app.domain.model.TmdbMetadata
 import com.localstream.app.domain.Formatters
@@ -228,8 +229,15 @@ private fun DetailsBackdropHeader(
     ) {
         val imageUrl = meta?.backdropUrl() ?: meta?.posterUrl()
         if (imageUrl != null) {
+            val context = LocalContext.current
+            val imageRequest = remember(imageUrl) {
+                ImageRequest.Builder(context)
+                    .data(imageUrl)
+                    .crossfade(false)
+                    .build()
+            }
             AsyncImage(
-                model = imageUrl,
+                model = imageRequest,
                 contentDescription = cleanTitle,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -569,8 +577,15 @@ private fun EpisodeItemRow(
                 ) {
                     val image = ep.tmdbEpisode?.stillUrl() ?: ep.fallbackImageUrl
                     if (image != null) {
+                        val context = LocalContext.current
+                        val imageRequest = remember(image) {
+                            ImageRequest.Builder(context)
+                                .data(image)
+                                .crossfade(false)
+                                .build()
+                        }
                         AsyncImage(
-                            model = image,
+                            model = imageRequest,
                             contentDescription = ep.video.name,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),

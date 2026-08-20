@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,10 +34,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.localstream.app.domain.TitleCleaner
 import com.localstream.app.domain.VideoUiSelectors
 import com.localstream.app.domain.model.TmdbMetadata
@@ -67,24 +70,34 @@ fun HeroSection(
     onPlay: (VideoItem) -> Unit,
     onOpenDetails: (VideoItem) -> Unit,
     modifier: Modifier = Modifier,
+    isScrolling: Boolean = false,
 ) {
     if (candidates.isEmpty()) return
 
     var heroIndex by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(candidates.size) {
+    LaunchedEffect(candidates.size, isScrolling) {
         if (candidates.size <= 1) return@LaunchedEffect
         while (true) {
             delay(HERO_ROTATION_MS)
-            heroIndex += 1
+            if (!isScrolling) {
+                heroIndex += 1
+            }
         }
     }
 
     val hero = candidates[heroIndex % candidates.size]
-    val heroHeight = LocalConfiguration.current.screenHeightDp.dp * HERO_HEIGHT_FRACTION
+    val configuration = LocalConfiguration.current
+    val heroHeight = remember(configuration.screenHeightDp) {
+        configuration.screenHeightDp.dp * HERO_HEIGHT_FRACTION
+    }
 
     Crossfade(
         targetState = hero,
-        animationSpec = tween(durationMillis = HERO_FADE_MS),
+        animationSpec = if (isScrolling) {
+            tween(durationMillis = 0)
+        } else {
+            tween(durationMillis = HERO_FADE_MS)
+        },
         modifier = modifier
             .fillMaxWidth()
             .height(heroHeight),
@@ -109,8 +122,15 @@ private fun HeroContent(
     Box(modifier = Modifier.fillMaxSize()) {
         val imageUrl = metadata?.backdropUrl() ?: metadata?.posterUrl()
         if (imageUrl != null) {
+            val context = LocalContext.current
+            val imageRequest = remember(imageUrl) {
+                ImageRequest.Builder(context)
+                    .data(imageUrl)
+                    .crossfade(false)
+                    .build()
+            }
             AsyncImage(
-                model = imageUrl,
+                model = imageRequest,
                 contentDescription = hero.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

@@ -24,16 +24,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.localstream.app.domain.Formatters
 import com.localstream.app.domain.VideoUiSelectors
 import com.localstream.app.domain.model.VideoItem
@@ -43,8 +43,6 @@ import com.localstream.app.ui.theme.Zinc800
 
 private val WatchedGreen = Color(0xFF16A34A) // green-600 Tailwind
 private val ProgressTrack = Color(0xFF52525B) // zinc-600 Tailwind
-private val DesaturatedColorFilter: ColorFilter =
-    ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.25f) })
 
 /**
  * Carte d'affiche vidéo (équivalent Compose de `VideoCard.tsx`) :
@@ -204,11 +202,17 @@ private fun PosterImage(
 ) {
     val dimmed = Modifier.graphicsLayer { alpha = if (isWatched) 0.5f else 1f }
     if (posterUrl != null) {
+        val context = LocalContext.current
+        val imageRequest = remember(posterUrl) {
+            ImageRequest.Builder(context)
+                .data(posterUrl)
+                .crossfade(false)
+                .build()
+        }
         AsyncImage(
-            model = posterUrl,
+            model = imageRequest,
             contentDescription = title,
             contentScale = ContentScale.Crop,
-            colorFilter = if (isWatched) DesaturatedColorFilter else null,
             modifier = Modifier
                 .fillMaxSize()
                 .then(dimmed),
