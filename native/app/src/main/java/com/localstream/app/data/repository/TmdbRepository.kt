@@ -33,7 +33,8 @@ class TmdbAuthException(message: String = "Clé API TMDB invalide") : Exception(
     "CyclomaticComplexMethod",
     "TooGenericExceptionCaught",
     "SwallowedException",
-    "ReturnCount"
+    "ReturnCount",
+    "NestedBlockDepth",
 )
 open class TmdbRepository(
     private val tmdbApi: TmdbApi,
@@ -68,25 +69,26 @@ open class TmdbRepository(
      */
     suspend fun prewarmCache() {
         if (isCachePrewarmed) return
+        val entities = runCatching { tmdbMetadataDao.getAll() }.getOrNull() ?: return
+        for (entity in entities) {
+            populateEntityInMemory(entity)
+        }
+        isCachePrewarmed = true
+    }
+
+    private fun populateEntityInMemory(entity: TmdbMetadataEntity) {
+        if (entity.json == NOT_FOUND_JSON) {
+            notFoundMemoryKeys.add(entity.queryKey)
+            return
+        }
         try {
-            val entities = tmdbMetadataDao.getAll()
-            for (entity in entities) {
-                if (entity.json == NOT_FOUND_JSON) {
-                    notFoundMemoryKeys.add(entity.queryKey)
-                } else {
-                    try {
-                        if (entity.queryKey.contains("_s") && entity.queryKey.contains("_e")) {
-                            val episode = json.decodeFromString<TmdbEpisode>(entity.json)
-                            episodeMemoryCache[entity.queryKey] = episode
-                        } else {
-                            val meta = json.decodeFromString<TmdbMetadata>(entity.json)
-                            metadataMemoryCache[entity.queryKey] = meta
-                        }
-                    } catch (_: Exception) {
-                    }
-                }
+            if (entity.queryKey.contains("_s") && entity.queryKey.contains("_e")) {
+                val episode = json.decodeFromString<TmdbEpisode>(entity.json)
+                episodeMemoryCache[entity.queryKey] = episode
+            } else {
+                val meta = json.decodeFromString<TmdbMetadata>(entity.json)
+                metadataMemoryCache[entity.queryKey] = meta
             }
-            isCachePrewarmed = true
         } catch (_: Exception) {
         }
     }
