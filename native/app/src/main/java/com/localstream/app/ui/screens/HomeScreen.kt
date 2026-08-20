@@ -61,6 +61,22 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
+    val continueWatchingListState = rememberLazyListState()
+    val recentAdditionsListState = rememberLazyListState()
+    val recommendationsListState = rememberLazyListState()
+    val seriesListState = rememberLazyListState()
+    val moviesListState = rememberLazyListState()
+    val alphabeticalListState = rememberLazyListState()
+
+    val alphaProvider = androidx.compose.runtime.remember(listState, uiState.hasContent) {
+        {
+            if (!uiState.hasContent || listState.firstVisibleItemIndex > 0) {
+                1f
+            } else {
+                (listState.firstVisibleItemScrollOffset / TOPBAR_SOLID_OFFSET_PX.toFloat()).coerceIn(0f, 1f)
+            }
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         when {
@@ -97,6 +113,7 @@ fun HomeScreen(
                             showResetProgress = true,
                             onOpenDetails = onOpenDetails,
                             onResetProgress = onResetProgress,
+                            listState = continueWatchingListState,
                         )
                     }
                 }
@@ -108,6 +125,7 @@ fun HomeScreen(
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
+                        listState = recentAdditionsListState,
                     )
                 }
                 item(key = "row_recommendations", contentType = "row_recommendations") {
@@ -118,6 +136,7 @@ fun HomeScreen(
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
+                        listState = recommendationsListState,
                     )
                 }
                 item(key = "row_series", contentType = "row_series") {
@@ -128,6 +147,7 @@ fun HomeScreen(
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
+                        listState = seriesListState,
                     )
                 }
                 item(key = "row_movies", contentType = "row_movies") {
@@ -138,6 +158,7 @@ fun HomeScreen(
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
+                        listState = moviesListState,
                     )
                 }
                 item(key = "row_alphabetical", contentType = "row_alphabetical") {
@@ -148,6 +169,7 @@ fun HomeScreen(
                         showResetProgress = false,
                         onOpenDetails = onOpenDetails,
                         onResetProgress = onResetProgress,
+                        listState = alphabeticalListState,
                     )
                 }
             }
@@ -155,13 +177,7 @@ fun HomeScreen(
 
         TopBar(
             solid = !uiState.hasContent,
-            backgroundAlphaProvider = {
-                if (!uiState.hasContent || listState.firstVisibleItemIndex > 0) {
-                    1f
-                } else {
-                    (listState.firstVisibleItemScrollOffset / TOPBAR_SOLID_OFFSET_PX.toFloat()).coerceIn(0f, 1f)
-                }
-            },
+            backgroundAlphaProvider = alphaProvider,
             showSearch = uiState.hasContent,
             isFetchingMetadata = uiState.isFetchingMetadata,
             onLogoClick = onLogoClick,
@@ -181,6 +197,7 @@ private fun HomeRow(
     onOpenDetails: (VideoItem) -> Unit,
     onResetProgress: (String) -> Unit,
     modifier: Modifier = Modifier,
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
 ) {
     VideoRow(
         title = title,
@@ -190,6 +207,7 @@ private fun HomeRow(
         onOpenDetails = onOpenDetails,
         onResetProgress = onResetProgress,
         modifier = modifier,
+        listState = listState,
     )
 }
 

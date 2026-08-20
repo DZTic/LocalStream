@@ -552,7 +552,7 @@ private fun EpisodeItemRow(
     val epNum = ep.video.episode ?: ep.tmdbEpisode?.episodeNumber ?: (epIndex + 1)
     val epSeason = ep.video.season ?: seasonNum
     val epLabel = "S$epSeason:E$epNum"
-    val epTitle = ep.tmdbEpisode?.name ?: TitleCleaner.getCleanTitle(ep.video.name)
+    val epTitle = ep.tmdbEpisode?.name ?: ep.video.cleanTitle ?: TitleCleaner.getCleanTitle(ep.video.name)
 
     Card(
         colors = CardDefaults.cardColors(containerColor = Zinc900),
@@ -581,6 +581,7 @@ private fun EpisodeItemRow(
                         val imageRequest = remember(image) {
                             ImageRequest.Builder(context)
                                 .data(image)
+                                .allowHardware(true)
                                 .crossfade(false)
                                 .build()
                         }

@@ -33,7 +33,7 @@ object HomeRowsDeriver {
         progress: Map<String, Double>,
     ): HomeRows {
         val unwatchedOnly = { items: List<VideoItem> ->
-            items.filter { !VideoUiSelectors.isWatched(it, watched) }
+            if (watched.isEmpty()) items else items.filter { !VideoUiSelectors.isWatched(it, watched) }
         }
 
         val unwatchedGrouped = unwatchedOnly(grouped)

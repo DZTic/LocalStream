@@ -67,11 +67,13 @@ fun VideoCard(
     modifier: Modifier = Modifier,
     episodeLabel: String? = null,
 ) {
-    val title = remember(video.name, video.seriesName, video.isSeriesGroup, video.cleanTitle) {
+    val title = video.cleanTitle ?: remember(video.name, video.seriesName, video.isSeriesGroup) {
         VideoUiSelectors.displayTitle(video)
     }
-    val resolution = remember(video.name) {
-        Formatters.getResolution(video.name)
+    val resolution = if (video.resolution.isNotEmpty()) {
+        video.resolution
+    } else {
+        remember(video.name) { Formatters.getResolution(video.name) }
     }
 
     Column(modifier = modifier) {
@@ -212,6 +214,7 @@ private fun PosterImage(
                 .precision(Precision.INEXACT)
                 .memoryCacheKey(posterUrl)
                 .diskCacheKey(posterUrl)
+                .allowHardware(true)
                 .crossfade(false)
                 .build()
         }
