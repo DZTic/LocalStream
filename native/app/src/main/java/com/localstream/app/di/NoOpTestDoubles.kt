@@ -73,6 +73,7 @@ class NoOpTmdbMetadataDao : TmdbMetadataDao {
     override suspend fun deleteMetadata(queryKey: String) {}
     override suspend fun clearAll() {}
     override suspend fun getAll(): List<TmdbMetadataEntity> = emptyList()
+    override fun observeAll(): Flow<List<TmdbMetadataEntity>> = MutableStateFlow(emptyList())
 }
 
 @Suppress("EmptyFunctionBlock")

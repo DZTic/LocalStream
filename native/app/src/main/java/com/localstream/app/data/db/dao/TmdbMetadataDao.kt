@@ -26,4 +26,7 @@ interface TmdbMetadataDao {
 
     @Query("SELECT * FROM tmdb_metadata")
     suspend fun getAll(): List<TmdbMetadataEntity>
+
+    @Query("SELECT * FROM tmdb_metadata")
+    fun observeAll(): kotlinx.coroutines.flow.Flow<List<TmdbMetadataEntity>>
 }

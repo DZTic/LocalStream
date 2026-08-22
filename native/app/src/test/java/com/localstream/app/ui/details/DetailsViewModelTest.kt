@@ -265,6 +265,28 @@ class DetailsViewModelTest {
         override suspend fun getAllItems(): List<PlaylistItemEntity> = items
     }
 
+    @Test
+    fun `DetailsViewModel avec identifiant d'un episode retrouve la serie parente et selectionne l'episode`() = runTest(testDispatcher) {
+        val videoRepo = VideoRepository(FakeScanner(listOf(ep1, ep2), listOf(seriesGroup)))
+        val watchRepo = WatchStateRepository(watchedDao, playbackDao)
+        val playlistRepo = PlaylistRepository(playlistDao)
+        val settingsRepo = SettingsRepository(dataStore = null)
+        val tmdbRepo = TmdbRepository(UnusedTmdbApi(), FakeTmdbMetadataDao(), settingsRepo)
+        val osRepo = OpenSubtitlesRepository(UnusedOsApi(), settingsRepo, SubtitleCache(File("/tmp")))
+
+        videoRepo.scanAndLoad()
+
+        val dummyContainer = DummyContainer(videoRepo, watchRepo, playlistRepo, tmdbRepo, settingsRepo, osRepo)
+        val viewModel = DetailsViewModel("Breaking.Bad.S01E02.mkv", dummyContainer)
+
+        backgroundScope.launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        org.junit.Assert.assertEquals("Breaking Bad", viewModel.uiState.value.videoGroup?.name)
+        org.junit.Assert.assertEquals(2, viewModel.uiState.value.episodes.size)
+        org.junit.Assert.assertEquals("Breaking.Bad.S01E02.mkv", viewModel.uiState.value.activeEpisodeName)
+    }
+
     private class FakeTmdbMetadataDao : TmdbMetadataDao {
         private val items = mutableMapOf<String, TmdbMetadataEntity>()
         override suspend fun getMetadata(queryKey: String): TmdbMetadataEntity? = items[queryKey]
@@ -273,6 +295,7 @@ class DetailsViewModelTest {
         override suspend fun deleteMetadata(queryKey: String) { items.remove(queryKey) }
         override suspend fun clearAll() = items.clear()
         override suspend fun getAll(): List<TmdbMetadataEntity> = items.values.toList()
+        override fun observeAll(): Flow<List<TmdbMetadataEntity>> = MutableStateFlow(items.values.toList())
     }
 
     private class UnusedTmdbApi : TmdbApi {

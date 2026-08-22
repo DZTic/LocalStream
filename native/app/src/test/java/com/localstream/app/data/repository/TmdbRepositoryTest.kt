@@ -536,4 +536,8 @@ class FakeTmdbMetadataDao : TmdbMetadataDao {
     override suspend fun getAll(): List<TmdbMetadataEntity> {
         return map.values.toList()
     }
+
+    override fun observeAll(): kotlinx.coroutines.flow.Flow<List<TmdbMetadataEntity>> {
+        return kotlinx.coroutines.flow.MutableStateFlow(map.values.toList())
+    }
 }

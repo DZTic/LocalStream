@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.localstream.app.data.db.entity.PlaybackStateEntity
+import com.localstream.app.data.db.entity.WatchedItemEntity
 import com.localstream.app.di.AppContainer
 import com.localstream.app.domain.TitleCleaner
 import com.localstream.app.domain.model.TmdbMetadata
@@ -34,28 +35,46 @@ data class HistoryUiState(
     val isLoading: Boolean = false,
 )
 
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 class HistoryViewModel(
     private val container: AppContainer,
 ) : ViewModel() {
 
+    init {
+        viewModelScope.launch {
+            container.tmdbRepository.prewarmCache()
+        }
+    }
+
     val uiState: StateFlow<HistoryUiState> = combine(
-        container.watchStateRepository.observeWatched,
+        container.watchStateRepository.observeWatchedEntities,
         container.watchStateRepository.observePlaybackStates,
         container.videoRepository.observeVideos,
+        container.tmdbRepository.observeAllMetadata,
         container.settingsRepository.observeForceAvailable,
-    ) { watchedSet: Set<String>, playbackMap: Map<String, PlaybackStateEntity>, diskVideos: List<VideoItem>, forceSet: Set<String> ->
-        val allNames = (watchedSet + playbackMap.keys).distinct()
-        val diskVideoMap = diskVideos.associateBy { it.name }
-        val diskVideoNames = diskVideoMap.keys
+    ) { watchedMap: Map<String, WatchedItemEntity>,
+        playbackMap: Map<String, PlaybackStateEntity>,
+        diskVideos: List<VideoItem>,
+        metadataMap: Map<String, TmdbMetadata>,
+        forceSet: Set<String> ->
 
-        val historyItems = allNames.map { name ->
+        val allNames = (watchedMap.keys + playbackMap.keys).distinct()
+        val rawVideos = container.videoRepository.getRawVideos()
+        val allVideos = (rawVideos + diskVideos + diskVideos.flatMap { it.episodes.orEmpty() })
+        val allVideosMap = allVideos.associateBy { it.name }
+        val diskNames = allVideosMap.keys
+
+        val historyItems = allNames.mapNotNull { name ->
             val pb = playbackMap[name]
-            val isWatched = watchedSet.contains(name)
-            val isDiskAvailable = diskVideoNames.contains(name)
+            val watchedEntity = watchedMap[name]
+            val isWatched = watchedEntity?.watched ?: false
+            if (!isWatched && pb == null) return@mapNotNull null
+
+            val isDiskAvailable = diskNames.contains(name) || rawVideos.any { it.name == name || it.path == name }
             val isForceAvailable = forceSet.contains(name)
             val effectiveAvailable = isDiskAvailable || isForceAvailable
 
-            val diskVideo = diskVideoMap[name]
+            val diskVideo = allVideosMap[name]
             val durationMs = (diskVideo?.duration ?: 0L) * 1000L
             val positionMs = pb?.positionMs ?: 0L
             val progressPercent = if (durationMs > 0L) {
@@ -63,9 +82,14 @@ class HistoryViewModel(
             } else {
                 ((pb?.progressPct ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f)
             }
-            val watchedAt = pb?.lastPlayedAt ?: 0L
+            val watchedAt = maxOf(pb?.lastPlayedAt ?: 0L, watchedEntity?.watchedAt ?: 0L)
 
-            val cleanTitle = TitleCleaner.getCleanTitle(name)
+            val cleanTitle = diskVideo?.cleanTitle ?: TitleCleaner.getCleanTitle(name)
+
+            val metadata = metadataMap[name]
+                ?: metadataMap[cleanTitle]
+                ?: diskVideo?.seriesName?.let { metadataMap[it] ?: metadataMap[TitleCleaner.getCleanTitle(it)] }
+                ?: metadataMap[TitleCleaner.getCleanTitle(name)]
 
             HistoryItemUiState(
                 videoName = name,
@@ -76,7 +100,7 @@ class HistoryViewModel(
                 progressPercent = progressPercent,
                 positionMs = positionMs,
                 isWatched = isWatched,
-                metadata = null,
+                metadata = metadata,
             )
         }.sortedByDescending { it.watchedAt }
 
@@ -90,7 +114,13 @@ class HistoryViewModel(
     fun removeFromHistory(videoName: String) {
         viewModelScope.launch {
             container.watchStateRepository.setWatched(videoName, false)
-            container.watchStateRepository.savePlaybackState(videoName, 0L, 0L, 0)
+            container.watchStateRepository.clearProgress(videoName)
+            val grouped = container.videoRepository.getGroupedVideos()
+            val group = grouped.find { it.name == videoName || it.seriesName == videoName }
+            group?.episodes?.forEach { ep ->
+                container.watchStateRepository.setWatched(ep.name, false)
+                container.watchStateRepository.clearProgress(ep.name)
+            }
         }
     }
 
@@ -111,7 +141,8 @@ class HistoryViewModel(
         val clean = TitleCleaner.getCleanTitle(title.trim())
         viewModelScope.launch {
             container.watchStateRepository.setWatched(clean, true)
-            val isUrl = clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("content://") || clean.startsWith("file://")
+            val isUrl = clean.startsWith("http://") || clean.startsWith("https://") ||
+                clean.startsWith("content://") || clean.startsWith("file://")
             val dummyVideo = VideoItem(name = clean, url = if (isUrl) clean else "", path = "", size = 0, duration = 0)
             container.tmdbRepository.fetchMetadataForVideo(dummyVideo)
         }

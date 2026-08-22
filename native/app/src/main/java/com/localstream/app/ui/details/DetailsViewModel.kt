@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.localstream.app.data.db.entity.PlaybackStateEntity
 import com.localstream.app.di.AppContainer
+import com.localstream.app.domain.TitleCleaner
 import com.localstream.app.domain.VideoUiSelectors
 import com.localstream.app.domain.model.PlaylistInfo
 import com.localstream.app.domain.model.TmdbEpisode
@@ -82,17 +83,37 @@ class DetailsViewModel(
         loadMetadata()
     }
 
+    private fun findVideoGroup(id: String, videos: List<VideoItem>): VideoItem {
+        val clean = TitleCleaner.getCleanTitle(id)
+        val rawVideos = container.videoRepository.getRawVideos()
+        val isUrl = id.startsWith("http://") || id.startsWith("https://") ||
+            id.startsWith("content://") || id.startsWith("file://")
+
+        return videos.find { it.name == id || it.seriesName == id }
+            ?: videos.find { it.name.equals(id, ignoreCase = true) || it.seriesName?.equals(id, ignoreCase = true) == true }
+            ?: videos.find { it.name.equals(clean, ignoreCase = true) || it.seriesName?.equals(clean, ignoreCase = true) == true }
+            ?: videos.find { group ->
+                group.episodes?.any { ep ->
+                    ep.name == id || ep.name.equals(id, ignoreCase = true) ||
+                        ep.name.equals(clean, ignoreCase = true) ||
+                        TitleCleaner.getCleanTitle(ep.name).equals(clean, ignoreCase = true)
+                } == true
+            }
+            ?: rawVideos.find { it.name == id || it.name.equals(id, ignoreCase = true) || it.path == id }
+            ?: VideoItem(name = id, url = if (isUrl) id else "", path = "", size = 0, duration = 0)
+    }
+
     private fun loadMetadata() {
         viewModelScope.launch {
+            val clean = TitleCleaner.getCleanTitle(id)
             val meta = container.tmdbRepository.getCachedMetadata(id)
+                ?: container.tmdbRepository.getCachedMetadata(clean)
             if (meta != null) {
                 cachedMetadataFlow.value = meta
             }
 
             container.videoRepository.observeVideos.collect { videos ->
-                val group = videos.find { it.name == id || it.seriesName == id }
-                    ?: videos.find { it.name.lowercase() == id.lowercase() }
-                    ?: return@collect
+                val group = findVideoGroup(id, videos)
 
                 val lookupName = if (group.isSeriesGroup && !group.seriesName.isNullOrEmpty()) {
                     group.seriesName
@@ -155,17 +176,16 @@ class DetailsViewModel(
         val meta = args[7] as TmdbMetadata?
         val cachedEpisodes = args[8] as Map<String, TmdbEpisode>
 
-        val isUrl = id.startsWith("http://") || id.startsWith("https://") || id.startsWith("content://") || id.startsWith("file://")
-        val group = videos.find { it.name == id || it.seriesName == id }
-            ?: videos.find { it.name.lowercase() == id.lowercase() }
-            ?: VideoItem(name = id, url = if (isUrl) id else "", path = "", size = 0, duration = 0)
+        val group = findVideoGroup(id, videos)
 
         val isGroupWatched = watchedSet.contains(group.name) ||
             (group.episodes?.isNotEmpty() == true && group.episodes.all { watchedSet.contains(it.name) })
 
+        val matchedEp = group.episodes?.find { it.name == id || it.name.equals(id, ignoreCase = true) }
+
         val watchedMap = watchedSet.associateWith { true }
         val progressMap = playbackMap.mapValues { it.value.progressPct }
-        val activeEp = VideoUiSelectors.getActiveEpisode(group, progressMap, watchedMap)
+        val activeEp = matchedEp ?: VideoUiSelectors.getActiveEpisode(group, progressMap, watchedMap)
         val activeEpPb = activeEp?.let { playbackMap[it.name] }
         val posMs = activeEpPb?.positionMs ?: playbackMap[group.name]?.positionMs ?: 0L
         val durMs = if (activeEp != null && activeEp.duration > 0) {
@@ -181,7 +201,7 @@ class DetailsViewModel(
         val activeNum = activeEp?.episode ?: group.episodes?.indexOfFirst { it.name == activeEp?.name }?.takeIf { it >= 0 }?.plus(1)
 
         val seasons = group.episodes?.mapNotNull { it.season }?.distinct()?.sorted()?.ifEmpty { listOf(1) } ?: listOf(1)
-        val currentSeason = if (seasons.contains(season)) season else seasons.firstOrNull() ?: 1
+        val currentSeason = if (seasons.contains(season)) season else matchedEp?.season ?: seasons.firstOrNull() ?: 1
 
         val currentSeasonEpisodes = group.episodes?.filter { (it.season ?: 1) == currentSeason } ?: emptyList()
 

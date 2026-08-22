@@ -35,6 +35,11 @@ class WatchStateRepository(
             list.filter { it.watched }.map { it.name }.toSet()
         }
 
+    val observeWatchedEntities: Flow<Map<String, WatchedItemEntity>> =
+        watchedItemDao.observeWatchedItems().map { list ->
+            list.filter { it.watched }.associateBy { it.name }
+        }
+
     suspend fun getWatchedMap(): Map<String, Boolean> =
         watchedItemDao.getAllWatchedItems().associate { it.name to it.watched }
 
