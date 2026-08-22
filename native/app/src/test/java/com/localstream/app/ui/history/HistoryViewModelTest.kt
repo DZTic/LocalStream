@@ -76,23 +76,24 @@ class HistoryViewModelTest {
 
     @Suppress("LongMethod")
     @Test
-    fun `uiState associe les metadonnees TMDB et detecte la disponibilite disque pour films et episodes`() = runTest(testDispatcher) {
+    fun `uiState regroupe les episodes d'une serie TV en un seul element dans l'historique`() = runTest(testDispatcher) {
         val watchRepo = WatchStateRepository(watchedDao, playbackDao)
         val settingsRepo = SettingsRepository(dataStore = null)
         val osRepo = OpenSubtitlesRepository(UnusedOsApi(), settingsRepo, SubtitleCache(File("/tmp")))
 
-        val episode1 = VideoItem(name = "Breaking.Bad.S01E01.mkv", duration = 3600, path = "/storage/BB/S01E01.mkv")
+        val episode1 = VideoItem(name = "Breaking.Bad.S01E01.mkv", duration = 3600, path = "/storage/BB/S01E01.mkv", season = 1, episode = 1)
+        val episode2 = VideoItem(name = "Breaking.Bad.S01E02.mkv", duration = 3600, path = "/storage/BB/S01E02.mkv", season = 1, episode = 2)
         val seriesGroup = VideoItem(
             name = "Breaking Bad",
             seriesName = "Breaking Bad",
             isSeriesGroup = true,
             isTvSeries = true,
-            episodes = listOf(episode1),
+            episodes = listOf(episode1, episode2),
         )
         val movie = VideoItem(name = "Inception.2010.mkv", duration = 7200, path = "/storage/Inception.mkv")
 
         val scanner = object : MediaScanner {
-            override fun scanVideoFiles(): List<VideoItem> = listOf(episode1, movie)
+            override fun scanVideoFiles(): List<VideoItem> = listOf(episode1, episode2, movie)
             override fun scanSubtitleFiles(): List<SubtitleEntry> = emptyList()
             override fun scanAndGroup(
                 whitelistedVideos: Set<String>,
@@ -125,6 +126,7 @@ class HistoryViewModelTest {
         )
 
         watchedDao.upsert(WatchedItemEntity(name = "Breaking.Bad.S01E01.mkv", watched = true, watchedAt = 1000L))
+        playbackDao.upsert(PlaybackStateEntity(name = "Breaking.Bad.S01E02.mkv", progressPct = 40.0, positionMs = 1440000L, lastPlayedAt = 1500L))
         playbackDao.upsert(PlaybackStateEntity(name = "Inception.2010.mkv", progressPct = 50.0, positionMs = 3600000L, lastPlayedAt = 2000L))
 
         val dummyContainer = DummyContainer(
@@ -145,34 +147,112 @@ class HistoryViewModelTest {
         org.junit.Assert.assertEquals("Inception.2010.mkv", firstItem.videoName)
         assertTrue(firstItem.isAvailableOnDisk)
         org.junit.Assert.assertEquals(2000L, firstItem.watchedAt)
+        org.junit.Assert.assertFalse(firstItem.isSeriesGroup)
 
         val secondItem = items[1]
-        org.junit.Assert.assertEquals("Breaking.Bad.S01E01.mkv", secondItem.videoName)
-        assertTrue("L'épisode de série doit être détecté sur disque", secondItem.isAvailableOnDisk)
-        org.junit.Assert.assertEquals(1000L, secondItem.watchedAt)
+        org.junit.Assert.assertEquals("Breaking Bad", secondItem.videoName)
+        assertTrue("La série doit être détectée sur disque", secondItem.isAvailableOnDisk)
+        org.junit.Assert.assertEquals(1500L, secondItem.watchedAt)
+        assertTrue(secondItem.isSeriesGroup)
+        assertTrue(secondItem.isTvSeries)
         org.junit.Assert.assertNotNull(secondItem.metadata)
         org.junit.Assert.assertEquals("Breaking Bad", secondItem.metadata?.title)
     }
 
     @Test
-    fun `removeFromHistory nettoie l'etat vu et la progression de lecture`() = runTest(testDispatcher) {
+    fun `uiState regroupe les films d'une saga MovieCollection en un seul element dans l'historique`() = runTest(testDispatcher) {
         val watchRepo = WatchStateRepository(watchedDao, playbackDao)
         val settingsRepo = SettingsRepository(dataStore = null)
         val osRepo = OpenSubtitlesRepository(UnusedOsApi(), settingsRepo, SubtitleCache(File("/tmp")))
-        val videoRepo = VideoRepository(FakeScanner())
 
-        watchedDao.upsert(WatchedItemEntity(name = "TestVideo.mp4", watched = true))
-        playbackDao.upsert(PlaybackStateEntity(name = "TestVideo.mp4", progressPct = 50.0, positionMs = 1000L))
+        val movie1 = VideoItem(name = "Harry.Potter.1.2001.mkv", cleanTitle = "Harry Potter 1", duration = 7200, path = "/storage/HP1.mkv")
+        val movie2 = VideoItem(name = "Harry.Potter.2.2002.mkv", cleanTitle = "Harry Potter 2", duration = 7200, path = "/storage/HP2.mkv")
+        val sagaGroup = VideoItem(
+            name = "Harry Potter Collection",
+            seriesName = "Harry Potter Collection",
+            cleanTitle = "Harry Potter Collection",
+            isSeriesGroup = true,
+            isTvSeries = false,
+            episodes = listOf(movie1, movie2),
+        )
+
+        val scanner = object : MediaScanner {
+            override fun scanVideoFiles(): List<VideoItem> = listOf(movie1, movie2)
+            override fun scanSubtitleFiles(): List<SubtitleEntry> = emptyList()
+            override fun scanAndGroup(
+                whitelistedVideos: Set<String>,
+                movieCollections: Map<String, MovieCollection>,
+                releaseDates: Map<String, String>,
+                rawVideos: List<VideoItem>?,
+            ): List<VideoItem> = listOf(sagaGroup)
+        }
+        val videoRepo = VideoRepository(scanner)
+        videoRepo.scanAndLoad()
+
+        watchedDao.upsert(WatchedItemEntity(name = "Harry.Potter.1.2001.mkv", watched = true, watchedAt = 1000L))
+        playbackDao.upsert(PlaybackStateEntity(name = "Harry.Potter.2.2002.mkv", progressPct = 30.0, positionMs = 2160000L, lastPlayedAt = 3000L))
+
+        val dummyContainer = DummyContainer(
+            overrideWatchRepo = watchRepo,
+            overrideOsRepo = osRepo,
+            overrideSettingsRepo = settingsRepo,
+            overrideVideoRepo = videoRepo,
+        )
+        val viewModel = HistoryViewModel(dummyContainer)
+        backgroundScope.launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        val items = viewModel.uiState.value.items
+        org.junit.Assert.assertEquals(1, items.size)
+
+        val sagaItem = items[0]
+        org.junit.Assert.assertEquals("Harry Potter Collection", sagaItem.videoName)
+        assertTrue(sagaItem.isSeriesGroup)
+        org.junit.Assert.assertFalse(sagaItem.isTvSeries)
+        assertTrue(sagaItem.isAvailableOnDisk)
+        org.junit.Assert.assertEquals(3000L, sagaItem.watchedAt)
+    }
+
+    @Test
+    fun `removeFromHistory nettoie l'etat vu et la progression de lecture pour un groupe`() = runTest(testDispatcher) {
+        val watchRepo = WatchStateRepository(watchedDao, playbackDao)
+        val settingsRepo = SettingsRepository(dataStore = null)
+        val osRepo = OpenSubtitlesRepository(UnusedOsApi(), settingsRepo, SubtitleCache(File("/tmp")))
+
+        val ep1 = VideoItem(name = "BB.S01E01.mkv", path = "/BB1.mp4")
+        val ep2 = VideoItem(name = "BB.S01E02.mkv", path = "/BB2.mp4")
+        val series = VideoItem(
+            name = "Breaking Bad",
+            seriesName = "Breaking Bad",
+            isSeriesGroup = true,
+            isTvSeries = true,
+            episodes = listOf(ep1, ep2),
+        )
+        val scanner = object : MediaScanner {
+            override fun scanVideoFiles(): List<VideoItem> = listOf(ep1, ep2)
+            override fun scanSubtitleFiles(): List<SubtitleEntry> = emptyList()
+            override fun scanAndGroup(
+                whitelistedVideos: Set<String>,
+                movieCollections: Map<String, MovieCollection>,
+                releaseDates: Map<String, String>,
+                rawVideos: List<VideoItem>?,
+            ): List<VideoItem> = listOf(series)
+        }
+        val videoRepo = VideoRepository(scanner)
+        videoRepo.scanAndLoad()
+
+        watchedDao.upsert(WatchedItemEntity(name = "BB.S01E01.mkv", watched = true))
+        playbackDao.upsert(PlaybackStateEntity(name = "BB.S01E02.mkv", progressPct = 50.0, positionMs = 1000L))
 
         val dummyContainer = DummyContainer(watchRepo, osRepo, settingsRepo, videoRepo)
         val viewModel = HistoryViewModel(dummyContainer)
         advanceUntilIdle()
 
-        viewModel.removeFromHistory("TestVideo.mp4")
+        viewModel.removeFromHistory("Breaking Bad")
         advanceUntilIdle()
 
-        assertTrue(watchedDao.items.value.none { it.name == "TestVideo.mp4" })
-        assertTrue(playbackDao.items.value.none { it.name == "TestVideo.mp4" })
+        assertTrue(watchedDao.items.value.none { it.name == "BB.S01E01.mkv" })
+        assertTrue(playbackDao.items.value.none { it.name == "BB.S01E02.mkv" })
     }
 
     private class DummyContainer(

@@ -256,14 +256,30 @@ private fun HistoryItemCard(
                         )
                     }
                 }
+                if (item.isSeriesGroup) {
+                    val badgeText = if (item.isTvSeries) "Série" else "Saga"
+                    Text(
+                        text = badgeText.uppercase(),
+                        color = White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(Red600, RoundedCornerShape(4.dp))
+                            .align(Alignment.TopStart)
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
                 if (!item.isAvailableOnDisk) {
                     Text(
                         text = "Non disponible",
                         color = White,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier
-                            .background(Red600.copy(alpha = 0.85f))
-                            .align(Alignment.TopStart)
+                            .background(
+                                if (item.isSeriesGroup) Zinc800.copy(alpha = 0.9f) else Red600.copy(alpha = 0.85f),
+                                RoundedCornerShape(4.dp),
+                            )
+                            .align(if (item.isSeriesGroup) Alignment.TopEnd else Alignment.TopStart)
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     )
                 }
@@ -289,6 +305,17 @@ private fun HistoryItemCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (!item.episodeLabel.isNullOrEmpty()) {
+                    Text(
+                        text = item.episodeLabel,
+                        color = if (item.episodeLabel.startsWith("En cours")) Red600 else Zinc500,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
