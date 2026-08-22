@@ -49,8 +49,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -62,6 +64,7 @@ import com.localstream.app.ui.history.HistoryViewModel
 import com.localstream.app.ui.theme.Black
 import com.localstream.app.ui.theme.Red600
 import com.localstream.app.ui.theme.White
+import com.localstream.app.ui.theme.Zinc500
 import com.localstream.app.ui.theme.Zinc800
 import com.localstream.app.ui.theme.Zinc900
 
@@ -235,6 +238,23 @@ private fun HistoryItemCard(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                     )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = item.cleanTitle,
+                            color = Zinc500,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 if (!item.isAvailableOnDisk) {
                     Text(

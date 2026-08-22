@@ -25,6 +25,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -72,17 +74,120 @@ class HistoryViewModelTest {
         assertTrue(watchedDao.items.value.any { it.name == "Inception" })
     }
 
+    @Suppress("LongMethod")
+    @Test
+    fun `uiState associe les metadonnees TMDB et detecte la disponibilite disque pour films et episodes`() = runTest(testDispatcher) {
+        val watchRepo = WatchStateRepository(watchedDao, playbackDao)
+        val settingsRepo = SettingsRepository(dataStore = null)
+        val osRepo = OpenSubtitlesRepository(UnusedOsApi(), settingsRepo, SubtitleCache(File("/tmp")))
+
+        val episode1 = VideoItem(name = "Breaking.Bad.S01E01.mkv", duration = 3600, path = "/storage/BB/S01E01.mkv")
+        val seriesGroup = VideoItem(
+            name = "Breaking Bad",
+            seriesName = "Breaking Bad",
+            isSeriesGroup = true,
+            isTvSeries = true,
+            episodes = listOf(episode1),
+        )
+        val movie = VideoItem(name = "Inception.2010.mkv", duration = 7200, path = "/storage/Inception.mkv")
+
+        val scanner = object : MediaScanner {
+            override fun scanVideoFiles(): List<VideoItem> = listOf(episode1, movie)
+            override fun scanSubtitleFiles(): List<SubtitleEntry> = emptyList()
+            override fun scanAndGroup(
+                whitelistedVideos: Set<String>,
+                movieCollections: Map<String, MovieCollection>,
+                releaseDates: Map<String, String>,
+                rawVideos: List<VideoItem>?,
+            ): List<VideoItem> = listOf(seriesGroup, movie)
+        }
+        val videoRepo = VideoRepository(scanner)
+        videoRepo.scanAndLoad()
+
+        val fakeTmdbDao = FakeTmdbDao()
+        val tmdbMeta = com.localstream.app.domain.model.TmdbMetadata(
+            queryKey = "Breaking Bad",
+            tmdbId = 1396,
+            title = "Breaking Bad",
+            posterPath = "/breaking_bad.jpg",
+        )
+        fakeTmdbDao.insertMetadata(
+            com.localstream.app.data.db.entity.TmdbMetadataEntity(
+                queryKey = "Breaking Bad",
+                json = kotlinx.serialization.json.Json.encodeToString(com.localstream.app.domain.model.TmdbMetadata.serializer(), tmdbMeta),
+                fetchedAt = System.currentTimeMillis(),
+            )
+        )
+        val tmdbRepo = com.localstream.app.data.repository.TmdbRepository(
+            tmdbApi = com.localstream.app.di.NoOpTmdbApi(),
+            tmdbMetadataDao = fakeTmdbDao,
+            settingsRepository = settingsRepo,
+        )
+
+        watchedDao.upsert(WatchedItemEntity(name = "Breaking.Bad.S01E01.mkv", watched = true, watchedAt = 1000L))
+        playbackDao.upsert(PlaybackStateEntity(name = "Inception.2010.mkv", progressPct = 50.0, positionMs = 3600000L, lastPlayedAt = 2000L))
+
+        val dummyContainer = DummyContainer(
+            overrideWatchRepo = watchRepo,
+            overrideOsRepo = osRepo,
+            overrideSettingsRepo = settingsRepo,
+            overrideVideoRepo = videoRepo,
+            overrideTmdbRepo = tmdbRepo,
+        )
+        val viewModel = HistoryViewModel(dummyContainer)
+        backgroundScope.launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        val items = viewModel.uiState.value.items
+        org.junit.Assert.assertEquals(2, items.size)
+
+        val firstItem = items[0]
+        org.junit.Assert.assertEquals("Inception.2010.mkv", firstItem.videoName)
+        assertTrue(firstItem.isAvailableOnDisk)
+        org.junit.Assert.assertEquals(2000L, firstItem.watchedAt)
+
+        val secondItem = items[1]
+        org.junit.Assert.assertEquals("Breaking.Bad.S01E01.mkv", secondItem.videoName)
+        assertTrue("L'épisode de série doit être détecté sur disque", secondItem.isAvailableOnDisk)
+        org.junit.Assert.assertEquals(1000L, secondItem.watchedAt)
+        org.junit.Assert.assertNotNull(secondItem.metadata)
+        org.junit.Assert.assertEquals("Breaking Bad", secondItem.metadata?.title)
+    }
+
+    @Test
+    fun `removeFromHistory nettoie l'etat vu et la progression de lecture`() = runTest(testDispatcher) {
+        val watchRepo = WatchStateRepository(watchedDao, playbackDao)
+        val settingsRepo = SettingsRepository(dataStore = null)
+        val osRepo = OpenSubtitlesRepository(UnusedOsApi(), settingsRepo, SubtitleCache(File("/tmp")))
+        val videoRepo = VideoRepository(FakeScanner())
+
+        watchedDao.upsert(WatchedItemEntity(name = "TestVideo.mp4", watched = true))
+        playbackDao.upsert(PlaybackStateEntity(name = "TestVideo.mp4", progressPct = 50.0, positionMs = 1000L))
+
+        val dummyContainer = DummyContainer(watchRepo, osRepo, settingsRepo, videoRepo)
+        val viewModel = HistoryViewModel(dummyContainer)
+        advanceUntilIdle()
+
+        viewModel.removeFromHistory("TestVideo.mp4")
+        advanceUntilIdle()
+
+        assertTrue(watchedDao.items.value.none { it.name == "TestVideo.mp4" })
+        assertTrue(playbackDao.items.value.none { it.name == "TestVideo.mp4" })
+    }
+
     private class DummyContainer(
         overrideWatchRepo: WatchStateRepository,
         overrideOsRepo: OpenSubtitlesRepository,
         overrideSettingsRepo: SettingsRepository,
         overrideVideoRepo: VideoRepository,
+        overrideTmdbRepo: com.localstream.app.data.repository.TmdbRepository? = null,
     ) : AppContainer(
         context = null,
         overrideWatchStateRepository = overrideWatchRepo,
         overrideOpenSubtitlesRepository = overrideOsRepo,
         overrideSettingsRepository = overrideSettingsRepo,
         overrideVideoRepository = overrideVideoRepo,
+        overrideTmdbRepository = overrideTmdbRepo,
     )
 
     private class FakeScanner : MediaScanner {
@@ -94,6 +199,24 @@ class HistoryViewModelTest {
             releaseDates: Map<String, String>,
             rawVideos: List<VideoItem>?,
         ): List<VideoItem> = emptyList()
+    }
+
+    private class FakeTmdbDao : com.localstream.app.data.db.dao.TmdbMetadataDao {
+        private val listFlow = MutableStateFlow<List<com.localstream.app.data.db.entity.TmdbMetadataEntity>>(emptyList())
+        override fun observeAll(): Flow<List<com.localstream.app.data.db.entity.TmdbMetadataEntity>> = listFlow
+        override suspend fun getMetadata(queryKey: String): com.localstream.app.data.db.entity.TmdbMetadataEntity? =
+            listFlow.value.find { it.queryKey == queryKey }
+        override suspend fun insertMetadata(entity: com.localstream.app.data.db.entity.TmdbMetadataEntity) {
+            listFlow.value = listFlow.value.filterNot { it.queryKey == entity.queryKey } + entity
+        }
+        override suspend fun insertMetadataList(entities: List<com.localstream.app.data.db.entity.TmdbMetadataEntity>) {
+            entities.forEach { insertMetadata(it) }
+        }
+        override suspend fun deleteMetadata(queryKey: String) {
+            listFlow.value = listFlow.value.filterNot { it.queryKey == queryKey }
+        }
+        override suspend fun clearAll() { listFlow.value = emptyList() }
+        override suspend fun getAll(): List<com.localstream.app.data.db.entity.TmdbMetadataEntity> = listFlow.value
     }
 
     private class FakeWatchedItemDao : WatchedItemDao {
@@ -115,7 +238,7 @@ class HistoryViewModelTest {
     }
 
     private class FakePlaybackStateDao : PlaybackStateDao {
-        private val items = MutableStateFlow<List<PlaybackStateEntity>>(emptyList())
+        val items = MutableStateFlow<List<PlaybackStateEntity>>(emptyList())
         override fun observeActivePlaybackStates(): Flow<List<PlaybackStateEntity>> = items
         override suspend fun getRecentlyPlayed(limit: Int): List<PlaybackStateEntity> = items.value.take(limit)
         override suspend fun getAll(): List<PlaybackStateEntity> = items.value

@@ -16,6 +16,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.encodeToString
@@ -100,6 +102,21 @@ open class TmdbRepository(
         prewarmCache()
         return metadataMemoryCache.toMap()
     }
+
+    val observeAllMetadata: Flow<Map<String, TmdbMetadata>> =
+        tmdbMetadataDao.observeAll().map { list ->
+            val result = mutableMapOf<String, TmdbMetadata>()
+            for (entity in list) {
+                if (entity.json != NOT_FOUND_JSON && !entity.queryKey.contains("_s") && !entity.queryKey.contains("_e")) {
+                    try {
+                        val meta = json.decodeFromString<TmdbMetadata>(entity.json)
+                        result[entity.queryKey] = meta
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+            result
+        }
 
     open suspend fun testApiKey(apiKeyOverride: String? = null): Result<Boolean> {
         val rawCandidate = apiKeyOverride ?: settingsRepository.getTmdbApiKey()

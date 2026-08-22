@@ -310,6 +310,7 @@ class LibraryViewModelTest {
         }
         override suspend fun clearAll() = items.clear()
         override suspend fun getAll(): List<TmdbMetadataEntity> = items.values.toList()
+        override fun observeAll(): Flow<List<TmdbMetadataEntity>> = MutableStateFlow(items.values.toList())
     }
 
     /** Sans clé API configurée, aucune méthode distante ne doit être appelée. */
