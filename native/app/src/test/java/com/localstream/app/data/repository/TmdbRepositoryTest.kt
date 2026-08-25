@@ -117,7 +117,7 @@ class TmdbRepositoryTest {
         assertNotNull(metadata)
         assertEquals("Fight Club", metadata?.title)
         assertEquals(550L, metadata?.tmdbId)
-        assertEquals("https://image.tmdb.org/t/p/w500/poster_fight_club.jpg", metadata?.posterUrl())
+        assertEquals("https://image.tmdb.org/t/p/w342/poster_fight_club.jpg", metadata?.posterUrl())
         assertEquals("https://image.tmdb.org/t/p/w1280/backdrop_fight_club.jpg", metadata?.backdropUrl())
         assertEquals(10L, metadata?.collectionId)
         assertEquals("Fight Club Collection", metadata?.collectionName)

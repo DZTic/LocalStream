@@ -96,6 +96,6 @@ class VideoUiSelectorsTest {
         )
         assertTrue(VideoUiSelectors.isWatched(film, displayData))
         assertEquals(50.0, VideoUiSelectors.progressOf(film, displayData), 0.001)
-        assertEquals("https://image.tmdb.org/t/p/w500/poster.jpg", VideoUiSelectors.posterUrl(film, displayData))
+        assertEquals("https://image.tmdb.org/t/p/w342/poster.jpg", VideoUiSelectors.posterUrl(film, displayData))
     }
 }
