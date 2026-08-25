@@ -1,9 +1,5 @@
 package com.localstream.app.ui.components
 
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,10 +7,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -101,7 +96,10 @@ fun TopBar(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (isFetchingMetadata) {
-                    SpinningRefreshIcon()
+                    CircularProgressIndicator(
+                        modifier = Modifier.padding(horizontal = 11.dp),
+                        color = Red600,
+                    )
                 }
                 if (showSearch) {
                     IconButton(onClick = onSearchClick) {
@@ -146,26 +144,4 @@ fun TopBar(
         modifier = modifier,
         backgroundAlphaProvider = { backgroundAlpha },
     )
-}
-
-/** Indicateur de récupération TMDB en cours (RefreshCw animé du web). */
-@Composable
-private fun SpinningRefreshIcon() {
-    val transition = rememberInfiniteTransition(label = "tmdb-refresh")
-    val angle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(animation = tween(durationMillis = 1000)),
-        label = "rotation",
-    )
-    Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-        Icon(
-            imageVector = Icons.Filled.Refresh,
-            contentDescription = "Récupération des métadonnées TMDB en cours",
-            tint = Red600,
-            modifier = Modifier
-                .size(18.dp)
-                .graphicsLayer { rotationZ = angle },
-        )
-    }
 }
