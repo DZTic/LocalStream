@@ -19,7 +19,7 @@ data class TmdbMetadata(
     val collectionName: String? = null,
 ) {
     fun posterUrl(): String? = posterPath?.let {
-        if (it.startsWith("http")) it else "https://image.tmdb.org/t/p/w500$it"
+        if (it.startsWith("http")) it else "https://image.tmdb.org/t/p/w342$it"
     }
 
     fun backdropUrl(): String? = backdropPath?.let {
