@@ -7,8 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.PictureInPicture
+import com.localstream.app.ui.theme.AppIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -88,11 +87,11 @@ fun BottomPlayerBar(
             )
             Row {
                 IconButton(onClick = onEnterPip) {
-                    Icon(Icons.Filled.PictureInPicture, contentDescription = "PiP", tint = White)
+                    Icon(AppIcons.PictureInPicture, contentDescription = "PiP", tint = White)
                 }
                 IconButton(onClick = onToggleLock) {
                     Icon(
-                        imageVector = if (isLocked) Icons.Filled.Lock else Icons.Filled.LockOpen,
+                        imageVector = if (isLocked) Icons.Filled.Lock else AppIcons.LockOpen,
                         contentDescription = "Verrouiller",
                         tint = White,
                     )

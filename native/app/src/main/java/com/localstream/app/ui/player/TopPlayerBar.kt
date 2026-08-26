@@ -10,9 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Subtitles
+import com.localstream.app.ui.theme.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -65,17 +63,17 @@ fun TopPlayerBar(
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onOpenTracks) {
-                Icon(Icons.Filled.Subtitles, contentDescription = "Sous-titres & Audio", tint = White)
+                Icon(AppIcons.Subtitles, contentDescription = "Sous-titres & Audio", tint = White)
             }
             IconButton(onClick = onCycleAspect) {
-                Icon(Icons.Filled.AspectRatio, contentDescription = "Format : ${aspectRatioMode.label}", tint = White)
+                Icon(AppIcons.AspectRatio, contentDescription = "Format : ${aspectRatioMode.label}", tint = White)
             }
             Button(
                 onClick = onCycleSpeed,
                 colors = ButtonDefaults.buttonColors(containerColor = Zinc800),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
             ) {
-                Icon(Icons.Filled.Speed, contentDescription = null, tint = White, modifier = Modifier.size(16.dp))
+                Icon(AppIcons.Speed, contentDescription = null, tint = White, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("${playbackSpeed}x", color = White, fontSize = 12.sp)
             }

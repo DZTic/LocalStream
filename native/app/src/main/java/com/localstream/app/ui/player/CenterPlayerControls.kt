@@ -8,11 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.filled.SkipNext
+import com.localstream.app.ui.theme.AppIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -39,7 +36,7 @@ fun CenterPlayerControls(
         horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         IconButton(onClick = onRewind, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Filled.Replay10, contentDescription = "Reculer 10s", tint = White, modifier = Modifier.size(36.dp))
+            Icon(AppIcons.Replay10, contentDescription = "Reculer 10s", tint = White, modifier = Modifier.size(36.dp))
         }
 
         Box(
@@ -51,7 +48,7 @@ fun CenterPlayerControls(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                imageVector = if (isPlaying) AppIcons.Pause else Icons.Filled.PlayArrow,
                 contentDescription = if (isPlaying) "Pause" else "Lecture",
                 tint = White,
                 modifier = Modifier.size(40.dp),
@@ -59,12 +56,12 @@ fun CenterPlayerControls(
         }
 
         IconButton(onClick = onForward, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Filled.Forward10, contentDescription = "Avancer 10s", tint = White, modifier = Modifier.size(36.dp))
+            Icon(AppIcons.Forward10, contentDescription = "Avancer 10s", tint = White, modifier = Modifier.size(36.dp))
         }
 
         if (hasNextVideo) {
             IconButton(onClick = onNextVideo, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Filled.SkipNext, contentDescription = "Épisode suivant", tint = White, modifier = Modifier.size(36.dp))
+                Icon(AppIcons.SkipNext, contentDescription = "Épisode suivant", tint = White, modifier = Modifier.size(36.dp))
             }
         }
     }

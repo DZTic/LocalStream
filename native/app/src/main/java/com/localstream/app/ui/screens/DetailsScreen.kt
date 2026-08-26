@@ -25,13 +25,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import com.localstream.app.ui.theme.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -382,7 +379,7 @@ private fun DetailsActionButtons(
             colors = ButtonDefaults.buttonColors(containerColor = Zinc800, contentColor = White),
             shape = RoundedCornerShape(4.dp),
         ) {
-            Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null)
+            Icon(AppIcons.PlaylistAdd, contentDescription = null)
             Text(text = "MA LISTE", modifier = Modifier.padding(start = 4.dp))
         }
 
@@ -398,7 +395,7 @@ private fun DetailsActionButtons(
         }
 
         IconButton(onClick = onShowSubtitleSheet) {
-            Icon(Icons.Filled.ClosedCaption, contentDescription = "Sous-titres", tint = White)
+            Icon(AppIcons.ClosedCaption, contentDescription = "Sous-titres", tint = White)
         }
     }
 }
@@ -678,7 +675,7 @@ private fun EpisodeItemRow(
 
                 IconButton(onClick = onToggleExpanded) {
                     Icon(
-                        if (ep.isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        if (ep.isExpanded) AppIcons.ExpandLess else AppIcons.ExpandMore,
                         contentDescription = "Détails de l'épisode",
                         tint = White,
                     )

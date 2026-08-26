@@ -19,10 +19,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteSweep
+import com.localstream.app.ui.theme.AppIcons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -165,7 +163,7 @@ fun HistoryScreen(
 
                 if (uiState.items.isNotEmpty()) {
                     IconButton(onClick = viewModel::clearHistory) {
-                        Icon(Icons.Filled.DeleteSweep, contentDescription = "Vider l'historique", tint = White)
+                        Icon(AppIcons.DeleteSweep, contentDescription = "Vider l'historique", tint = White)
                     }
                 }
             }
@@ -323,7 +321,7 @@ private fun HistoryItemCard(
                 ) {
                     IconButton(onClick = onToggleForceAvailable, modifier = Modifier.size(28.dp)) {
                         Icon(
-                            if (item.isForceAvailable) Icons.Filled.Cloud else Icons.Filled.CloudOff,
+                            if (item.isForceAvailable) AppIcons.Cloud else AppIcons.CloudOff,
                             contentDescription = "Disponibilité",
                             tint = if (item.isForceAvailable) Red600 else White.copy(alpha = 0.5f),
                             modifier = Modifier.size(18.dp),

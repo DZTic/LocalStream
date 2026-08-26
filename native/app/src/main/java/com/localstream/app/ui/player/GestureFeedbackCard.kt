@@ -5,11 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Brightness6
-import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.filled.VolumeUp
+import com.localstream.app.ui.theme.AppIcons
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -40,10 +36,10 @@ fun GestureFeedbackCard(
         ) {
             Icon(
                 imageVector = when (feedback.type) {
-                    FeedbackType.VOLUME -> Icons.Filled.VolumeUp
-                    FeedbackType.BRIGHTNESS -> Icons.Filled.Brightness6
-                    FeedbackType.SEEK_FORWARD -> Icons.Filled.Forward10
-                    FeedbackType.SEEK_REWIND -> Icons.Filled.Replay10
+                    FeedbackType.VOLUME -> AppIcons.VolumeUp
+                    FeedbackType.BRIGHTNESS -> AppIcons.Brightness6
+                    FeedbackType.SEEK_FORWARD -> AppIcons.Forward10
+                    FeedbackType.SEEK_REWIND -> AppIcons.Replay10
                 },
                 contentDescription = null,
                 tint = White,
