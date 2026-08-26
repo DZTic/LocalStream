@@ -100,6 +100,8 @@ class PlayerViewModel(
 
     private val savePositionChannel = Channel<SavePositionRequest>(Channel.CONFLATED)
 
+    private var hasMarkedWatchedThisSession = false
+
     init {
         @OptIn(FlowPreview::class)
         viewModelScope.launch {
@@ -140,6 +142,7 @@ class PlayerViewModel(
             val rawPos = state?.positionMs ?: 0L
             val pct = state?.progressPct ?: 0.0
             val pos = if (isFinished(isWatched, pct, rawPos, targetVideo.duration * 1000L)) 0L else rawPos
+            hasMarkedWatchedThisSession = isWatched
 
             val targetDur = if (targetVideo.duration > 0L) {
                 targetVideo.duration * 1000L
@@ -251,7 +254,8 @@ class PlayerViewModel(
         }
 
         val isThresholdReached = durationMs > 0L && positionMs >= (durationMs * WATCHED_THRESHOLD_RATIO)
-        if (isThresholdReached) {
+        if (isThresholdReached && !hasMarkedWatchedThisSession) {
+            hasMarkedWatchedThisSession = true
             viewModelScope.launch {
                 container.watchStateRepository.setWatched(
                     videoName = video.name,
@@ -280,12 +284,15 @@ class PlayerViewModel(
     fun onVideoEnded() {
         _uiState.update { it.copy(isEnded = true, isPlaying = false) }
         val video = _uiState.value.currentVideo ?: return
-        viewModelScope.launch {
-            container.watchStateRepository.setWatched(
-                videoName = video.name,
-                watched = true,
-                mediaStoreId = video.mediaStoreId,
-            )
+        if (!hasMarkedWatchedThisSession) {
+            hasMarkedWatchedThisSession = true
+            viewModelScope.launch {
+                container.watchStateRepository.setWatched(
+                    videoName = video.name,
+                    watched = true,
+                    mediaStoreId = video.mediaStoreId,
+                )
+            }
         }
     }
 
@@ -492,6 +499,7 @@ class PlayerViewModel(
             val rawPos = state?.positionMs ?: 0L
             val pct = state?.progressPct ?: 0.0
             val pos = if (isFinished(isWatched, pct, rawPos, video.duration * 1000L)) 0L else rawPos
+            hasMarkedWatchedThisSession = isWatched
 
             val targetDur = if (video.duration > 0L) {
                 video.duration * 1000L
