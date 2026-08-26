@@ -20,7 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlaylistPlay
+import com.localstream.app.ui.theme.AppIcons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -273,7 +273,7 @@ private fun PlaylistCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Filled.PlaylistPlay,
+                    AppIcons.PlaylistPlay,
                     contentDescription = null,
                     tint = Red600,
                     modifier = Modifier.height(40.dp),

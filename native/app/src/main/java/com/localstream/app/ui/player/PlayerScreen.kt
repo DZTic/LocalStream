@@ -31,8 +31,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Lock
+import com.localstream.app.ui.theme.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -530,7 +530,7 @@ fun PlayerScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.ErrorOutline,
+                        imageVector = AppIcons.ErrorOutline,
                         contentDescription = null,
                         tint = Red600,
                         modifier = Modifier.size(48.dp),

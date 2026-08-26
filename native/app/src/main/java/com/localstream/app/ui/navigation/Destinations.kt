@@ -2,10 +2,8 @@ package com.localstream.app.ui.navigation
 
 import java.net.URLEncoder
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Movie
+import com.localstream.app.ui.theme.AppIcons
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -46,7 +44,7 @@ enum class TopLevelDestination(
     val labelRes: Int,
 ) {
     HOME(Routes.HOME, Icons.Filled.Home, com.localstream.app.R.string.tab_home),
-    LIBRARY(Routes.LIBRARY, Icons.Filled.Movie, com.localstream.app.R.string.tab_library),
-    PLAYLISTS(Routes.PLAYLISTS, Icons.AutoMirrored.Filled.PlaylistPlay, com.localstream.app.R.string.tab_playlists),
-    HISTORY(Routes.HISTORY, Icons.Filled.History, com.localstream.app.R.string.tab_history),
+    LIBRARY(Routes.LIBRARY, AppIcons.Movie, com.localstream.app.R.string.tab_library),
+    PLAYLISTS(Routes.PLAYLISTS, AppIcons.PlaylistPlay, com.localstream.app.R.string.tab_playlists),
+    HISTORY(Routes.HISTORY, AppIcons.History, com.localstream.app.R.string.tab_history),
 }

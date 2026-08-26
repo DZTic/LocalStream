@@ -15,11 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.VpnKey
+import com.localstream.app.ui.theme.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -116,7 +112,7 @@ fun SettingsScreen(
             Card(colors = CardDefaults.cardColors(containerColor = Zinc900), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.VpnKey, contentDescription = null, tint = Red600)
+                        Icon(AppIcons.VpnKey, contentDescription = null, tint = Red600)
                         Text(
                             text = stringResource(R.string.settings_tmdb_title),
                             color = White,
@@ -184,7 +180,7 @@ fun SettingsScreen(
                                 modifier = Modifier.weight(1f, fill = false),
                             ) {
                                 Icon(
-                                    imageVector = if (isSuccess) Icons.Filled.CheckCircle else Icons.Filled.Error,
+                                    imageVector = if (isSuccess) Icons.Filled.CheckCircle else AppIcons.Error,
                                     contentDescription = null,
                                     tint = if (isSuccess) White else Red600,
                                     modifier = Modifier.size(18.dp),
@@ -205,7 +201,7 @@ fun SettingsScreen(
             Card(colors = CardDefaults.cardColors(containerColor = Zinc900), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Subtitles, contentDescription = null, tint = Red600)
+                        Icon(AppIcons.Subtitles, contentDescription = null, tint = Red600)
                         Text(
                             text = stringResource(R.string.settings_opensubtitles_title),
                             color = White,
@@ -301,7 +297,7 @@ fun SettingsScreen(
             Card(colors = CardDefaults.cardColors(containerColor = Zinc900), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Movie, contentDescription = null, tint = Red600)
+                        Icon(AppIcons.Movie, contentDescription = null, tint = Red600)
                         Text(
                             text = stringResource(R.string.settings_player_title),
                             color = White,
@@ -390,7 +386,7 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(4.dp),
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             ) {
-                Icon(Icons.Filled.OpenInNew, contentDescription = null, tint = White)
+                Icon(AppIcons.OpenInNew, contentDescription = null, tint = White)
                 Text(stringResource(R.string.settings_system_apps_settings), color = White, modifier = Modifier.padding(start = 8.dp))
             }
         }
