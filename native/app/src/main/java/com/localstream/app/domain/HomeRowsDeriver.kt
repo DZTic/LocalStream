@@ -19,11 +19,12 @@ data class HomeRows(
  * Dérivation pure des rows de l'accueil (réf. `HomeScreen.tsx` + `App.tsx`).
  *
  * Ordre exact : "Continuer la lecture" (si non vide), "Nouveautés" (15),
- * "Recommandations" (15), "Séries", "Films", "De A à Z".
+ * "Recommandations" (15), "Séries" (50), "Films" (50), "De A à Z" (50).
  */
 object HomeRowsDeriver {
 
     const val ROW_LIMIT = 15
+    const val CATEGORY_ROW_LIMIT = 50
     const val CONTINUE_MAX_PROGRESS = 95.0
 
     fun derive(
@@ -50,12 +51,12 @@ object HomeRowsDeriver {
             },
             recentAdditions = unwatchedOnly(grouped.asReversed().take(ROW_LIMIT)),
             recommendations = unwatchedOnly(grouped.take(ROW_LIMIT)),
-            series = unwatchedOnly(grouped.filter { it.isSeriesGroup }),
-            movies = unwatchedOnly(grouped.filter { !it.isSeriesGroup }),
+            series = unwatchedOnly(grouped.filter { it.isSeriesGroup }).take(CATEGORY_ROW_LIMIT),
+            movies = unwatchedOnly(grouped.filter { !it.isSeriesGroup }).take(CATEGORY_ROW_LIMIT),
             alphabetical = unwatchedOnly(filteredSorted.sortedWith(
                 compareBy<VideoItem, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
                     .thenBy { it.name },
-            )),
+            )).take(CATEGORY_ROW_LIMIT),
         )
     }
 }
