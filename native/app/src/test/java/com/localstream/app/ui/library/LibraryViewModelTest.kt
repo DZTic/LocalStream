@@ -240,6 +240,32 @@ class LibraryViewModelTest {
         assertEquals(3, viewModel.uiState.value.videos.size)
     }
 
+    @Test
+    fun `une mise a jour de progression seule ne declenche pas de re-tri complet`() = runTest(testDispatcher) {
+        viewModel.refreshLibrary()
+        advanceUntilIdle()
+
+        val initialFilteredSorted = viewModel.uiState.value.filteredSorted
+
+        // Écriture de progression seule (aucun changement watched / tri / filtre)
+        playbackDao.upsert(
+            PlaybackStateEntity(name = "Avatar.2009.2160p.mkv", progressPct = 42.0, positionMs = 1000L),
+        )
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(42.0, state.progress["Avatar.2009.2160p.mkv"]!!, 0.0)
+        assertEquals(
+            "Le re-tri ne doit pas être relancé pour une progression seule",
+            initialFilteredSorted,
+            state.filteredSorted,
+        )
+        assertTrue(
+            "L'instance de filteredSorted doit être conservée sans re-tri",
+            initialFilteredSorted === state.filteredSorted,
+        )
+    }
+
     // -------- Fakes --------
 
     private class FakeScanner(
