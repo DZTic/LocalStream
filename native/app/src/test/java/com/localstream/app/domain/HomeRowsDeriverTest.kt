@@ -106,4 +106,16 @@ class HomeRowsDeriverTest {
         val rows = HomeRowsDeriver.derive(grouped, grouped, emptyMap(), progress)
         assertEquals(filmC, rows.heroCandidates.first())
     }
+
+    @Test
+    fun `séries, films et de A à Z sont bornés à 50 items maximum`() {
+        val manyMovies = (1..70).map { idx -> movie("Movie_" + idx + ".mp4", lastModified = idx.toLong()) }
+        val manySeries = (1..60).map { idx -> series("Series_" + idx, listOf(movie("Series_" + idx + "_ep1.mkv"))) }
+        val allGrouped = manyMovies + manySeries
+
+        val rows = HomeRowsDeriver.derive(allGrouped, allGrouped, emptyMap(), emptyMap())
+        assertEquals(50, rows.movies.size)
+        assertEquals(50, rows.series.size)
+        assertEquals(50, rows.alphabetical.size)
+    }
 }
