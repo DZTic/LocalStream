@@ -28,6 +28,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -62,15 +63,22 @@ data class LibraryUiState(
     val watched: Map<String, Boolean> get() = displayData.watched
     val progress: Map<String, Double> get() = displayData.progress
 
-    /** Dates de sortie par clé de lookup (tri par date). */
-    val releaseDates: Map<String, String>
-        get() = metadata.mapNotNull { (key, meta) ->
+    // Mémoïsation interne : reconstruites uniquement quand l'état change,
+    // pas à chaque accès (withDerived y accède plusieurs fois par update).
+    private val cachedReleaseDates: Map<String, String> by lazy {
+        metadata.mapNotNull { (key, meta) ->
             meta.releaseDate?.takeIf { it.isNotBlank() }?.let { key to it }
         }.toMap()
+    }
+    private val cachedVideoGenres: Map<String, List<Int>> by lazy {
+        metadata.mapValues { it.value.genreIds }
+    }
+
+    /** Dates de sortie par clé de lookup (tri par date). */
+    val releaseDates: Map<String, String> get() = cachedReleaseDates
 
     /** Genres TMDB par clé de lookup (filtre par genre). */
-    val videoGenres: Map<String, List<Int>>
-        get() = metadata.mapValues { it.value.genreIds }
+    val videoGenres: Map<String, List<Int>> get() = cachedVideoGenres
 }
 
 /**
@@ -248,16 +256,31 @@ class LibraryViewModel(
 
     private fun observeWatchState() {
         viewModelScope.launch {
-            watchStateRepository.watchedItems.collect { watched ->
-                _uiState.update { it.copy(displayData = it.displayData.copy(watched = watched)).withDerived() }
-            }
-        }
-        viewModelScope.launch {
-            watchStateRepository.activePlaybackStates.collect { progress ->
-                _uiState.update { it.copy(displayData = it.displayData.copy(progress = progress)).withDerived() }
+            combine(
+                watchStateRepository.watchedItems,
+                watchStateRepository.activePlaybackStates,
+            ) { watched, progress -> watched to progress }.collect { (watched, progress) ->
+                _uiState.update { previous ->
+                    val next = previous.copy(
+                        displayData = previous.displayData.copy(watched = watched, progress = progress),
+                    )
+                    if (next.needsWatchStateResort(previous)) {
+                        next.withDerived()
+                    } else {
+                        // Seule la progression a changé : le tri/filtrage n'en dépend pas.
+                        next
+                    }
+                }
             }
         }
     }
+
+    /** True si le tri/filtrage doit être recalculé après un changement d'état de visionnage. */
+    private fun LibraryUiState.needsWatchStateResort(previous: LibraryUiState): Boolean =
+        sortBy != previous.sortBy ||
+            filterGenre != previous.filterGenre ||
+            filterResolution != previous.filterResolution ||
+            watched != previous.watched
 
     private fun observePreferences() {
         viewModelScope.launch {
