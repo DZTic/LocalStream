@@ -14,10 +14,15 @@ data class PlayerGestureCallbacks(
     val onVerticalDragLeft: (Float) -> Unit,
     val onVerticalDragRight: (Float) -> Unit,
     val onHorizontalDrag: (Float) -> Unit,
+    val onLongPressStart: () -> Unit = {},
+    val onLongPressEnd: () -> Unit = {},
     val onDragStart: () -> Unit = {},
     val onDragEnd: () -> Unit = {},
 )
 
+private const val LONG_PRESS_TIMEOUT_MS = 500L
+
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 suspend fun PointerInputScope.detectPlayerGestures(
     callbacks: PlayerGestureCallbacks,
 ) {
@@ -29,7 +34,9 @@ suspend fun PointerInputScope.detectPlayerGestures(
         val startX = down.position.x
         val touchSlop = viewConfiguration.touchSlop
         val pointerId = down.id
+        val downTime = System.currentTimeMillis()
         var isDrag = false
+        var isLongPress = false
         var dragMode = 0
         var pointerActive = true
 
@@ -38,7 +45,9 @@ suspend fun PointerInputScope.detectPlayerGestures(
             val change = event.changes.firstOrNull { it.id == pointerId }
             if (change == null || !change.pressed) {
                 pointerActive = false
-                if (isDrag) {
+                if (isLongPress) {
+                    callbacks.onLongPressEnd()
+                } else if (isDrag) {
                     callbacks.onDragEnd()
                 } else {
                     lastTapTime = processTapRelease(startX, size.width.toFloat(), lastTapTime, lastTapX, callbacks)
@@ -47,7 +56,16 @@ suspend fun PointerInputScope.detectPlayerGestures(
             } else {
                 val totalDx = change.position.x - startX
                 val totalDy = change.position.y - down.position.y
-                if (!isDrag && (abs(totalDx) > touchSlop || abs(totalDy) > touchSlop)) {
+                val movedPastSlop = abs(totalDx) > touchSlop || abs(totalDy) > touchSlop
+
+                if (!isDrag && !isLongPress && !movedPastSlop) {
+                    if (System.currentTimeMillis() - downTime >= LONG_PRESS_TIMEOUT_MS) {
+                        isLongPress = true
+                        callbacks.onLongPressStart()
+                    }
+                }
+
+                if (!isDrag && !isLongPress && movedPastSlop) {
                     isDrag = true
                     dragMode = if (abs(totalDx) > abs(totalDy)) 1 else if (startX < size.width * 0.5f) 2 else 3
                     callbacks.onDragStart()

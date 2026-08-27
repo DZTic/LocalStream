@@ -400,6 +400,151 @@ class PlayerViewModelTest {
     }
 
     @Test
+    fun `adjustSubtitleOffset and resetSubtitleOffset update subtitleOffsetMs`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.adjustSubtitleOffset(500L)
+        advanceUntilIdle()
+        assertEquals(500L, viewModel.uiState.value.subtitleOffsetMs)
+
+        viewModel.adjustSubtitleOffset(-200L)
+        advanceUntilIdle()
+        assertEquals(300L, viewModel.uiState.value.subtitleOffsetMs)
+
+        viewModel.resetSubtitleOffset()
+        advanceUntilIdle()
+        assertEquals(0L, viewModel.uiState.value.subtitleOffsetMs)
+    }
+
+    @Test
+    fun `setAudioBoost updates audio boost state and level`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isAudioBoostEnabled)
+
+        viewModel.setAudioBoost(enabled = true, level = 80)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isAudioBoostEnabled)
+        assertEquals(80, viewModel.uiState.value.audioBoostLevel)
+    }
+
+    @Test
+    fun `setQuickSpeedActive updates quick speed state`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isQuickSpeedActive)
+
+        viewModel.setQuickSpeedActive(true)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isQuickSpeedActive)
+
+        viewModel.setQuickSpeedActive(false)
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isQuickSpeedActive)
+    }
+
+    @Test
+    fun `triggerDoubleTapSeek creates ripple and accumulates on consecutive taps`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.onPositionChanged(50000L, 100000L)
+        advanceUntilIdle()
+
+        viewModel.triggerDoubleTapSeek(RippleSide.RIGHT, 10)
+        advanceUntilIdle()
+        val ripple1 = viewModel.uiState.value.doubleTapRipple
+        assertNotNull(ripple1)
+        assertEquals(RippleSide.RIGHT, ripple1?.side)
+        assertEquals(10, ripple1?.secondsAccumulated)
+
+        viewModel.triggerDoubleTapSeek(RippleSide.RIGHT, 10)
+        advanceUntilIdle()
+        val ripple2 = viewModel.uiState.value.doubleTapRipple
+        assertNotNull(ripple2)
+        assertEquals(20, ripple2?.secondsAccumulated)
+
+        viewModel.clearDoubleTapRipple()
+        advanceUntilIdle()
+        assertEquals(null, viewModel.uiState.value.doubleTapRipple)
+    }
+
+    @Test
+    fun `restartFromBeginning resets position and saves playback state`() = runTest {
+        playbackDao.upsert(PlaybackStateEntity(name = video1.name, progressPct = 50.0, positionMs = 4400000L))
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(4400000L, viewModel.uiState.value.positionMs)
+        assertTrue(viewModel.uiState.value.showResumeBanner)
+
+        viewModel.restartFromBeginning()
+        advanceUntilIdle()
+
+        assertEquals(0L, viewModel.uiState.value.positionMs)
+        assertFalse(viewModel.uiState.value.showResumeBanner)
+        assertEquals(null, playbackDao.findByName(video1.name))
+    }
+
+    @Test
+    fun `selectEpisode loads new episode and hides sheet`() = runTest {
+        val viewModel = PlayerViewModel(ep1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(ep1.name, viewModel.uiState.value.currentVideo?.name)
+        assertEquals(2, viewModel.uiState.value.availableEpisodes.size)
+
+        viewModel.setEpisodesSheetVisible(true)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isEpisodesSheetVisible)
+
+        viewModel.selectEpisode(ep2)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isEpisodesSheetVisible)
+        assertEquals(ep2.name, viewModel.uiState.value.currentVideo?.name)
+    }
+
+    @Test
+    fun `startSleepTimer and cancelSleepTimer control sleep timer state`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.startSleepTimer(15)
+        assertEquals(15 * 60, viewModel.uiState.value.sleepTimerRemainingSeconds)
+
+        viewModel.cancelSleepTimer()
+        advanceUntilIdle()
+        assertEquals(null, viewModel.uiState.value.sleepTimerRemainingSeconds)
+    }
+
+    @Test
+    fun `skipIntro seeks forward by default 85s`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.onPositionChanged(10000L, 200000L)
+        advanceUntilIdle()
+
+        viewModel.skipIntro()
+        advanceUntilIdle()
+
+        assertEquals(95000L, viewModel.uiState.value.positionMs)
+    }
+
+    @Test
     fun `onPositionChanged updates positionMs StateFlow`() = runTest {
         val viewModel = PlayerViewModel(video1.name, container)
         backgroundScope.launch { viewModel.uiState.collect {} }

@@ -1,18 +1,20 @@
 package com.localstream.app.ui.player
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
-import com.localstream.app.ui.theme.AppIcons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -22,8 +24,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.localstream.app.ui.theme.AppIcons
 import com.localstream.app.ui.theme.Red600
 import com.localstream.app.ui.theme.White
 import com.localstream.app.ui.theme.Zinc800
@@ -41,6 +45,7 @@ internal fun formatTimeMs(ms: Long): String {
     }
 }
 
+@Suppress("LongParameterList")
 @Composable
 fun BottomPlayerBar(
     positionMs: Long,
@@ -49,15 +54,24 @@ fun BottomPlayerBar(
     onSeek: (Long) -> Unit,
     onToggleLock: () -> Unit,
     onEnterPip: () -> Unit,
+    onSkipIntro: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var isSeeking by remember { mutableStateOf(false) }
     var seekPositionMs by remember { mutableLongStateOf(0L) }
+    var showRemainingTime by remember { mutableStateOf(false) }
 
     val displayPos = if (isSeeking) seekPositionMs else positionMs
 
-    val timeLabel by remember(displayPos, durationMs) {
-        derivedStateOf { "${formatTimeMs(displayPos)} / ${formatTimeMs(durationMs)}" }
+    val timeLabel by remember(displayPos, durationMs, showRemainingTime) {
+        derivedStateOf {
+            if (showRemainingTime && durationMs > 0L) {
+                val remaining = (durationMs - displayPos).coerceAtLeast(0L)
+                "${formatTimeMs(displayPos)} (-${formatTimeMs(remaining)})"
+            } else {
+                "${formatTimeMs(displayPos)} / ${formatTimeMs(durationMs)}"
+            }
+        }
     }
 
     val sliderValue by remember(displayPos, durationMs) {
@@ -84,8 +98,19 @@ fun BottomPlayerBar(
                 text = timeLabel,
                 color = White,
                 fontSize = 12.sp,
+                modifier = Modifier
+                    .padding(4.dp)
+                    .clickable { showRemainingTime = !showRemainingTime },
             )
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (onSkipIntro != null) {
+                    TextButton(
+                        onClick = onSkipIntro,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    ) {
+                        Text("+85s Intro", color = Red600, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
                 IconButton(onClick = onEnterPip) {
                     Icon(AppIcons.PictureInPicture, contentDescription = "PiP", tint = White)
                 }
@@ -123,3 +148,4 @@ fun BottomPlayerBar(
         )
     }
 }
+
