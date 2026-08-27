@@ -8,7 +8,9 @@ import androidx.lifecycle.viewModelScope
 import com.localstream.app.di.AppContainer
 import com.localstream.app.domain.model.VideoItem
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,6 +57,17 @@ data class SubtitleTrackUiState(
     val uriString: String? = null,
 )
 
+enum class RippleSide {
+    LEFT,
+    RIGHT,
+}
+
+data class DoubleTapRippleState(
+    val side: RippleSide,
+    val secondsAccumulated: Int,
+    val timestamp: Long = System.currentTimeMillis(),
+)
+
 data class PlayerUiState(
     val currentVideo: VideoItem? = null,
     val isPlaying: Boolean = false,
@@ -78,6 +91,18 @@ data class PlayerUiState(
     val initialPositionMs: Long = 0L,
     val isBuffering: Boolean = false,
     val errorMessage: String? = null,
+    val subtitleOffsetMs: Long = 0L,
+    val isAudioBoostEnabled: Boolean = false,
+    val audioBoostLevel: Int = 50,
+    val isQuickSpeedActive: Boolean = false,
+    val sleepTimerRemainingSeconds: Int? = null,
+    val availableEpisodes: List<VideoItem> = emptyList(),
+    val isEpisodesSheetVisible: Boolean = false,
+    val isSleepTimerDialogVisible: Boolean = false,
+    val doubleTapRipple: DoubleTapRippleState? = null,
+    val showResumeBanner: Boolean = false,
+    val resumePositionMs: Long = 0L,
+    val isOnlineSubtitlesSheetVisible: Boolean = false,
 )
 
 @Suppress("TooManyFunctions", "LongMethod")
@@ -153,12 +178,22 @@ class PlayerViewModel(
             }
 
             _positionMs.value = pos
+            val parentGroup = allGrouped.find { group ->
+                (targetVideo.seriesName != null && group.name == targetVideo.seriesName) ||
+                    group.episodes?.any { it.name == targetVideo.name } == true
+            }
+            val episodes = parentGroup?.episodes.orEmpty()
+            val hasResume = pos > 10_000L
+
             _uiState.update {
                 it.copy(
                     initialPositionMs = pos,
                     positionMs = pos,
                     durationMs = if (targetDur > 0L) targetDur else it.durationMs,
                     currentVideo = targetVideo,
+                    availableEpisodes = episodes,
+                    showResumeBanner = hasResume,
+                    resumePositionMs = pos,
                 )
             }
 
@@ -475,6 +510,7 @@ class PlayerViewModel(
         videoNameFlowOrLoad(next.name)
     }
 
+    @Suppress("CyclomaticComplexMethod")
     private fun videoNameFlowOrLoad(newName: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isEnded = false) }
@@ -510,17 +546,163 @@ class PlayerViewModel(
             }
 
             _positionMs.value = pos
+            val parentGroup = allGrouped.find { group ->
+                (video.seriesName != null && group.name == video.seriesName) ||
+                    group.episodes?.any { it.name == video.name } == true
+            }
+            val episodes = parentGroup?.episodes.orEmpty()
+            val hasResume = pos > 10_000L
+
             _uiState.update {
                 it.copy(
                     initialPositionMs = pos,
                     positionMs = pos,
                     durationMs = if (targetDur > 0L) targetDur else it.durationMs,
                     currentVideo = video,
+                    availableEpisodes = episodes,
+                    showResumeBanner = hasResume,
+                    resumePositionMs = pos,
                 )
             }
 
             resolveNextVideo(video, allGrouped, allRaw)
         }
+    }
+
+    fun adjustSubtitleOffset(deltaMs: Long) {
+        _uiState.update {
+            val newOffset = (it.subtitleOffsetMs + deltaMs).coerceIn(-MAX_OFFSET_MS, MAX_OFFSET_MS)
+            it.copy(
+                subtitleOffsetMs = newOffset,
+                gestureFeedback = GestureFeedback(
+                    type = FeedbackType.SEEK_FORWARD,
+                    text = "Sous-titres : ${if (newOffset >= 0) "+$newOffset" else "$newOffset"}ms",
+                ),
+            )
+        }
+    }
+
+    fun resetSubtitleOffset() {
+        _uiState.update { it.copy(subtitleOffsetMs = 0L) }
+    }
+
+    fun setAudioBoost(enabled: Boolean, level: Int = 50) {
+        _uiState.update { it.copy(isAudioBoostEnabled = enabled, audioBoostLevel = level) }
+    }
+
+    fun setQuickSpeedActive(active: Boolean) {
+        _uiState.update { it.copy(isQuickSpeedActive = active) }
+    }
+
+    private var sleepTimerJob: Job? = null
+
+    fun startSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        if (minutes <= 0) {
+            _uiState.update { it.copy(sleepTimerRemainingSeconds = null, isSleepTimerDialogVisible = false) }
+            return
+        }
+        val totalSeconds = minutes * SECONDS_PER_MINUTE
+        _uiState.update {
+            it.copy(
+                sleepTimerRemainingSeconds = totalSeconds,
+                isSleepTimerDialogVisible = false,
+                gestureFeedback = GestureFeedback(
+                    type = FeedbackType.VOLUME,
+                    text = "Mise en veille dans $minutes min",
+                ),
+            )
+        }
+        sleepTimerJob = viewModelScope.launch {
+            var remaining = totalSeconds
+            while (remaining > 0) {
+                delay(ONE_SECOND_MS)
+                remaining--
+                _uiState.update { it.copy(sleepTimerRemainingSeconds = remaining) }
+            }
+            _uiState.update { it.copy(isPlaying = false, sleepTimerRemainingSeconds = null) }
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _uiState.update { it.copy(sleepTimerRemainingSeconds = null, isSleepTimerDialogVisible = false) }
+    }
+
+    fun setEpisodesSheetVisible(visible: Boolean) {
+        _uiState.update { it.copy(isEpisodesSheetVisible = visible) }
+    }
+
+    fun setSleepTimerDialogVisible(visible: Boolean) {
+        _uiState.update { it.copy(isSleepTimerDialogVisible = visible) }
+    }
+
+    fun setOnlineSubtitlesSheetVisible(visible: Boolean) {
+        _uiState.update { it.copy(isOnlineSubtitlesSheetVisible = visible) }
+    }
+
+    fun selectEpisode(episode: VideoItem) {
+        setEpisodesSheetVisible(false)
+        videoNameFlowOrLoad(episode.name)
+    }
+
+    fun dismissResumeBanner() {
+        _uiState.update { it.copy(showResumeBanner = false) }
+    }
+
+    fun restartFromBeginning() {
+        _positionMs.value = 0L
+        _uiState.update {
+            it.copy(
+                positionMs = 0L,
+                showResumeBanner = false,
+                initialPositionMs = 0L,
+            )
+        }
+        val video = _uiState.value.currentVideo ?: return
+        viewModelScope.launch {
+            container.watchStateRepository.savePlaybackState(
+                videoName = video.name,
+                positionMs = 0L,
+                durationMs = _uiState.value.durationMs,
+            )
+        }
+    }
+
+    fun triggerDoubleTapSeek(side: RippleSide, deltaSeconds: Int = 10) {
+        val currentRipple = _uiState.value.doubleTapRipple
+        val now = System.currentTimeMillis()
+        val isConsecutive = currentRipple != null &&
+            currentRipple.side == side &&
+            now - currentRipple.timestamp < 1000L
+
+        val accumulated = if (isConsecutive) {
+            currentRipple!!.secondsAccumulated + deltaSeconds
+        } else {
+            deltaSeconds
+        }
+
+        _uiState.update {
+            it.copy(
+                doubleTapRipple = DoubleTapRippleState(
+                    side = side,
+                    secondsAccumulated = accumulated,
+                    timestamp = now,
+                ),
+            )
+        }
+
+        val deltaMs = if (side == RippleSide.RIGHT) deltaSeconds * 1000L else -deltaSeconds * 1000L
+        seekBy(deltaMs)
+    }
+
+    fun clearDoubleTapRipple() {
+        _uiState.update { it.copy(doubleTapRipple = null) }
+    }
+
+    fun skipIntro() {
+        seekBy(DEFAULT_INTRO_SKIP_MS)
     }
 
     override fun onCleared() {
@@ -534,6 +716,10 @@ class PlayerViewModel(
         const val MIN_BRIGHTNESS: Float = 0.05f
         const val MAX_BRIGHTNESS: Float = 1.0f
         private const val DEFAULT_BRIGHTNESS: Float = 1.0f
+        private const val MAX_OFFSET_MS: Long = 10000L
+        private const val SECONDS_PER_MINUTE: Int = 60
+        private const val ONE_SECOND_MS: Long = 1000L
+        private const val DEFAULT_INTRO_SKIP_MS: Long = 85000L
 
         fun factory(videoName: String, container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {

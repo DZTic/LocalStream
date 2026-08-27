@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.media.AudioManager
+import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
@@ -21,8 +22,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -31,8 +34,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
-import com.localstream.app.ui.theme.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -75,14 +78,20 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.localstream.app.LocalStreamApplication
 import com.localstream.app.domain.model.VideoItem
+import com.localstream.app.ui.subtitles.SubtitlePickerSheet
+import com.localstream.app.ui.subtitles.SubtitlePickerViewModel
+import com.localstream.app.ui.theme.AppIcons
 import com.localstream.app.ui.theme.Black
 import com.localstream.app.ui.theme.Red600
 import com.localstream.app.ui.theme.White
+import com.localstream.app.ui.theme.Zinc800
 import com.localstream.app.ui.theme.Zinc900
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -103,8 +112,14 @@ fun PlayerScreen(
     },
 ) {
     val context = LocalContext.current
+    val appContainer = (context.applicationContext as LocalStreamApplication).container
     val activity = context as? Activity
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    val subtitlePickerViewModel: SubtitlePickerViewModel = viewModel(
+        factory = SubtitlePickerViewModel.factory(appContainer)
+    )
+    val subPickerUiState by subtitlePickerViewModel.uiState.collectAsStateWithLifecycle()
 
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -222,9 +237,48 @@ fun PlayerScreen(
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
             .build()
-        ExoPlayer.Builder(context)
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setEnableDecoderFallback(true)
+        ExoPlayer.Builder(context, renderersFactory)
             .setAudioAttributes(audioAttributes, true)
+            .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+    }
+
+    val loudnessEnhancer = remember(exoPlayer) {
+        try {
+            val audioSessionId = exoPlayer.audioSessionId
+            if (audioSessionId != C.AUDIO_SESSION_ID_UNSET && audioSessionId != 0) {
+                LoudnessEnhancer(audioSessionId)
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    LaunchedEffect(uiState.isAudioBoostEnabled, uiState.audioBoostLevel, loudnessEnhancer) {
+        try {
+            loudnessEnhancer?.let { enhancer ->
+                enhancer.enabled = uiState.isAudioBoostEnabled
+                if (uiState.isAudioBoostEnabled) {
+                    enhancer.setTargetGain((uiState.audioBoostLevel * 20).coerceIn(0, 2000))
+                }
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    DisposableEffect(loudnessEnhancer) {
+        onDispose {
+            try {
+                loudnessEnhancer?.release()
+            } catch (_: Exception) {
+            }
+        }
     }
 
     DisposableEffect(lifecycleOwner, exoPlayer) {
@@ -265,6 +319,24 @@ fun PlayerScreen(
                 }
             }
 
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && activity != null) {
+                    val width = videoSize.width
+                    val height = videoSize.height
+                    if (width > 0 && height > 0) {
+                        val floatRatio = width.toFloat() / height.toFloat()
+                        if (floatRatio in 0.42f..2.38f) {
+                            val rational = Rational(width.coerceIn(1, 2390), height.coerceIn(1, 2390))
+                            val pipBuilder = PictureInPictureParams.Builder().setAspectRatio(rational)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                pipBuilder.setAutoEnterEnabled(true)
+                            }
+                            runCatching { activity.setPictureInPictureParams(pipBuilder.build()) }
+                        }
+                    }
+                }
+            }
+
             override fun onPlayerError(error: PlaybackException) {
                 viewModel.setBuffering(false)
                 viewModel.setErrorMessage(error.localizedMessage ?: "Erreur de lecture de la vidéo")
@@ -294,19 +366,34 @@ fun PlayerScreen(
                     for (i in 0 until group.length) {
                         val format = group.getTrackFormat(i)
                         val id = format.id ?: "$trackType-$i"
-                        val label = format.label ?: format.language ?: "Piste ${i + 1}"
                         val isSelected = group.isTrackSelected(i)
 
                         if (trackType == C.TRACK_TYPE_AUDIO) {
+                            val audioChannels = when (format.channelCount) {
+                                1 -> "Mono"
+                                2 -> "Stéréo"
+                                6 -> "5.1"
+                                8 -> "7.1"
+                                else -> if (format.channelCount > 0) "${format.channelCount} ch" else null
+                            }
+                            val audioCodec = format.sampleMimeType?.substringAfterLast('/')?.uppercase()
+                            val richLabel = buildString {
+                                append(format.label ?: format.language ?: "Piste ${i + 1}")
+                                val extras = listOfNotNull(audioChannels, audioCodec).joinToString(", ")
+                                if (extras.isNotBlank()) {
+                                    append(" ($extras)")
+                                }
+                            }
                             audioList.add(
                                 AudioTrackUiState(
                                     id = id,
-                                    label = label,
+                                    label = richLabel,
                                     language = format.language,
                                     isSelected = isSelected,
                                 )
                             )
                         } else if (trackType == C.TRACK_TYPE_TEXT) {
+                            val label = format.label ?: format.language ?: "Piste ${i + 1}"
                             subList.add(
                                 SubtitleTrackUiState(
                                     id = id,
@@ -360,9 +447,17 @@ fun PlayerScreen(
             val currentVideo = uiState.currentVideo ?: return@LaunchedEffect
             val uri = extractUri(currentVideo) ?: return@LaunchedEffect
 
-            val subUri = Uri.parse(externalTrack.uriString)
+            val uriString = externalTrack.uriString ?: return@LaunchedEffect
+            val mimeType = when {
+                uriString.endsWith(".vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
+                uriString.endsWith(".ass", ignoreCase = true) ||
+                    uriString.endsWith(".ssa", ignoreCase = true) -> MimeTypes.TEXT_SSA
+                else -> MimeTypes.APPLICATION_SUBRIP
+            }
+
+            val subUri = Uri.parse(uriString)
             val subConfig = MediaItem.SubtitleConfiguration.Builder(subUri)
-                .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+                .setMimeType(mimeType)
                 .setLanguage("fr")
                 .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                 .build()
@@ -410,7 +505,9 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(uiState.playbackSpeed) {
-        exoPlayer.setPlaybackSpeed(uiState.playbackSpeed)
+        if (!uiState.isQuickSpeedActive) {
+            exoPlayer.setPlaybackSpeed(uiState.playbackSpeed)
+        }
     }
 
     BackHandler {
@@ -432,14 +529,26 @@ fun PlayerScreen(
                         },
                         onDoubleTapLeft = {
                             if (!uiState.isLocked) {
-                                viewModel.seekBy(-10000L)
+                                viewModel.triggerDoubleTapSeek(RippleSide.LEFT, 10)
                                 exoPlayer.seekTo((exoPlayer.currentPosition - 10000L).coerceAtLeast(0L))
                             }
                         },
                         onDoubleTapRight = {
                             if (!uiState.isLocked) {
-                                viewModel.seekBy(10000L)
+                                viewModel.triggerDoubleTapSeek(RippleSide.RIGHT, 10)
                                 exoPlayer.seekTo((exoPlayer.currentPosition + 10000L).coerceAtMost(exoPlayer.duration))
+                            }
+                        },
+                        onLongPressStart = {
+                            if (!uiState.isLocked) {
+                                viewModel.setQuickSpeedActive(true)
+                                exoPlayer.setPlaybackSpeed(2.0f)
+                            }
+                        },
+                        onLongPressEnd = {
+                            if (!uiState.isLocked) {
+                                viewModel.setQuickSpeedActive(false)
+                                exoPlayer.setPlaybackSpeed(uiState.playbackSpeed)
                             }
                         },
                         onDragStart = {
@@ -481,7 +590,7 @@ fun PlayerScreen(
                             }
                             pendingSeekTargetMs = null
                         },
-                    )
+                    ),
                 )
             },
     ) {
@@ -549,15 +658,25 @@ fun PlayerScreen(
                         fontSize = 14.sp,
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = {
-                            viewModel.retryPlayback()
-                            exoPlayer.prepare()
-                            exoPlayer.play()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Red600),
-                    ) {
-                        Text("Réessayer", color = White)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                viewModel.retryPlayback()
+                                exoPlayer.prepare()
+                                exoPlayer.play()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Red600),
+                        ) {
+                            Text("Réessayer", color = White)
+                        }
+                        Button(
+                            onClick = {
+                                uiState.currentVideo?.let { launchExternalPlayer(context, it, "") }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Zinc800),
+                        ) {
+                            Text("Lecteur externe", color = White)
+                        }
                     }
                 }
             }
@@ -570,6 +689,25 @@ fun PlayerScreen(
             )
         }
 
+        DoubleTapRippleOverlay(
+            rippleState = uiState.doubleTapRipple,
+            onDismiss = viewModel::clearDoubleTapRipple,
+        )
+
+        if (uiState.showResumeBanner && uiState.resumePositionMs > 0L) {
+            ResumeBanner(
+                positionMs = uiState.resumePositionMs,
+                onRestart = {
+                    viewModel.restartFromBeginning()
+                    exoPlayer.seekTo(0L)
+                },
+                onDismiss = viewModel::dismissResumeBanner,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 24.dp, bottom = 80.dp),
+            )
+        }
+
         PlayerControlsOverlay(
             isVisible = uiState.isControlsVisible,
             isLocked = uiState.isLocked,
@@ -578,10 +716,16 @@ fun PlayerScreen(
             playbackSpeed = uiState.playbackSpeed,
             isPlaying = uiState.isPlaying,
             hasNextVideo = uiState.nextVideo != null,
+            hasEpisodes = uiState.availableEpisodes.isNotEmpty(),
+            sleepTimerActive = uiState.sleepTimerRemainingSeconds != null,
+            isQuickSpeedActive = uiState.isQuickSpeedActive,
             positionMsFlow = viewModel.positionMs,
             durationMs = uiState.durationMs,
             onBack = onBack,
             onOpenTracks = { showTracksSheet = true },
+            onOpenEpisodes = { viewModel.setEpisodesSheetVisible(true) },
+            onOpenSleepTimer = { viewModel.setSleepTimerDialogVisible(true) },
+            onSkipIntro = viewModel::skipIntro,
             onCycleAspect = viewModel::cycleAspectRatio,
             onCycleSpeed = viewModel::cyclePlaybackSpeed,
             onTogglePlay = {
@@ -638,13 +782,103 @@ fun PlayerScreen(
         TracksSelectionSheet(
             audioTracks = uiState.audioTracks,
             subtitleTracks = uiState.subtitleTracks,
+            subtitleOffsetMs = uiState.subtitleOffsetMs,
+            isAudioBoostEnabled = uiState.isAudioBoostEnabled,
             onSelectAudio = viewModel::selectAudioTrack,
             onSelectSubtitle = viewModel::selectSubtitleTrack,
+            onAdjustSubtitleOffset = viewModel::adjustSubtitleOffset,
+            onResetSubtitleOffset = viewModel::resetSubtitleOffset,
+            onToggleAudioBoost = { viewModel.setAudioBoost(it) },
             onPickSubtitleFile = {
-                subtitleFilePicker.launch("application/x-subrip")
+                subtitleFilePicker.launch("*/*")
+            },
+            onOpenOnlineSubtitles = {
+                showTracksSheet = false
+                viewModel.setOnlineSubtitlesSheetVisible(true)
             },
             onDismiss = { showTracksSheet = false },
         )
+    }
+
+    if (uiState.isEpisodesSheetVisible) {
+        EpisodesSelectionSheet(
+            episodes = uiState.availableEpisodes,
+            currentVideoName = uiState.currentVideo?.name,
+            onSelectEpisode = viewModel::selectEpisode,
+            onDismiss = { viewModel.setEpisodesSheetVisible(false) },
+        )
+    }
+
+    if (uiState.isSleepTimerDialogVisible) {
+        SleepTimerDialog(
+            remainingSeconds = uiState.sleepTimerRemainingSeconds,
+            onSetTimer = viewModel::startSleepTimer,
+            onCancelTimer = viewModel::cancelSleepTimer,
+            onDismiss = { viewModel.setSleepTimerDialogVisible(false) },
+        )
+    }
+
+    if (uiState.isOnlineSubtitlesSheetVisible) {
+        SubtitlePickerSheet(
+            uiState = subPickerUiState,
+            initialQuery = uiState.currentVideo?.cleanTitle ?: uiState.currentVideo?.name ?: videoName,
+            onQueryChange = subtitlePickerViewModel::onQueryChange,
+            onSearch = subtitlePickerViewModel::searchOpenSubtitles,
+            onDownload = { subId, onDownloaded ->
+                subtitlePickerViewModel.downloadSubtitle(subId, onDownloaded)
+            },
+            onPickLocal = { subtitleFilePicker.launch("*/*") },
+            onSubtitleSelected = { path ->
+                val fileName = path.substringAfterLast('/')
+                viewModel.addExternalSubtitle(fileName, path)
+            },
+            onDismiss = { viewModel.setOnlineSubtitlesSheetVisible(false) },
+        )
+    }
+}
+
+@Composable
+private fun ResumeBanner(
+    positionMs: Long,
+    onRestart: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Zinc900.copy(alpha = 0.95f)),
+        modifier = modifier.padding(16.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Reprise à ${formatTimeMs(positionMs)}",
+                color = White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Button(
+                onClick = onRestart,
+                colors = ButtonDefaults.buttonColors(containerColor = Red600),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text("Recommencer", color = White, fontSize = 12.sp)
+            }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.size(24.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Fermer",
+                    tint = White.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
     }
 }
 

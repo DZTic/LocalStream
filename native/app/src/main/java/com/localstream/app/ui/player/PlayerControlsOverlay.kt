@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 
+@Suppress("LongParameterList")
 @Composable
 fun PlayerControlsOverlay(
     isVisible: Boolean,
@@ -25,8 +26,14 @@ fun PlayerControlsOverlay(
     isPlaying: Boolean,
     hasNextVideo: Boolean,
     durationMs: Long,
+    hasEpisodes: Boolean = false,
+    sleepTimerActive: Boolean = false,
+    isQuickSpeedActive: Boolean = false,
     onBack: () -> Unit,
     onOpenTracks: () -> Unit,
+    onOpenEpisodes: () -> Unit = {},
+    onOpenSleepTimer: () -> Unit = {},
+    onSkipIntro: () -> Unit = {},
     onCycleAspect: () -> Unit,
     onCycleSpeed: () -> Unit,
     onTogglePlay: () -> Unit,
@@ -62,8 +69,13 @@ fun PlayerControlsOverlay(
                 title = title,
                 aspectRatioMode = aspectRatioMode,
                 playbackSpeed = playbackSpeed,
+                hasEpisodes = hasEpisodes,
+                sleepTimerActive = sleepTimerActive,
+                isQuickSpeedActive = isQuickSpeedActive,
                 onBack = onBack,
                 onOpenTracks = onOpenTracks,
+                onOpenEpisodes = onOpenEpisodes,
+                onOpenSleepTimer = onOpenSleepTimer,
                 onCycleAspect = onCycleAspect,
                 onCycleSpeed = onCycleSpeed,
                 modifier = Modifier.align(Alignment.TopCenter),
@@ -86,8 +98,10 @@ fun PlayerControlsOverlay(
                 onSeek = onSeek,
                 onToggleLock = onToggleLock,
                 onEnterPip = onEnterPip,
+                onSkipIntro = onSkipIntro,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
     }
 }
+
