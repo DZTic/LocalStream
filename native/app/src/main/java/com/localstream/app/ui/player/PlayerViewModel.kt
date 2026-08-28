@@ -156,8 +156,14 @@ class PlayerViewModel(
     private fun loadVideoDetails() {
         viewModelScope.launch {
             val decodedName = decodeUri(videoName)
-            val allRaw = container.videoRepository.getRawVideos()
-            val allGrouped = container.videoRepository.getGroupedVideos()
+            var allRaw = container.videoRepository.getRawVideos()
+            var allGrouped = container.videoRepository.getGroupedVideos()
+
+            if (allRaw.isEmpty() && allGrouped.isEmpty()) {
+                container.videoRepository.scanAndLoad()
+                allRaw = container.videoRepository.getRawVideos()
+                allGrouped = container.videoRepository.getGroupedVideos()
+            }
 
             val targetVideo = resolveTargetVideo(decodedName, videoName, allGrouped, allRaw)
 
@@ -515,19 +521,16 @@ class PlayerViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isEnded = false) }
             val decodedName = decodeUri(newName)
-            val allRaw = container.videoRepository.getRawVideos()
-            val allGrouped = container.videoRepository.getGroupedVideos()
+            var allRaw = container.videoRepository.getRawVideos()
+            var allGrouped = container.videoRepository.getGroupedVideos()
 
-            val foundInGrouped = allGrouped.firstNotNullOfOrNull { group ->
-                if (group.name == decodedName || group.name == newName) {
-                    group
-                } else {
-                    group.episodes?.find { it.name == decodedName || it.name == newName }
-                }
+            if (allRaw.isEmpty() && allGrouped.isEmpty()) {
+                container.videoRepository.scanAndLoad()
+                allRaw = container.videoRepository.getRawVideos()
+                allGrouped = container.videoRepository.getGroupedVideos()
             }
-            val video = allRaw.find { it.name == decodedName || it.name == newName }
-                ?: foundInGrouped
-                ?: createFallbackVideoItem(decodedName)
+
+            val video = resolveTargetVideo(decodedName, newName, allGrouped, allRaw)
 
             val watchedMap = container.watchStateRepository.getWatchedMap()
             val isWatched = watchedMap[video.name] == true
