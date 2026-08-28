@@ -18,6 +18,7 @@ import android.os.SystemClock
 import android.util.Rational
 import android.view.ViewGroup
 import android.view.WindowManager
+import java.io.File
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -141,6 +142,13 @@ fun PlayerScreen(
                 val insetsController = WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
             }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && activity != null) {
+                runCatching {
+                    activity.setPictureInPictureParams(
+                        PictureInPictureParams.Builder().setAutoEnterEnabled(false).build(),
+                    )
+                }
+            }
         }
     }
 
@@ -158,28 +166,34 @@ fun PlayerScreen(
     var dragStartSeekPos by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(Unit) {
-        audioManager?.let { am ->
-            val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-            if (maxVol > 0) {
-                val curVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-                val curPct = ((curVol.toFloat() / maxVol) * 100f).coerceIn(0f, 100f)
-                viewModel.setInitialVolumePercent(curPct)
+        try {
+            audioManager?.let { am ->
+                val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                if (maxVol > 0) {
+                    val curVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                    val curPct = ((curVol.toFloat() / maxVol) * 100f).coerceIn(0f, 100f)
+                    viewModel.setInitialVolumePercent(curPct)
+                }
             }
+        } catch (_: Exception) {
         }
         isVolumeInitialized = true
     }
 
     LaunchedEffect(uiState.volumePercent, isVolumeInitialized) {
         if (!isVolumeInitialized) return@LaunchedEffect
-        audioManager?.let { am ->
-            val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-            if (maxVol > 0) {
-                val targetVol = ((uiState.volumePercent / 100f) * maxVol).roundToInt().coerceIn(0, maxVol)
-                val curVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-                if (curVol != targetVol) {
-                    am.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+        try {
+            audioManager?.let { am ->
+                val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                if (maxVol > 0) {
+                    val targetVol = ((uiState.volumePercent / 100f) * maxVol).roundToInt().coerceIn(0, maxVol)
+                    val curVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                    if (curVol != targetVol) {
+                        am.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+                    }
                 }
             }
+        } catch (_: Exception) {
         }
     }
 
@@ -247,16 +261,24 @@ fun PlayerScreen(
             .build()
     }
 
-    val loudnessEnhancer = remember(exoPlayer) {
-        try {
-            val audioSessionId = exoPlayer.audioSessionId
-            if (audioSessionId != C.AUDIO_SESSION_ID_UNSET && audioSessionId != 0) {
-                LoudnessEnhancer(audioSessionId)
-            } else {
-                null
+    var loudnessEnhancer by remember { mutableStateOf<LoudnessEnhancer?>(null) }
+
+    LaunchedEffect(uiState.isAudioBoostEnabled) {
+        if (uiState.isAudioBoostEnabled && loudnessEnhancer == null) {
+            try {
+                val audioSessionId = exoPlayer.audioSessionId
+                if (audioSessionId != C.AUDIO_SESSION_ID_UNSET && audioSessionId != 0) {
+                    loudnessEnhancer = LoudnessEnhancer(audioSessionId)
+                }
+            } catch (_: Exception) {
+                loudnessEnhancer = null
             }
-        } catch (_: Exception) {
-            null
+        } else if (!uiState.isAudioBoostEnabled && loudnessEnhancer != null) {
+            try {
+                loudnessEnhancer?.release()
+            } catch (_: Exception) {
+            }
+            loudnessEnhancer = null
         }
     }
 
@@ -272,10 +294,11 @@ fun PlayerScreen(
         }
     }
 
-    DisposableEffect(loudnessEnhancer) {
+    DisposableEffect(Unit) {
         onDispose {
             try {
                 loudnessEnhancer?.release()
+                loudnessEnhancer = null
             } catch (_: Exception) {
             }
         }
@@ -328,9 +351,6 @@ fun PlayerScreen(
                         if (floatRatio in 0.42f..2.38f) {
                             val rational = Rational(width.coerceIn(1, 2390), height.coerceIn(1, 2390))
                             val pipBuilder = PictureInPictureParams.Builder().setAspectRatio(rational)
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                pipBuilder.setAutoEnterEnabled(true)
-                            }
                             runCatching { activity.setPictureInPictureParams(pipBuilder.build()) }
                         }
                     }
@@ -911,10 +931,16 @@ private fun launchExternalPlayer(context: Context, video: VideoItem, packageName
 private fun extractUri(video: VideoItem?): Uri? {
     if (video == null) return null
     if (video.url.isNotBlank()) {
-        return Uri.parse(video.url)
+        val parsed = Uri.parse(video.url)
+        return if (parsed.scheme != null) parsed else Uri.fromFile(File(video.url))
     }
     if (video.path.isNotBlank()) {
-        return Uri.parse(video.path)
+        val parsed = Uri.parse(video.path)
+        return if (parsed.scheme != null) parsed else Uri.fromFile(File(video.path))
+    }
+    if (!video.nativeUri.isNullOrBlank()) {
+        val parsed = Uri.parse(video.nativeUri)
+        return if (parsed.scheme != null) parsed else Uri.fromFile(File(video.nativeUri))
     }
     return null
 }

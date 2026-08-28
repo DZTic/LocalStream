@@ -5,12 +5,17 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Maintien de l'écran et du CPU allumés pendant la lecture vidéo (ExoPlayer) -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <!-- Scan MediaStore (Phase 3) : lecture des vidéos du stockage partagé.
          READ_MEDIA_VIDEO à partir d'Android 13, READ_EXTERNAL_STORAGE avant. -->
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- Android 14+ sélection partielle de médias -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
     <application
         android:name=".LocalStreamApplication"
@@ -25,7 +30,7 @@
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode|fontScale"
             android:exported="true"
             android:label="@string/app_name"
             android:resizeableActivity="true"
