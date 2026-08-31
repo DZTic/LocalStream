@@ -47,19 +47,21 @@ fun PlayerControlsOverlay(
     positionMs: Long = 0L,
     positionMsFlow: StateFlow<Long>? = null,
 ) {
-    val currentPosition = if (positionMsFlow != null) {
-        val pos by positionMsFlow.collectAsStateWithLifecycle()
-        pos
-    } else {
-        positionMs
-    }
-
     AnimatedVisibility(
         visible = isVisible && !isLocked,
         enter = fadeIn(),
         exit = fadeOut(),
         modifier = modifier.fillMaxSize(),
     ) {
+        // Collectée ici, dans le contenu visible : hors écran, l'overlay
+        // ne se recompose plus à chaque tick de position (4x/seconde).
+        val currentPosition = if (positionMsFlow != null) {
+            val pos by positionMsFlow.collectAsStateWithLifecycle()
+            pos
+        } else {
+            positionMs
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -104,4 +106,3 @@ fun PlayerControlsOverlay(
         }
     }
 }
-
