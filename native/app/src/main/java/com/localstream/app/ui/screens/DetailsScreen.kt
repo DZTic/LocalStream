@@ -549,7 +549,11 @@ private fun EpisodeItemRow(
     val epNum = ep.video.episode ?: ep.tmdbEpisode?.episodeNumber ?: (epIndex + 1)
     val epSeason = ep.video.season ?: seasonNum
     val epLabel = "S$epSeason:E$epNum"
-    val epTitle = ep.tmdbEpisode?.name ?: ep.video.cleanTitle ?: TitleCleaner.getCleanTitle(ep.video.name)
+    val epTitle = remember(ep.tmdbEpisode?.name, ep.video.cleanTitle, ep.video.name) {
+        ep.tmdbEpisode?.name?.takeIf { it.isNotBlank() }
+            ?: ep.video.cleanTitle?.takeIf { it.isNotBlank() }
+            ?: TitleCleaner.getCleanTitle(ep.video.name)
+    }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = Zinc900),
