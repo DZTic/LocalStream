@@ -516,6 +516,29 @@ class PlayerViewModelTest {
     }
 
     @Test
+    fun `loadVideoDetails for series group selects first in-progress unwatched episode`() = runTest {
+        playbackDao.upsert(PlaybackStateEntity(name = ep2.name, progressPct = 20.0, positionMs = 50000L))
+
+        val viewModel = PlayerViewModel(seriesGroup.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(ep2.name, viewModel.uiState.value.currentVideo?.name)
+        assertEquals(50000L, viewModel.uiState.value.initialPositionMs)
+    }
+
+    @Test
+    fun `loadVideoDetails for series group selects first unwatched episode when none in-progress`() = runTest {
+        watchedDao.upsert(WatchedItemEntity(name = ep1.name, watched = true))
+
+        val viewModel = PlayerViewModel(seriesGroup.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(ep2.name, viewModel.uiState.value.currentVideo?.name)
+    }
+
+    @Test
     fun `startSleepTimer and cancelSleepTimer control sleep timer state`() = runTest {
         val viewModel = PlayerViewModel(video1.name, container)
         backgroundScope.launch { viewModel.uiState.collect {} }

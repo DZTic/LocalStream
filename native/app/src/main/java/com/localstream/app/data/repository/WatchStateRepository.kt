@@ -99,6 +99,9 @@ class WatchStateRepository(
     suspend fun getPositionsMap(): Map<String, Long> =
         playbackStateDao.getAll().associate { it.name to it.positionMs }
 
+    suspend fun getPlaybackStatesMap(): Map<String, PlaybackStateEntity> =
+        playbackStateDao.getAll().associateBy { it.name }
+
     suspend fun getPlaybackState(name: String): PlaybackStateEntity? =
         playbackStateDao.findByName(name)
 

@@ -5,6 +5,7 @@ import kotlin.math.roundToInt
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.localstream.app.data.db.entity.PlaybackStateEntity
 import com.localstream.app.di.AppContainer
 import com.localstream.app.domain.model.VideoItem
 import kotlinx.coroutines.FlowPreview
@@ -155,7 +156,6 @@ class PlayerViewModel(
 
     private fun loadVideoDetails() {
         viewModelScope.launch {
-            val decodedName = decodeUri(videoName)
             var allRaw = container.videoRepository.getRawVideos()
             var allGrouped = container.videoRepository.getGroupedVideos()
 
@@ -165,11 +165,18 @@ class PlayerViewModel(
                 allGrouped = container.videoRepository.getGroupedVideos()
             }
 
-            val targetVideo = resolveTargetVideo(decodedName, videoName, allGrouped, allRaw)
-
             val watchedMap = container.watchStateRepository.getWatchedMap()
+            val playbackStatesMap = container.watchStateRepository.getPlaybackStatesMap()
+            val targetVideo = resolveTargetVideo(
+                rawName = videoName,
+                allGrouped = allGrouped,
+                allRaw = allRaw,
+                watchedMap = watchedMap,
+                playbackStatesMap = playbackStatesMap,
+            )
+
             val isWatched = watchedMap[targetVideo.name] == true
-            val state = container.watchStateRepository.getPlaybackState(targetVideo.name)
+            val state = playbackStatesMap[targetVideo.name]
             val rawPos = state?.positionMs ?: 0L
             val pct = state?.progressPct ?: 0.0
             val pos = if (isFinished(isWatched, pct, rawPos, targetVideo.duration * 1000L)) 0L else rawPos
@@ -207,12 +214,14 @@ class PlayerViewModel(
         }
     }
 
-    private suspend fun resolveTargetVideo(
-        decodedName: String,
+    private fun resolveTargetVideo(
         rawName: String,
         allGrouped: List<VideoItem>,
         allRaw: List<VideoItem>,
+        watchedMap: Map<String, Boolean>,
+        playbackStatesMap: Map<String, PlaybackStateEntity>,
     ): VideoItem {
+        val decodedName = decodeUri(rawName)
         val rawVideo = allRaw.find { it.name == decodedName || it.name == rawName }
         val foundGroup = allGrouped.find { group ->
             group.name == decodedName || group.name == rawName
@@ -220,9 +229,8 @@ class PlayerViewModel(
 
         return when {
             foundGroup != null && foundGroup.isSeriesGroup && !foundGroup.episodes.isNullOrEmpty() -> {
-                val watchedMap = container.watchStateRepository.getWatchedMap()
                 foundGroup.episodes.firstOrNull { ep ->
-                    val state = container.watchStateRepository.getPlaybackState(ep.name)
+                    val state = playbackStatesMap[ep.name]
                     (state?.positionMs ?: 0L) > 0L && watchedMap[ep.name] != true
                 } ?: foundGroup.episodes.firstOrNull { ep ->
                     watchedMap[ep.name] != true
@@ -520,7 +528,6 @@ class PlayerViewModel(
     private fun videoNameFlowOrLoad(newName: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isEnded = false) }
-            val decodedName = decodeUri(newName)
             var allRaw = container.videoRepository.getRawVideos()
             var allGrouped = container.videoRepository.getGroupedVideos()
 
@@ -530,11 +537,18 @@ class PlayerViewModel(
                 allGrouped = container.videoRepository.getGroupedVideos()
             }
 
-            val video = resolveTargetVideo(decodedName, newName, allGrouped, allRaw)
-
             val watchedMap = container.watchStateRepository.getWatchedMap()
+            val playbackStatesMap = container.watchStateRepository.getPlaybackStatesMap()
+            val video = resolveTargetVideo(
+                rawName = newName,
+                allGrouped = allGrouped,
+                allRaw = allRaw,
+                watchedMap = watchedMap,
+                playbackStatesMap = playbackStatesMap,
+            )
+
             val isWatched = watchedMap[video.name] == true
-            val state = container.watchStateRepository.getPlaybackState(video.name)
+            val state = playbackStatesMap[video.name]
             val rawPos = state?.positionMs ?: 0L
             val pct = state?.progressPct ?: 0.0
             val pos = if (isFinished(isWatched, pct, rawPos, video.duration * 1000L)) 0L else rawPos
