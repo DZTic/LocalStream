@@ -23,6 +23,24 @@ class MediaStoreScanner(
     private val customDirectories: List<File> = emptyList()
 ) : MediaScanner {
 
+    private var cachedSubtitleIndex: Map<String, SubtitleEntry>? = null
+
+    override fun clearSubtitleCache() {
+        cachedSubtitleIndex = null
+    }
+
+    /**
+     * Retourne l\'index des sous-titres en cache ou le construit au premier appel.
+     */
+    fun getOrBuildSubtitleIndex(): Map<String, SubtitleEntry> {
+        val existing = cachedSubtitleIndex
+        if (existing != null) return existing
+        val subtitles = scanSubtitleFiles()
+        val index = VideoNameParser.buildSubtitleIndex(subtitles)
+        cachedSubtitleIndex = index
+        return index
+    }
+
     override fun scanVideoFiles(): List<VideoItem> {
         return scanVideoFilesPaged(pageSize = DEFAULT_PAGE_SIZE)
     }
@@ -217,8 +235,7 @@ class MediaStoreScanner(
         rawVideos: List<VideoItem>?,
     ): List<VideoItem> {
         val videos = rawVideos ?: scanVideoFiles()
-        val subtitles = scanSubtitleFiles()
-        val subIndex = VideoNameParser.buildSubtitleIndex(subtitles)
+        val subIndex = getOrBuildSubtitleIndex()
 
         val videosWithSubtitles = videos.map { video ->
             val folder = VideoNameParser.parentFolder(video.path)
