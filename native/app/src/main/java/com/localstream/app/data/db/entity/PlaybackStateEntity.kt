@@ -18,6 +18,7 @@ import androidx.room.Index
 @Entity(
     tableName = "playback_state",
     indices = [
+        Index(value = ["name"], unique = true),
         Index(value = ["last_played_at"]),
         Index(value = ["progress_pct"]),
     ],

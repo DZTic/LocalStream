@@ -66,5 +66,32 @@ class AppDatabaseMigrationTest {
         assertTrue(executedQueries.any { it.contains("CREATE INDEX IF NOT EXISTS `index_playback_state_last_played_at`") })
         assertTrue(executedQueries.any { it.contains("CREATE INDEX IF NOT EXISTS `index_playback_state_progress_pct`") })
     }
+
+    @Test
+    fun migration3To4_hasCorrectVersions() {
+        assertEquals(3, AppDatabase.MIGRATION_3_4.startVersion)
+        assertEquals(4, AppDatabase.MIGRATION_3_4.endVersion)
+    }
+
+    @Test
+    fun migration3To4_executesCreateUniqueIndices() {
+        val executedQueries = mutableListOf<String>()
+
+        val dbProxy = Proxy.newProxyInstance(
+            SupportSQLiteDatabase::class.java.classLoader,
+            arrayOf(SupportSQLiteDatabase::class.java),
+        ) { _, method, args ->
+            if (method.name == "execSQL" && args != null && args.isNotEmpty()) {
+                executedQueries.add(args[0].toString())
+            }
+            null
+        } as SupportSQLiteDatabase
+
+        AppDatabase.MIGRATION_3_4.migrate(dbProxy)
+
+        assertEquals(2, executedQueries.size)
+        assertTrue(executedQueries.any { it.contains("CREATE UNIQUE INDEX IF NOT EXISTS `index_playback_state_name`") })
+        assertTrue(executedQueries.any { it.contains("CREATE UNIQUE INDEX IF NOT EXISTS `index_watched_items_name`") })
+    }
 }
 

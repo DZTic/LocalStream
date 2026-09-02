@@ -2,6 +2,7 @@ package com.localstream.app.data.db.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -9,7 +10,12 @@ import androidx.room.PrimaryKey
  * Cl\u00e9 : [name] (nom de fichier) — m\u00eame cl\u00e9 que localStorage "watchedVideos".
  * [mediaStoreId] est nullable pour compatibilit\u00e9 (renseign\u00e9 progressivement).
  */
-@Entity(tableName = "watched_items")
+@Entity(
+    tableName = "watched_items",
+    indices = [
+        Index(value = ["name"], unique = true),
+    ],
+)
 data class WatchedItemEntity(
     @PrimaryKey
     @ColumnInfo(name = "name") val name: String,
