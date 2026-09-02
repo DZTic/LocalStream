@@ -10,9 +10,10 @@ import androidx.compose.ui.graphics.Color
 // Fond principal (bg-black).
 val Black = Color(0xFF000000)
 
-// Surfaces (zinc-900 / zinc-800).
+// Surfaces (zinc-900 / zinc-800 / zinc-700).
 val Zinc900 = Color(0xFF18181B)
 val Zinc800 = Color(0xFF27272A)
+val Zinc700 = Color(0xFF3F3F46)
 
 // Texte et bordures.
 val Zinc300 = Color(0xFFD4D4D8)

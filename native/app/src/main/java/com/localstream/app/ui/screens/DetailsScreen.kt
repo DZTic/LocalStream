@@ -51,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +77,7 @@ import com.localstream.app.ui.theme.Red600
 import com.localstream.app.ui.theme.White
 import com.localstream.app.ui.theme.Zinc300
 import com.localstream.app.ui.theme.Zinc500
+import com.localstream.app.ui.theme.Zinc700
 import com.localstream.app.ui.theme.Zinc800
 import com.localstream.app.ui.theme.Zinc900
 
@@ -236,6 +238,8 @@ private fun DetailsBackdropHeader(
             AsyncImage(
                 model = imageRequest,
                 contentDescription = cleanTitle,
+                placeholder = ColorPainter(Zinc700),
+                error = ColorPainter(Zinc800),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -589,6 +593,8 @@ private fun EpisodeItemRow(
                         AsyncImage(
                             model = imageRequest,
                             contentDescription = ep.video.name,
+                            placeholder = ColorPainter(Zinc700),
+                            error = ColorPainter(Zinc800),
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
                         )
