@@ -1,8 +1,7 @@
 package com.localstream.app.data.db.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
+import androidx.room.Upsert
 import androidx.room.Query
 import com.localstream.app.data.db.entity.WatchedItemEntity
 import kotlinx.coroutines.flow.Flow
@@ -18,10 +17,10 @@ interface WatchedItemDao {
     @Query("SELECT * FROM watched_items")
     suspend fun getAllWatchedItems(): List<WatchedItemEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsert(item: WatchedItemEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertAll(items: List<WatchedItemEntity>)
 
     @Query("DELETE FROM watched_items WHERE name = :name")

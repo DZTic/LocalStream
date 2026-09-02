@@ -110,24 +110,20 @@ class WatchStateRepository(
         positionMs: Long,
         durationMs: Long = 0L,
         progressPercent: Int = 0,
+        mediaStoreId: Long? = null,
     ) {
         if (positionMs <= 0L && progressPercent <= 0) {
             playbackStateDao.deleteByName(videoName)
             return
         }
-        val existing = playbackStateDao.findByName(videoName)
-        val calculatedPct = if (durationMs > 0L) {
-            (positionMs.toDouble() / durationMs.toDouble() * 100.0).coerceIn(0.0, 100.0)
-        } else {
-            progressPercent.toDouble()
-        }
+        val calculatedPct = calculateProgressPct(positionMs, durationMs, progressPercent.toDouble())
         playbackStateDao.upsert(
             PlaybackStateEntity(
                 name = videoName,
                 progressPct = calculatedPct,
                 positionMs = positionMs,
                 lastPlayedAt = System.currentTimeMillis(),
-                mediaStoreId = existing?.mediaStoreId,
+                mediaStoreId = mediaStoreId,
             )
         )
     }
@@ -142,14 +138,13 @@ class WatchStateRepository(
             playbackStateDao.deleteByName(videoName)
             return
         }
-        val existing = playbackStateDao.findByName(videoName)
         playbackStateDao.upsert(
             PlaybackStateEntity(
                 name = videoName,
                 progressPct = progressPct,
                 positionMs = positionMs,
                 lastPlayedAt = System.currentTimeMillis(),
-                mediaStoreId = mediaStoreId ?: existing?.mediaStoreId,
+                mediaStoreId = mediaStoreId,
             )
         )
     }
@@ -166,4 +161,18 @@ class WatchStateRepository(
     /** Retourne les 30 derniers fichiers lus, triés par date décroissante. */
     suspend fun getRecentlyWatched(): List<String> =
         playbackStateDao.getRecentlyPlayed(RECENTLY_WATCHED_LIMIT).map { it.name }
+
+    companion object {
+        private const val PERCENT_MAX = 100.0
+
+        fun calculateProgressPct(
+            positionMs: Long,
+            durationMs: Long,
+            fallbackPct: Double = 0.0,
+        ): Double = if (durationMs > 0L) {
+            (positionMs.toDouble() / durationMs.toDouble() * PERCENT_MAX).coerceIn(0.0, PERCENT_MAX)
+        } else {
+            fallbackPct
+        }
+    }
 }
