@@ -32,6 +32,9 @@ class VideoRepository(
         if (!forceRefresh && groupedVideos.isNotEmpty()) {
             return groupedVideos
         }
+        if (forceRefresh) {
+            mediaScanner.clearSubtitleCache()
+        }
         rawVideos = mediaScanner.scanVideoFiles()
         groupedVideos = mediaScanner.scanAndGroup(
             whitelistedVideos = whitelistedVideos,

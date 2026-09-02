@@ -16,4 +16,7 @@ interface MediaScanner {
         releaseDates: Map<String, String> = emptyMap(),
         rawVideos: List<VideoItem>? = null,
     ): List<VideoItem>
+
+    /** Invalide le cache des sous-titres (appelé lors d'un refresh forcé). */
+    fun clearSubtitleCache() {}
 }

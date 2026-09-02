@@ -1,8 +1,7 @@
 package com.localstream.app.data.db.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
+import androidx.room.Upsert
 import androidx.room.Query
 import com.localstream.app.data.db.entity.PlaybackStateEntity
 import kotlinx.coroutines.flow.Flow
@@ -21,10 +20,10 @@ interface PlaybackStateDao {
     @Query("SELECT * FROM playback_state")
     suspend fun getAll(): List<PlaybackStateEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsert(state: PlaybackStateEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertAll(states: List<PlaybackStateEntity>)
 
     @Query("DELETE FROM playback_state WHERE name = :name")

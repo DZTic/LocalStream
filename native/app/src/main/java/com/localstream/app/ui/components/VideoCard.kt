@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +41,7 @@ import com.localstream.app.domain.VideoUiSelectors
 import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.theme.Red600
 import com.localstream.app.ui.theme.Zinc500
+import com.localstream.app.ui.theme.Zinc700
 import com.localstream.app.ui.theme.Zinc800
 
 private val WatchedGreen = Color(0xFF16A34A) // green-600 Tailwind
@@ -221,6 +223,8 @@ private fun PosterImage(
         AsyncImage(
             model = imageRequest,
             contentDescription = title,
+            placeholder = ColorPainter(Zinc700),
+            error = ColorPainter(Zinc800),
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()

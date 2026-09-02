@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -255,23 +256,25 @@ class LibraryViewModel(
     // -------- Observation des états persistés --------
 
     private fun observeWatchState() {
-        viewModelScope.launch {
+        viewModelScope.launch(computationDispatcher) {
             combine(
                 watchStateRepository.watchedItems,
                 watchStateRepository.activePlaybackStates,
-            ) { watched, progress -> watched to progress }.collect { (watched, progress) ->
-                _uiState.update { previous ->
-                    val next = previous.copy(
-                        displayData = previous.displayData.copy(watched = watched, progress = progress),
-                    )
-                    if (next.needsWatchStateResort(previous)) {
-                        next.withDerived()
-                    } else {
-                        // Seule la progression a changé : le tri/filtrage n'en dépend pas.
-                        next
+            ) { watched, progress -> watched to progress }
+                .flowOn(computationDispatcher)
+                .collect { (watched, progress) ->
+                    _uiState.update { previous ->
+                        val next = previous.copy(
+                            displayData = previous.displayData.copy(watched = watched, progress = progress),
+                        )
+                        if (next.needsWatchStateResort(previous)) {
+                            next.withDerived()
+                        } else {
+                            // Seule la progression a changé : le tri/filtrage n'en dépend pas.
+                            next
+                        }
                     }
                 }
-            }
         }
     }
 
@@ -293,12 +296,14 @@ class LibraryViewModel(
     /** Résultats de recherche débouncés (250 ms comme le web) sur la liste filtrée/triée. */
     @OptIn(FlowPreview::class)
     private fun observeSearchQuery() {
-        viewModelScope.launch {
-            _searchQuery.debounce(SEARCH_DEBOUNCE_MS).collectLatest { query ->
-                _uiState.update {
-                    it.copy(searchResults = VideoUiSelectors.filterByQuery(it.filteredSorted, query))
+        viewModelScope.launch(computationDispatcher) {
+            _searchQuery.debounce(SEARCH_DEBOUNCE_MS)
+                .flowOn(computationDispatcher)
+                .collectLatest { query ->
+                    _uiState.update {
+                        it.copy(searchResults = VideoUiSelectors.filterByQuery(it.filteredSorted, query))
+                    }
                 }
-            }
         }
     }
 
@@ -309,27 +314,35 @@ class LibraryViewModel(
     }
 
     fun setSortBy(sortBy: SortBy) {
-        _uiState.update { it.copy(sortBy = sortBy).withDerived() }
+        viewModelScope.launch(computationDispatcher) {
+            _uiState.update { it.copy(sortBy = sortBy).withDerived() }
+        }
     }
 
     fun setFilterGenre(genreId: Int?) {
-        _uiState.update { it.copy(filterGenre = genreId).withDerived() }
+        viewModelScope.launch(computationDispatcher) {
+            _uiState.update { it.copy(filterGenre = genreId).withDerived() }
+        }
     }
 
     fun setFilterResolution(resolution: ResolutionFilter) {
-        _uiState.update { it.copy(filterResolution = resolution).withDerived() }
+        viewModelScope.launch(computationDispatcher) {
+            _uiState.update { it.copy(filterResolution = resolution).withDerived() }
+        }
     }
 
     /** Clic sur le logo : retour à l'état d'accueil (filtres et recherche réinitialisés). */
     fun resetFilters() {
         _searchQuery.value = ""
-        _uiState.update {
-            it.copy(
-                sortBy = SortBy.ALPHA,
-                filterGenre = null,
-                filterResolution = ResolutionFilter.ALL,
-                searchResults = emptyList(),
-            ).withDerived()
+        viewModelScope.launch(computationDispatcher) {
+            _uiState.update {
+                it.copy(
+                    sortBy = SortBy.ALPHA,
+                    filterGenre = null,
+                    filterResolution = ResolutionFilter.ALL,
+                    searchResults = emptyList(),
+                ).withDerived()
+            }
         }
     }
 
@@ -353,6 +366,9 @@ class LibraryViewModel(
 
     // -------- Dérivation filtre/tri --------
 
+    /**
+     * Dérive la liste filtrée/triée et les résultats de recherche (CPU-bound, exécuté sur [computationDispatcher]).
+     */
     private fun LibraryUiState.withDerived(): LibraryUiState {
         val filtered = VideoFilterSorter.filterAndSortVideos(
             videos,

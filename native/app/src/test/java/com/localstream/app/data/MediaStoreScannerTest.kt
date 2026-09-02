@@ -114,4 +114,27 @@ class MediaStoreScannerTest {
         assertTrue(result.any { it.name == "Item1.mkv" })
         assertTrue(result.any { it.name == "Item2.mkv" })
     }
+
+    @Test
+    fun scanAndGroup_cachesSubtitleIndexAcrossCalls() {
+        File(tempDir, "Movie.mkv").createNewFile()
+        File(tempDir, "Movie.srt").createNewFile()
+
+        val scanner = MediaStoreScanner(context = null, customDirectories = listOf(tempDir))
+        val firstResult = scanner.scanAndGroup()
+        val movieWithSub = firstResult.first { it.name == "Movie.mkv" }
+        assertTrue(movieWithSub.subtitleNativePath != null)
+
+        File(tempDir, "Movie2.mkv").createNewFile()
+        File(tempDir, "Movie2.srt").createNewFile()
+
+        val secondResult = scanner.scanAndGroup()
+        val movie2 = secondResult.firstOrNull { it.name == "Movie2.mkv" }
+        assertTrue(movie2?.subtitleNativePath == null)
+
+        scanner.clearSubtitleCache()
+        val thirdResult = scanner.scanAndGroup()
+        val movie2AfterInvalidate = thirdResult.firstOrNull { it.name == "Movie2.mkv" }
+        assertTrue(movie2AfterInvalidate?.subtitleNativePath != null)
+    }
 }
