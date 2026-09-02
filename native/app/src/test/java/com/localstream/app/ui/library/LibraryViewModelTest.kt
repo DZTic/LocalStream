@@ -146,6 +146,67 @@ class LibraryViewModelTest {
         assertEquals(listOf("Blockbuster.2024.1080p.mkv"), viewModel.uiState.value.searchResults.map { it.name })
     }
 
+    @Test
+    fun `resetFilters reinitialise les filtres et le tri par defaut`() = runTest(testDispatcher) {
+        viewModel.refreshLibrary()
+        advanceUntilIdle()
+
+        viewModel.setSortBy(SortBy.SIZE)
+        viewModel.setFilterResolution(ResolutionFilter.FOUR_K)
+        advanceUntilIdle()
+        assertEquals(listOf("Avatar.2009.2160p.mkv"), viewModel.uiState.value.filteredSorted.map { it.name })
+
+        viewModel.resetFilters()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(SortBy.ALPHA, state.sortBy)
+        assertEquals(ResolutionFilter.ALL, state.filterResolution)
+        assertEquals(
+            listOf("Avatar.2009.2160p.mkv", "Blockbuster.2024.1080p.mkv", "Old.Movie.avi"),
+            state.filteredSorted.map { it.name },
+        )
+    }
+
+    @Test
+    fun `les operations de tri et filtrage sont executees sur le computationDispatcher`() = runTest(testDispatcher) {
+        val computationCalls = java.util.concurrent.atomic.AtomicInteger(0)
+        val trackingDispatcher = object : kotlinx.coroutines.CoroutineDispatcher() {
+            override fun dispatch(context: kotlin.coroutines.CoroutineContext, block: Runnable) {
+                computationCalls.incrementAndGet()
+                testDispatcher.dispatch(context, block)
+            }
+        }
+
+        val trackingVm = LibraryViewModel(
+            videoRepository = VideoRepository(FakeScanner(raw, grouped)),
+            watchStateRepository = WatchStateRepository(FakeWatchedItemDao(), playbackDao),
+            tmdbRepository = TmdbRepository(UnusedTmdbApi(), FakeTmdbMetadataDao(), SettingsRepository()),
+            settingsRepository = SettingsRepository(),
+            ioDispatcher = testDispatcher,
+            computationDispatcher = trackingDispatcher,
+        )
+        trackingVm.refreshLibrary()
+        advanceUntilIdle()
+
+        val initialCalls = computationCalls.get()
+        assertTrue(initialCalls > 0)
+
+        trackingVm.setSortBy(SortBy.SIZE)
+        advanceUntilIdle()
+        assertTrue(computationCalls.get() > initialCalls)
+
+        val callsAfterSort = computationCalls.get()
+        trackingVm.setFilterResolution(ResolutionFilter.FOUR_K)
+        advanceUntilIdle()
+        assertTrue(computationCalls.get() > callsAfterSort)
+
+        val callsAfterFilter = computationCalls.get()
+        trackingVm.resetFilters()
+        advanceUntilIdle()
+        assertTrue(computationCalls.get() > callsAfterFilter)
+    }
+
 
     @Test
     fun `resetProgress sur une serie supprime la progression de tous ses episodes`() = runTest(testDispatcher) {
