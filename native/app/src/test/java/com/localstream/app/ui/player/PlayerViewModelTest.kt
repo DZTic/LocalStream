@@ -27,6 +27,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -383,6 +384,48 @@ class PlayerViewModelTest {
         assertTrue(extTrack!!.isExternal)
         assertTrue(extTrack.isSelected)
         assertEquals(extId, state4.selectedSubtitleTrackId)
+    }
+
+    @Test
+    fun `selectSubtitleTrack null disables subtitles and updateTracks preserves external label`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val audio = listOf(AudioTrackUiState(id = "a1", label = "Français", isSelected = true))
+        val sub = listOf(SubtitleTrackUiState(id = "s1", label = "Français SRT", isSelected = true))
+        viewModel.updateTracks(audio, sub)
+        advanceUntilIdle()
+
+        viewModel.addExternalSubtitle("danseaveclesloups.srt", "file:///cache/sub.srt")
+        advanceUntilIdle()
+
+        val extId = viewModel.uiState.value.selectedSubtitleTrackId
+        assertNotNull(extId)
+
+        // ExoPlayer emits track changes with external track included
+        viewModel.updateTracks(
+            audio,
+            listOf(
+                SubtitleTrackUiState(id = "s1", label = "Français SRT", isSelected = false),
+                SubtitleTrackUiState(id = extId!!, label = "Piste 2", isSelected = true),
+            ),
+        )
+        advanceUntilIdle()
+
+        val stateAfterExo = viewModel.uiState.value
+        val extTrack = stateAfterExo.subtitleTracks.find { it.id == extId }
+        assertNotNull(extTrack)
+        assertTrue(extTrack!!.isExternal)
+        assertEquals("danseaveclesloups.srt", extTrack.label)
+        assertEquals("file:///cache/sub.srt", extTrack.uriString)
+
+        // Disable subtitles
+        viewModel.selectSubtitleTrack(null)
+        advanceUntilIdle()
+        val disabledState = viewModel.uiState.value
+        assertNull(disabledState.selectedSubtitleTrackId)
+        assertTrue(disabledState.subtitleTracks.none { it.isSelected })
     }
 
     @Test
