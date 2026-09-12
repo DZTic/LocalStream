@@ -88,6 +88,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
@@ -268,6 +269,7 @@ fun PlayerScreen(
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
+            .setSeekParameters(SeekParameters.CLOSEST_SYNC)
             .build()
     }
 
@@ -329,6 +331,7 @@ fun PlayerScreen(
     }
 
     var isPlayerReady by remember { mutableStateOf(false) }
+    var currentTracksState by remember { mutableStateOf(Tracks.EMPTY) }
 
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
@@ -388,6 +391,7 @@ fun PlayerScreen(
             }
 
             override fun onTracksChanged(tracks: Tracks) {
+                currentTracksState = tracks
                 val audioList = mutableListOf<AudioTrackUiState>()
                 val subList = mutableListOf<SubtitleTrackUiState>()
 
@@ -448,8 +452,8 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(uiState.selectedAudioTrackId, uiState.selectedSubtitleTrackId, exoPlayer.currentTracks) {
-        val tracks = exoPlayer.currentTracks
+    LaunchedEffect(uiState.selectedAudioTrackId, uiState.selectedSubtitleTrackId, currentTracksState) {
+        val tracks = currentTracksState
         val builder = exoPlayer.trackSelectionParameters.buildUpon()
 
         val selAudioId = uiState.selectedAudioTrackId
@@ -467,7 +471,7 @@ fun PlayerScreen(
         } else {
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
             builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
-            findTrackOverride(tracks, C.TRACK_TYPE_TEXT, selSubId)?.let {
+            findTrackOverride(tracks, C.TRACK_TYPE_TEXT, selSubId, uiState.subtitleTracks)?.let {
                 builder.setOverrideForType(it)
             }
         }
@@ -1021,19 +1025,50 @@ private fun getScreenBrightness(activity: Activity?): Float {
     return 0.5f
 }
 
-private fun findTrackOverride(tracks: Tracks, trackType: @C.TrackType Int, targetId: String): TrackSelectionOverride? {
+private fun findTrackOverrideById(tracks: Tracks, trackType: @C.TrackType Int, targetId: String): TrackSelectionOverride? {
     for (groupIndex in 0 until tracks.groups.size) {
         val group = tracks.groups[groupIndex]
         if (group.type != trackType) continue
         for (i in 0 until group.length) {
             val format = group.getTrackFormat(i)
             val id = format.id ?: "$trackType-$groupIndex-$i"
-            if (id == targetId) {
+            if (id == targetId || group.mediaTrackGroup.id == targetId) {
                 return TrackSelectionOverride(group.mediaTrackGroup, i)
             }
         }
     }
     return null
+}
+
+private fun findSubtitleOverrideByLabel(tracks: Tracks, targetLabel: String): TrackSelectionOverride? {
+    for (groupIndex in 0 until tracks.groups.size) {
+        val group = tracks.groups[groupIndex]
+        if (group.type != C.TRACK_TYPE_TEXT) continue
+        for (i in 0 until group.length) {
+            val format = group.getTrackFormat(i)
+            val formatLabel = format.label?.trim()
+            if (formatLabel != null && formatLabel.equals(targetLabel, ignoreCase = true)) {
+                return TrackSelectionOverride(group.mediaTrackGroup, i)
+            }
+        }
+    }
+    return null
+}
+
+private fun findTrackOverride(
+    tracks: Tracks,
+    trackType: @C.TrackType Int,
+    targetId: String,
+    subtitleTracks: List<SubtitleTrackUiState> = emptyList(),
+): TrackSelectionOverride? {
+    val directMatch = findTrackOverrideById(tracks, trackType, targetId)
+    val fallbackMatch = if (directMatch == null && trackType == C.TRACK_TYPE_TEXT) {
+        val targetLabel = subtitleTracks.find { it.id == targetId }?.label?.trim()
+        if (!targetLabel.isNullOrBlank()) findSubtitleOverrideByLabel(tracks, targetLabel) else null
+    } else {
+        null
+    }
+    return directMatch ?: fallbackMatch
 }
 
 private fun resolveDisplayName(context: Context, uri: Uri): String {
