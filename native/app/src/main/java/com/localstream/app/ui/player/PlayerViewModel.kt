@@ -106,7 +106,7 @@ data class PlayerUiState(
     val isOnlineSubtitlesSheetVisible: Boolean = false,
 )
 
-@Suppress("TooManyFunctions", "LongMethod")
+@Suppress("TooManyFunctions", "LongMethod", "LargeClass")
 class PlayerViewModel(
     val videoName: String,
     private val container: AppContainer,
@@ -467,29 +467,76 @@ class PlayerViewModel(
         _uiState.update { it.copy(gestureFeedback = null) }
     }
 
+    private fun mergeSubtitleTracks(
+        internalSubs: List<SubtitleTrackUiState>,
+        externalTracks: List<SubtitleTrackUiState>,
+    ): List<SubtitleTrackUiState> {
+        val matchedExternalKeys = mutableSetOf<String>()
+
+        val merged = internalSubs.map { sub ->
+            val matchingExt = externalTracks.find { ext ->
+                ext.id == sub.id ||
+                    (ext.label.isNotBlank() && ext.label.equals(sub.label, ignoreCase = true))
+            }
+            if (matchingExt != null) {
+                matchedExternalKeys.add(matchingExt.id)
+                matchedExternalKeys.add(matchingExt.label.lowercase())
+                sub.copy(
+                    label = matchingExt.label,
+                    isExternal = true,
+                    uriString = matchingExt.uriString,
+                )
+            } else {
+                sub
+            }
+        }
+
+        val remainingExternals = externalTracks.filter { ext ->
+            ext.id !in matchedExternalKeys &&
+                ext.label.lowercase() !in matchedExternalKeys &&
+                internalSubs.none { sub ->
+                    ext.label.isNotBlank() && ext.label.equals(sub.label, ignoreCase = true)
+                }
+        }
+
+        return merged + remainingExternals
+    }
+
+    private fun resolveSelectedSubtitleId(
+        currentId: String?,
+        externalTracks: List<SubtitleTrackUiState>,
+        mergedSubs: List<SubtitleTrackUiState>,
+    ): String? = if (currentId == null) {
+        mergedSubs.firstOrNull { it.isSelected }?.id
+    } else {
+        val wasSelectedExt = externalTracks.find { it.id == currentId }
+        val unified = if (wasSelectedExt != null) {
+            mergedSubs.find {
+                it.id == currentId ||
+                    (it.label.isNotBlank() && it.label.equals(wasSelectedExt.label, ignoreCase = true))
+            }
+        } else {
+            null
+        }
+        unified?.id ?: currentId
+    }
+
     fun updateTracks(
         audio: List<AudioTrackUiState>,
         subtitles: List<SubtitleTrackUiState>,
     ) {
         _uiState.update { state ->
             val externalTracks = state.subtitleTracks.filter { it.isExternal }
-            val mergedSubtitles = subtitles.map { sub ->
-                val matchingExt = externalTracks.find { it.id == sub.id }
-                if (matchingExt != null) {
-                    sub.copy(
-                        label = matchingExt.label,
-                        isExternal = true,
-                        uriString = matchingExt.uriString,
-                    )
-                } else {
-                    sub
-                }
-            } + externalTracks.filter { ext -> subtitles.none { it.id == ext.id } }
-
+            val mergedSubtitles = mergeSubtitleTracks(subtitles, externalTracks)
+            val resolvedSelectedSub = resolveSelectedSubtitleId(
+                state.selectedSubtitleTrackId,
+                externalTracks,
+                mergedSubtitles,
+            )
             val selectedAudio = state.selectedAudioTrackId ?: audio.firstOrNull { it.isSelected }?.id
-            val selectedSub = state.selectedSubtitleTrackId ?: mergedSubtitles.firstOrNull { it.isSelected }?.id
-            val finalSubtitles = if (selectedSub != null) {
-                mergedSubtitles.map { it.copy(isSelected = it.id == selectedSub) }
+
+            val finalSubtitles = if (resolvedSelectedSub != null) {
+                mergedSubtitles.map { it.copy(isSelected = it.id == resolvedSelectedSub) }
             } else {
                 mergedSubtitles
             }
@@ -500,7 +547,7 @@ class PlayerViewModel(
             }
 
             val isAudioUnchanged = state.audioTracks == finalAudio && state.selectedAudioTrackId == selectedAudio
-            val isSubUnchanged = state.subtitleTracks == finalSubtitles && state.selectedSubtitleTrackId == selectedSub
+            val isSubUnchanged = state.subtitleTracks == finalSubtitles && state.selectedSubtitleTrackId == resolvedSelectedSub
 
             if (isAudioUnchanged && isSubUnchanged) {
                 state
@@ -509,7 +556,7 @@ class PlayerViewModel(
                     audioTracks = finalAudio,
                     subtitleTracks = finalSubtitles,
                     selectedAudioTrackId = selectedAudio,
-                    selectedSubtitleTrackId = selectedSub,
+                    selectedSubtitleTrackId = resolvedSelectedSub,
                 )
             }
         }

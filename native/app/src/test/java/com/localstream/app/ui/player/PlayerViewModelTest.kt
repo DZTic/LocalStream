@@ -429,6 +429,49 @@ class PlayerViewModelTest {
     }
 
     @Test
+    fun `updateTracks unifies external subtitles by label without duplicate and updates selectedSubtitleTrackId`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val audio = listOf(AudioTrackUiState(id = "a1", label = "Français", isSelected = true))
+        val sub = listOf(SubtitleTrackUiState(id = "s1", label = "Français SRT", isSelected = true))
+        viewModel.updateTracks(audio, sub)
+        advanceUntilIdle()
+
+        viewModel.addExternalSubtitle("danseaveclesloupsversionlongue-1cd.srt", "file:///cache/subtitles/local_123.srt")
+        advanceUntilIdle()
+
+        val initialExtId = viewModel.uiState.value.selectedSubtitleTrackId
+        assertNotNull(initialExtId)
+        assertTrue(initialExtId!!.startsWith("ext_"))
+
+        val exoInternalId = "3-1-0"
+        viewModel.updateTracks(
+            audio,
+            listOf(
+                SubtitleTrackUiState(id = "s1", label = "Français SRT", isSelected = false),
+                SubtitleTrackUiState(id = exoInternalId, label = "danseaveclesloupsversionlongue-1cd.srt", isSelected = false),
+            ),
+        )
+        advanceUntilIdle()
+
+        val stateAfterUpdate = viewModel.uiState.value
+        val matchingTracks = stateAfterUpdate.subtitleTracks.filter {
+            it.label.contains("danseaveclesloupsversionlongue-1cd.srt")
+        }
+        assertEquals(1, matchingTracks.size)
+
+        val unifiedTrack = matchingTracks.first()
+        assertTrue(unifiedTrack.isExternal)
+        assertEquals("danseaveclesloupsversionlongue-1cd.srt", unifiedTrack.label)
+        assertEquals("file:///cache/subtitles/local_123.srt", unifiedTrack.uriString)
+        assertEquals(exoInternalId, unifiedTrack.id)
+        assertTrue(unifiedTrack.isSelected)
+        assertEquals(exoInternalId, stateAfterUpdate.selectedSubtitleTrackId)
+    }
+
+    @Test
     fun `onVideoEnded sets isEnded and marks watched`() = runTest {
         val viewModel = PlayerViewModel(video1.name, container)
         backgroundScope.launch { viewModel.uiState.collect {} }
