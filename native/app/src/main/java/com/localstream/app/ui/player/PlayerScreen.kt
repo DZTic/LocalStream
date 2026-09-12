@@ -22,7 +22,9 @@ import android.util.Rational
 import android.view.ViewGroup
 import android.view.WindowManager
 import java.io.File
-import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.charset.Charset
+import java.nio.charset.CodingErrorAction
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -389,11 +391,12 @@ fun PlayerScreen(
                 val audioList = mutableListOf<AudioTrackUiState>()
                 val subList = mutableListOf<SubtitleTrackUiState>()
 
-                for (group in tracks.groups) {
+                for (groupIndex in 0 until tracks.groups.size) {
+                    val group = tracks.groups[groupIndex]
                     val trackType = group.type
                     for (i in 0 until group.length) {
                         val format = group.getTrackFormat(i)
-                        val id = format.id ?: "$trackType-$i"
+                        val id = format.id ?: "$trackType-$groupIndex-$i"
                         val isSelected = group.isTrackSelected(i)
 
                         if (trackType == C.TRACK_TYPE_AUDIO) {
@@ -451,6 +454,7 @@ fun PlayerScreen(
 
         val selAudioId = uiState.selectedAudioTrackId
         if (selAudioId != null) {
+            builder.clearOverridesOfType(C.TRACK_TYPE_AUDIO)
             findTrackOverride(tracks, C.TRACK_TYPE_AUDIO, selAudioId)?.let {
                 builder.setOverrideForType(it)
             }
@@ -458,9 +462,11 @@ fun PlayerScreen(
 
         val selSubId = uiState.selectedSubtitleTrackId
         if (selSubId == null) {
+            builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
         } else {
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
             findTrackOverride(tracks, C.TRACK_TYPE_TEXT, selSubId)?.let {
                 builder.setOverrideForType(it)
             }
@@ -469,48 +475,13 @@ fun PlayerScreen(
         exoPlayer.trackSelectionParameters = builder.build()
     }
 
-    LaunchedEffect(uiState.subtitleTracks) {
-        val externalTrack = uiState.subtitleTracks.firstOrNull { it.isExternal && it.isSelected && !it.uriString.isNullOrEmpty() }
-        if (externalTrack != null) {
-            val currentVideo = uiState.currentVideo ?: return@LaunchedEffect
-            val uri = extractUri(currentVideo) ?: return@LaunchedEffect
-
-            val uriString = externalTrack.uriString ?: return@LaunchedEffect
-            val mimeType = when {
-                uriString.endsWith(".vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
-                uriString.endsWith(".ass", ignoreCase = true) ||
-                    uriString.endsWith(".ssa", ignoreCase = true) -> MimeTypes.TEXT_SSA
-                else -> MimeTypes.APPLICATION_SUBRIP
-            }
-
-            val subUri = if (uriString.startsWith("content://") || uriString.startsWith("file://")) {
-                Uri.parse(uriString)
-            } else {
-                Uri.fromFile(File(uriString))
-            }
-            val subConfig = MediaItem.SubtitleConfiguration.Builder(subUri)
-                .setId(externalTrack.id)
-                .setLabel(externalTrack.label)
-                .setMimeType(mimeType)
-                .setLanguage("fr")
-                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT or C.SELECTION_FLAG_FORCED)
-                .build()
-
-            val currentMediaItem = exoPlayer.currentMediaItem
-            val mediaItem = (currentMediaItem?.buildUpon() ?: MediaItem.Builder().setUri(uri))
-                .setSubtitleConfigurations(listOf(subConfig))
-                .build()
-
-            exoPlayer.setMediaItem(mediaItem, /* resetPosition = */ false)
-            exoPlayer.prepare()
-            exoPlayer.playWhenReady = true
-        }
-    }
+    var attachedSubtitleUris by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     LaunchedEffect(uiState.currentVideo) {
         val video = uiState.currentVideo ?: return@LaunchedEffect
         val uri = extractUri(video) ?: return@LaunchedEffect
 
+        attachedSubtitleUris = emptySet()
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
         isPlayerReady = false
@@ -523,6 +494,53 @@ fun PlayerScreen(
         }
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
+    }
+
+    val externalTracks = remember(uiState.subtitleTracks) {
+        uiState.subtitleTracks.filter { it.isExternal && !it.uriString.isNullOrBlank() }
+    }
+    val externalUris = remember(externalTracks) {
+        externalTracks.mapNotNull { it.uriString }.toSet()
+    }
+
+    LaunchedEffect(externalUris) {
+        if (externalUris.isEmpty() || externalUris == attachedSubtitleUris) return@LaunchedEffect
+        val currentVideo = uiState.currentVideo ?: return@LaunchedEffect
+        val uri = extractUri(currentVideo) ?: return@LaunchedEffect
+
+        val subConfigs = externalTracks.map { track ->
+            val trackUriString = track.uriString!!
+            val mimeType = when {
+                trackUriString.endsWith(".vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
+                trackUriString.endsWith(".ass", ignoreCase = true) ||
+                    trackUriString.endsWith(".ssa", ignoreCase = true) -> MimeTypes.TEXT_SSA
+                else -> MimeTypes.APPLICATION_SUBRIP
+            }
+
+            val subUri = if (trackUriString.startsWith("content://") || trackUriString.startsWith("file://")) {
+                Uri.parse(trackUriString)
+            } else {
+                Uri.fromFile(File(trackUriString))
+            }
+            MediaItem.SubtitleConfiguration.Builder(subUri)
+                .setId(track.id)
+                .setLabel(track.label)
+                .setMimeType(mimeType)
+                .setLanguage(track.language ?: "fr")
+                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .build()
+        }
+
+        val currentPos = exoPlayer.currentPosition.coerceAtLeast(0L)
+        val currentMediaItem = exoPlayer.currentMediaItem
+        val mediaItem = (currentMediaItem?.buildUpon() ?: MediaItem.Builder().setUri(uri))
+            .setSubtitleConfigurations(subConfigs)
+            .build()
+
+        attachedSubtitleUris = externalUris
+        exoPlayer.setMediaItem(mediaItem, currentPos)
+        exoPlayer.prepare()
+        exoPlayer.play()
     }
 
     LaunchedEffect(exoPlayer, isPlayerReady, uiState.isPlaying) {
@@ -1004,11 +1022,12 @@ private fun getScreenBrightness(activity: Activity?): Float {
 }
 
 private fun findTrackOverride(tracks: Tracks, trackType: @C.TrackType Int, targetId: String): TrackSelectionOverride? {
-    for (group in tracks.groups) {
+    for (groupIndex in 0 until tracks.groups.size) {
+        val group = tracks.groups[groupIndex]
         if (group.type != trackType) continue
         for (i in 0 until group.length) {
             val format = group.getTrackFormat(i)
-            val id = format.id ?: "$trackType-$i"
+            val id = format.id ?: "$trackType-$groupIndex-$i"
             if (id == targetId) {
                 return TrackSelectionOverride(group.mediaTrackGroup, i)
             }
@@ -1041,17 +1060,56 @@ private fun resolveExtension(fileName: String): String = when {
     else -> ".srt"
 }
 
+private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
+private val UTF16_LE_BOM = byteArrayOf(0xFF.toByte(), 0xFE.toByte())
+private val UTF16_BE_BOM = byteArrayOf(0xFE.toByte(), 0xFF.toByte())
+
+private fun hasPrefix(bytes: ByteArray, prefix: ByteArray): Boolean {
+    return bytes.size >= prefix.size && prefix.indices.none { bytes[it] != prefix[it] }
+}
+
+@Suppress("ReturnCount")
+private fun normalizeSubtitleEncoding(bytes: ByteArray): ByteArray {
+    if (hasPrefix(bytes, UTF8_BOM)) {
+        return bytes.copyOfRange(UTF8_BOM.size, bytes.size)
+    }
+    if (hasPrefix(bytes, UTF16_LE_BOM)) {
+        return String(bytes, UTF16_LE_BOM.size, bytes.size - UTF16_LE_BOM.size, Charsets.UTF_16LE)
+            .toByteArray(Charsets.UTF_8)
+    }
+    if (hasPrefix(bytes, UTF16_BE_BOM)) {
+        return String(bytes, UTF16_BE_BOM.size, bytes.size - UTF16_BE_BOM.size, Charsets.UTF_16BE)
+            .toByteArray(Charsets.UTF_8)
+    }
+
+    val isUtf8 = runCatching {
+        val decoder = Charsets.UTF_8.newDecoder()
+        decoder.onMalformedInput(CodingErrorAction.REPORT)
+        decoder.onUnmappableCharacter(CodingErrorAction.REPORT)
+        decoder.decode(ByteBuffer.wrap(bytes))
+        true
+    }.getOrDefault(false)
+
+    return if (isUtf8) {
+        bytes
+    } else {
+        val cp1252 = Charset.forName("windows-1252")
+        String(bytes, cp1252).toByteArray(Charsets.UTF_8)
+    }
+}
+
 private fun copyUriToCache(context: Context, uri: Uri): Pair<String, String> {
     val fileName = resolveDisplayName(context, uri)
     val extension = resolveExtension(fileName)
     val subDir = File(context.cacheDir, "subtitles").apply { mkdirs() }
     val cacheFile = File(subDir, "local_${System.currentTimeMillis()}$extension")
     val copied = runCatching {
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            FileOutputStream(cacheFile).use { output ->
-                input.copyTo(output)
-            }
-        }
+        val rawBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: return@runCatching false
+        if (rawBytes.isEmpty()) return@runCatching false
+
+        val normalized = normalizeSubtitleEncoding(rawBytes)
+        cacheFile.writeBytes(normalized)
         cacheFile.exists() && cacheFile.length() > 0
     }.getOrDefault(false)
 

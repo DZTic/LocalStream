@@ -476,7 +476,11 @@ class PlayerViewModel(
             val mergedSubtitles = subtitles.map { sub ->
                 val matchingExt = externalTracks.find { it.id == sub.id }
                 if (matchingExt != null) {
-                    sub.copy(isExternal = true, uriString = matchingExt.uriString)
+                    sub.copy(
+                        label = matchingExt.label,
+                        isExternal = true,
+                        uriString = matchingExt.uriString,
+                    )
                 } else {
                     sub
                 }
@@ -494,12 +498,20 @@ class PlayerViewModel(
             } else {
                 audio
             }
-            state.copy(
-                audioTracks = finalAudio,
-                subtitleTracks = finalSubtitles,
-                selectedAudioTrackId = selectedAudio,
-                selectedSubtitleTrackId = selectedSub,
-            )
+
+            val isAudioUnchanged = state.audioTracks == finalAudio && state.selectedAudioTrackId == selectedAudio
+            val isSubUnchanged = state.subtitleTracks == finalSubtitles && state.selectedSubtitleTrackId == selectedSub
+
+            if (isAudioUnchanged && isSubUnchanged) {
+                state
+            } else {
+                state.copy(
+                    audioTracks = finalAudio,
+                    subtitleTracks = finalSubtitles,
+                    selectedAudioTrackId = selectedAudio,
+                    selectedSubtitleTrackId = selectedSub,
+                )
+            }
         }
     }
 
@@ -599,6 +611,8 @@ class PlayerViewModel(
                     availableEpisodes = episodes,
                     showResumeBanner = hasResume,
                     resumePositionMs = pos,
+                    subtitleTracks = emptyList(),
+                    selectedSubtitleTrackId = null,
                 )
             }
 
