@@ -12,13 +12,17 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.media.audiofx.LoudnessEnhancer
+import android.graphics.Color as AndroidColor
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
+import android.provider.OpenableColumns
 import android.util.Rational
 import android.view.ViewGroup
 import android.view.WindowManager
 import java.io.File
+import java.io.FileOutputStream
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -83,7 +87,9 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
 import com.localstream.app.LocalStreamApplication
 import com.localstream.app.domain.model.VideoItem
 import com.localstream.app.ui.subtitles.SubtitlePickerSheet
@@ -211,8 +217,10 @@ fun PlayerScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
-            val fileName = it.lastPathSegment?.substringAfterLast('/') ?: "Sous-titre"
-            viewModel.addExternalSubtitle(fileName, it.toString())
+            val (fileName, targetUriString) = copyUriToCache(context, it)
+            viewModel.addExternalSubtitle(fileName, targetUriString)
+            showTracksSheet = false
+            viewModel.setOnlineSubtitlesSheetVisible(false)
         }
     }
 
@@ -475,20 +483,25 @@ fun PlayerScreen(
                 else -> MimeTypes.APPLICATION_SUBRIP
             }
 
-            val subUri = Uri.parse(uriString)
+            val subUri = if (uriString.startsWith("content://") || uriString.startsWith("file://")) {
+                Uri.parse(uriString)
+            } else {
+                Uri.fromFile(File(uriString))
+            }
             val subConfig = MediaItem.SubtitleConfiguration.Builder(subUri)
+                .setId(externalTrack.id)
+                .setLabel(externalTrack.label)
                 .setMimeType(mimeType)
                 .setLanguage("fr")
-                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT or C.SELECTION_FLAG_FORCED)
                 .build()
 
-            val curPos = exoPlayer.currentPosition
-            val mediaItem = MediaItem.Builder()
-                .setUri(uri)
+            val currentMediaItem = exoPlayer.currentMediaItem
+            val mediaItem = (currentMediaItem?.buildUpon() ?: MediaItem.Builder().setUri(uri))
                 .setSubtitleConfigurations(listOf(subConfig))
                 .build()
 
-            exoPlayer.setMediaItem(mediaItem, curPos)
+            exoPlayer.setMediaItem(mediaItem, /* resetPosition = */ false)
             exoPlayer.prepare()
             exoPlayer.playWhenReady = true
         }
@@ -623,6 +636,19 @@ fun PlayerScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
+                    subtitleView?.apply {
+                        val captionStyle = CaptionStyleCompat(
+                            AndroidColor.WHITE,
+                            AndroidColor.TRANSPARENT,
+                            AndroidColor.TRANSPARENT,
+                            CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                            AndroidColor.BLACK,
+                            Typeface.DEFAULT_BOLD,
+                        )
+                        setStyle(captionStyle)
+                        setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 0.95f)
+                        setBottomPaddingFraction(SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION)
+                    }
                 }
             },
             update = { playerView ->
@@ -850,7 +876,12 @@ fun PlayerScreen(
             onPickLocal = { subtitleFilePicker.launch("*/*") },
             onSubtitleSelected = { path ->
                 val fileName = path.substringAfterLast('/')
-                viewModel.addExternalSubtitle(fileName, path)
+                val targetUri = if (path.startsWith("content://") || path.startsWith("file://")) {
+                    path
+                } else {
+                    Uri.fromFile(File(path)).toString()
+                }
+                viewModel.addExternalSubtitle(fileName, targetUri)
             },
             onDismiss = { viewModel.setOnlineSubtitlesSheetVisible(false) },
         )
@@ -984,4 +1015,51 @@ private fun findTrackOverride(tracks: Tracks, trackType: @C.TrackType Int, targe
         }
     }
     return null
+}
+
+private fun resolveDisplayName(context: Context, uri: Uri): String {
+    if (uri.scheme == "content") {
+        runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (idx >= 0) {
+                        cursor.getString(idx)?.let { return it }
+                    }
+                }
+            }
+        }
+    }
+    return uri.lastPathSegment?.substringAfterLast('/') ?: "Sous-titre"
+}
+
+private fun resolveExtension(fileName: String): String = when {
+    fileName.endsWith(".vtt", ignoreCase = true) -> ".vtt"
+    fileName.endsWith(".ass", ignoreCase = true) -> ".ass"
+    fileName.endsWith(".ssa", ignoreCase = true) -> ".ssa"
+    fileName.endsWith(".srt", ignoreCase = true) -> ".srt"
+    else -> ".srt"
+}
+
+private fun copyUriToCache(context: Context, uri: Uri): Pair<String, String> {
+    val fileName = resolveDisplayName(context, uri)
+    val extension = resolveExtension(fileName)
+    val subDir = File(context.cacheDir, "subtitles").apply { mkdirs() }
+    val cacheFile = File(subDir, "local_${System.currentTimeMillis()}$extension")
+    val copied = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(cacheFile).use { output ->
+                input.copyTo(output)
+            }
+        }
+        cacheFile.exists() && cacheFile.length() > 0
+    }.getOrDefault(false)
+
+    val targetUriString = if (copied) {
+        Uri.fromFile(cacheFile).toString()
+    } else {
+        uri.toString()
+    }
+
+    return Pair(fileName, targetUriString)
 }

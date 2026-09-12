@@ -472,11 +472,31 @@ class PlayerViewModel(
         subtitles: List<SubtitleTrackUiState>,
     ) {
         _uiState.update { state ->
+            val externalTracks = state.subtitleTracks.filter { it.isExternal }
+            val mergedSubtitles = subtitles.map { sub ->
+                val matchingExt = externalTracks.find { it.id == sub.id }
+                if (matchingExt != null) {
+                    sub.copy(isExternal = true, uriString = matchingExt.uriString)
+                } else {
+                    sub
+                }
+            } + externalTracks.filter { ext -> subtitles.none { it.id == ext.id } }
+
             val selectedAudio = state.selectedAudioTrackId ?: audio.firstOrNull { it.isSelected }?.id
-            val selectedSub = state.selectedSubtitleTrackId ?: subtitles.firstOrNull { it.isSelected }?.id
+            val selectedSub = state.selectedSubtitleTrackId ?: mergedSubtitles.firstOrNull { it.isSelected }?.id
+            val finalSubtitles = if (selectedSub != null) {
+                mergedSubtitles.map { it.copy(isSelected = it.id == selectedSub) }
+            } else {
+                mergedSubtitles
+            }
+            val finalAudio = if (selectedAudio != null) {
+                audio.map { it.copy(isSelected = it.id == selectedAudio) }
+            } else {
+                audio
+            }
             state.copy(
-                audioTracks = audio,
-                subtitleTracks = subtitles,
+                audioTracks = finalAudio,
+                subtitleTracks = finalSubtitles,
                 selectedAudioTrackId = selectedAudio,
                 selectedSubtitleTrackId = selectedSub,
             )

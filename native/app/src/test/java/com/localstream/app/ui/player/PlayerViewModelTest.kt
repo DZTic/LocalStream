@@ -372,6 +372,17 @@ class PlayerViewModelTest {
         val state3 = viewModel.uiState.value
         assertEquals(2, state3.subtitleTracks.size)
         assertTrue(state3.subtitleTracks.last().isExternal)
+
+        val extId = state3.selectedSubtitleTrackId
+        viewModel.updateTracks(audio, listOf(SubtitleTrackUiState(id = "s1", label = "Français SRT", isSelected = false)))
+        advanceUntilIdle()
+        val state4 = viewModel.uiState.value
+        assertEquals(2, state4.subtitleTracks.size)
+        val extTrack = state4.subtitleTracks.firstOrNull { it.id == extId }
+        assertNotNull(extTrack)
+        assertTrue(extTrack!!.isExternal)
+        assertTrue(extTrack.isSelected)
+        assertEquals(extId, state4.selectedSubtitleTrackId)
     }
 
     @Test
