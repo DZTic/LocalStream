@@ -3,11 +3,14 @@ package com.localstream.app.data.repository
 import com.localstream.app.data.db.dao.TmdbMetadataDao
 import com.localstream.app.data.db.entity.TmdbMetadataEntity
 import com.localstream.app.data.remote.tmdb.TmdbApi
+import com.localstream.app.domain.model.TmdbMetadata
 import com.localstream.app.domain.model.VideoItem
 import java.util.concurrent.Executors
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -518,6 +521,34 @@ class TmdbRepositoryTest {
         repository.clearCache()
         val after = repository.getCachedMetadata("Interstellar")
         assertTrue(after == null)
+    }
+
+    @Test
+    fun `observeAllMetadata emet les metadonnees en cache sans re-interroger room ni re-decoder le json`() = runTest {
+        val metaJson = """
+            {"queryKey":"Inception","tmdbId":1,"title":"Inception","overview":"Dreams","posterPath":"/inception.jpg","genreIds":[]}
+        """.trimIndent()
+        fakeDao.insertMetadata(
+            TmdbMetadataEntity(
+                queryKey = "Inception",
+                json = metaJson,
+                fetchedAt = System.currentTimeMillis(),
+            ),
+        )
+
+        var emitted: Map<String, TmdbMetadata>? = null
+        val job = launch {
+            repository.observeAllMetadata.collect {
+                emitted = it
+            }
+        }
+        testScheduler.advanceUntilIdle()
+
+        assertNotNull(emitted)
+        assertEquals("Inception", emitted?.get("Inception")?.title)
+        assertEquals("/inception.jpg", emitted?.get("Inception")?.posterPath)
+
+        job.cancel()
     }
 }
 
