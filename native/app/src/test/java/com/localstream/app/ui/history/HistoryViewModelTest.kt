@@ -286,6 +286,8 @@ class HistoryViewModelTest {
         override fun observeAll(): Flow<List<com.localstream.app.data.db.entity.TmdbMetadataEntity>> = listFlow
         override suspend fun getMetadata(queryKey: String): com.localstream.app.data.db.entity.TmdbMetadataEntity? =
             listFlow.value.find { it.queryKey == queryKey }
+        override suspend fun getMetadataList(keys: List<String>): List<com.localstream.app.data.db.entity.TmdbMetadataEntity> =
+            listFlow.value.filter { it.queryKey in keys }
         override suspend fun insertMetadata(entity: com.localstream.app.data.db.entity.TmdbMetadataEntity) {
             listFlow.value = listFlow.value.filterNot { it.queryKey == entity.queryKey } + entity
         }

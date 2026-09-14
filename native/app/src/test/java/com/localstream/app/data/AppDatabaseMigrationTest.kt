@@ -93,5 +93,30 @@ class AppDatabaseMigrationTest {
         assertTrue(executedQueries.any { it.contains("CREATE UNIQUE INDEX IF NOT EXISTS `index_playback_state_name`") })
         assertTrue(executedQueries.any { it.contains("CREATE UNIQUE INDEX IF NOT EXISTS `index_watched_items_name`") })
     }
-}
 
+    @Test
+    fun migration4To5_hasCorrectVersions() {
+        assertEquals(4, AppDatabase.MIGRATION_4_5.startVersion)
+        assertEquals(5, AppDatabase.MIGRATION_4_5.endVersion)
+    }
+
+    @Test
+    fun migration4To5_executesCreateIndexOnWatched() {
+        val executedQueries = mutableListOf<String>()
+
+        val dbProxy = Proxy.newProxyInstance(
+            SupportSQLiteDatabase::class.java.classLoader,
+            arrayOf(SupportSQLiteDatabase::class.java),
+        ) { _, method, args ->
+            if (method.name == "execSQL" && args != null && args.isNotEmpty()) {
+                executedQueries.add(args[0].toString())
+            }
+            null
+        } as SupportSQLiteDatabase
+
+        AppDatabase.MIGRATION_4_5.migrate(dbProxy)
+
+        assertEquals(1, executedQueries.size)
+        assertTrue(executedQueries.first().contains("CREATE INDEX IF NOT EXISTS `index_watched_items_watched` ON `watched_items` (`watched`)"))
+    }
+}

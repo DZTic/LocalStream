@@ -25,6 +25,7 @@ class LocalStreamApplication : Application(), ImageLoaderFactory {
 
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
+            .okHttpClient { container.okHttpClient }
             .memoryCache {
                 MemoryCache.Builder(this)
                     .maxSizePercent(0.35)
@@ -46,4 +47,3 @@ class LocalStreamApplication : Application(), ImageLoaderFactory {
             .build()
     }
 }
-

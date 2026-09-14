@@ -23,19 +23,20 @@ object VideoFilterSorter {
         }
     }
 
-    private val HD_OR_4K_REGEX = Regex("1080p|720p|2160p|4k", RegexOption.IGNORE_CASE)
-
     private fun filterByResolution(videos: List<VideoItem>, opts: FilterSortOptions): List<VideoItem> {
         if (opts.filterResolution == ResolutionFilter.ALL) return videos
         return videos.filter { v ->
-            val firstName = if (v.isSeriesGroup) v.episodes?.firstOrNull()?.name ?: v.name else v.name
-            val n = firstName.lowercase()
+            val res = (if (v.isSeriesGroup) v.episodes?.firstOrNull()?.resolution ?: v.resolution else v.resolution)
+                .ifEmpty {
+                    val firstName = if (v.isSeriesGroup) v.episodes?.firstOrNull()?.name ?: v.name else v.name
+                    Formatters.getResolution(firstName)
+                }
             when (opts.filterResolution) {
-                ResolutionFilter.FOUR_K -> n.contains("2160p") || n.contains("4k")
-                ResolutionFilter.TWO_K -> n.contains("1440p")
-                ResolutionFilter.ONE_THOUSAND_EIGHTY_P -> n.contains("1080p")
-                ResolutionFilter.SEVEN_HUNDRED_TWENTY_P -> n.contains("720p")
-                ResolutionFilter.SD -> !HD_OR_4K_REGEX.containsMatchIn(n)
+                ResolutionFilter.FOUR_K -> res == "4K"
+                ResolutionFilter.TWO_K -> res == "2K"
+                ResolutionFilter.ONE_THOUSAND_EIGHTY_P -> res == "1080p"
+                ResolutionFilter.SEVEN_HUNDRED_TWENTY_P -> res == "720p"
+                ResolutionFilter.SD -> res == "SD" || res.isEmpty()
                 ResolutionFilter.ALL -> true
             }
         }
@@ -99,4 +100,3 @@ object VideoFilterSorter {
         }
     }
 }
-

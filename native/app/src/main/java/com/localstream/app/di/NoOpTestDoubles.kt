@@ -68,6 +68,7 @@ class NoOpPlaybackStateDao : PlaybackStateDao {
 @Suppress("EmptyFunctionBlock")
 class NoOpTmdbMetadataDao : TmdbMetadataDao {
     override suspend fun getMetadata(queryKey: String): TmdbMetadataEntity? = null
+    override suspend fun getMetadataList(keys: List<String>): List<TmdbMetadataEntity> = emptyList()
     override suspend fun insertMetadata(entity: TmdbMetadataEntity) {}
     override suspend fun insertMetadataList(entities: List<TmdbMetadataEntity>) {}
     override suspend fun deleteMetadata(queryKey: String) {}
