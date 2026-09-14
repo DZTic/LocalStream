@@ -175,6 +175,45 @@ open class TmdbRepository(
         }
     }
 
+    open suspend fun getCachedEpisodes(lookupName: String, episodes: List<VideoItem>): Map<String, TmdbEpisode> {
+        val result = mutableMapOf<String, TmdbEpisode>()
+        val missingKeysWithEp = mutableListOf<Pair<String, VideoItem>>()
+
+        episodes.forEachIndexed { index, ep ->
+            val s = ep.season ?: 1
+            val e = ep.episode ?: (index + 1)
+            val epKey = "${lookupName}_s${s}_e${e}"
+            val cached = episodeMemoryCache[epKey]
+            if (cached != null) {
+                result[ep.name] = cached
+            } else if (!notFoundMemoryKeys.contains(epKey)) {
+                missingKeysWithEp.add(epKey to ep)
+            }
+        }
+
+        if (missingKeysWithEp.isNotEmpty()) {
+            val missingKeys = missingKeysWithEp.map { it.first }
+            val entities = tmdbMetadataDao.getMetadataList(missingKeys)
+            val entityMap = entities.associateBy { it.queryKey }
+
+            for ((epKey, ep) in missingKeysWithEp) {
+                val entity = entityMap[epKey]
+                if (entity == null || entity.json == NOT_FOUND_JSON) {
+                    notFoundMemoryKeys.add(epKey)
+                } else {
+                    try {
+                        val episode = json.decodeFromString<TmdbEpisode>(entity.json)
+                        episodeMemoryCache[epKey] = episode
+                        result[ep.name] = episode
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+
+        return result
+    }
+
     suspend fun fetchMetadataForVideo(
         video: VideoItem,
         forceRefresh: Boolean = false,

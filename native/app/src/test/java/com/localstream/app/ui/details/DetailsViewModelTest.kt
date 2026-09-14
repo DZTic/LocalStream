@@ -290,6 +290,7 @@ class DetailsViewModelTest {
     private class FakeTmdbMetadataDao : TmdbMetadataDao {
         private val items = mutableMapOf<String, TmdbMetadataEntity>()
         override suspend fun getMetadata(queryKey: String): TmdbMetadataEntity? = items[queryKey]
+        override suspend fun getMetadataList(keys: List<String>): List<TmdbMetadataEntity> = keys.mapNotNull { items[it] }
         override suspend fun insertMetadata(entity: TmdbMetadataEntity) { items[entity.queryKey] = entity }
         override suspend fun insertMetadataList(entities: List<TmdbMetadataEntity>) { entities.forEach { items[it.queryKey] = it } }
         override suspend fun deleteMetadata(queryKey: String) { items.remove(queryKey) }

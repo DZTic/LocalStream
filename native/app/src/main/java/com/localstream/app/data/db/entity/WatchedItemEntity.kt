@@ -14,6 +14,7 @@ import androidx.room.PrimaryKey
     tableName = "watched_items",
     indices = [
         Index(value = ["name"], unique = true),
+        Index(value = ["watched"]),
     ],
 )
 data class WatchedItemEntity(
