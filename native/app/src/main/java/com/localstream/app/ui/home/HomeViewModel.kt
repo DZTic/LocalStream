@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.localstream.app.domain.HomeRows
 import com.localstream.app.domain.HomeRowsDeriver
+import com.localstream.app.domain.StaticHomeRows
 import com.localstream.app.domain.model.TmdbMetadata
 import com.localstream.app.domain.model.VideoDisplayData
 import com.localstream.app.domain.model.VideoItem
@@ -56,40 +57,29 @@ class HomeViewModel(
 ) : ViewModel() {
 
     private var cachedRows: HomeRows? = null
-    private var lastGrouped: List<VideoItem>? = null
-    private var lastFilteredSorted: List<VideoItem>? = null
-    private var lastWatched: Map<String, Boolean>? = null
+    private var cachedStaticRows: StaticHomeRows? = null
+    private var lastStaticGrouped: List<VideoItem>? = null
+    private var lastStaticFilteredSorted: List<VideoItem>? = null
+    private var lastStaticWatched: Map<String, Boolean>? = null
     private var lastProgress: Map<String, Double>? = null
+
+    private fun isStaticCacheValid(state: LibraryUiState): Boolean =
+        cachedStaticRows != null &&
+            lastStaticGrouped === state.videos &&
+            lastStaticFilteredSorted === state.filteredSorted &&
+            lastStaticWatched == state.watched
 
     @Suppress("ComplexCondition")
     private fun isCacheValid(state: LibraryUiState): Boolean =
-        cachedRows != null &&
-            lastGrouped === state.videos &&
-            lastFilteredSorted === state.filteredSorted &&
-            lastWatched === state.watched &&
-            lastProgress === state.progress
+        isStaticCacheValid(state) &&
+            cachedRows != null &&
+            lastProgress == state.progress
 
     private fun deriveHomeUiStateWithCache(state: LibraryUiState): HomeUiState {
         val rows = if (isCacheValid(state)) {
-            cachedRows ?: HomeRowsDeriver.derive(
-                grouped = state.videos,
-                filteredSorted = state.filteredSorted,
-                watched = state.watched,
-                progress = state.progress,
-            )
+            cachedRows ?: computeRows(state)
         } else {
-            val computed = HomeRowsDeriver.derive(
-                grouped = state.videos,
-                filteredSorted = state.filteredSorted,
-                watched = state.watched,
-                progress = state.progress,
-            )
-            cachedRows = computed
-            lastGrouped = state.videos
-            lastFilteredSorted = state.filteredSorted
-            lastWatched = state.watched
-            lastProgress = state.progress
-            computed
+            computeRows(state)
         }
         return HomeUiState(
             isLoading = state.isScanning && state.videos.isEmpty(),
@@ -109,16 +99,44 @@ class HomeViewModel(
         )
     }
 
+    private fun computeRows(state: LibraryUiState): HomeRows {
+        val staticRows = if (isStaticCacheValid(state) && cachedStaticRows != null) {
+            cachedStaticRows!!
+        } else {
+            HomeRowsDeriver.deriveStatic(
+                grouped = state.videos,
+                filteredSorted = state.filteredSorted,
+                watched = state.watched,
+            ).also {
+                cachedStaticRows = it
+                lastStaticGrouped = state.videos
+                lastStaticFilteredSorted = state.filteredSorted
+                lastStaticWatched = state.watched
+            }
+        }
+
+        val computed = HomeRowsDeriver.deriveWithStatic(
+            grouped = state.videos,
+            watched = state.watched,
+            progress = state.progress,
+            staticRows = staticRows,
+        )
+        cachedRows = computed
+        lastProgress = state.progress
+        return computed
+    }
+
     val uiState: StateFlow<HomeUiState> = libraryUiState
         .map { deriveHomeUiStateWithCache(it) }
         .flowOn(computationDispatcher)
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.Lazily,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
             initialValue = HomeUiState(),
         )
 
     companion object {
+        private const val STOP_TIMEOUT_MILLIS = 5_000L
 
         /** Projection pure LibraryUiState → HomeUiState (testable sans Android). */
         fun deriveHomeUiState(state: LibraryUiState): HomeUiState {
