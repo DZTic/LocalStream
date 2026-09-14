@@ -30,6 +30,8 @@ class FormattersTest {
         assertTrue(Formatters.isPersonalVideo("clip.mp4", "/storage/emulated/0/DCIM/Camera/clip.mp4"))
         assertTrue(Formatters.isPersonalVideo("movie.mp4", "/WhatsApp/Media/movie.mp4"))
         assertFalse(Formatters.isPersonalVideo("Inception.2010.1080p.mkv", "/Movies/Inception.2010.1080p.mkv"))
+        assertFalse(Formatters.isPersonalVideo("The.Matrix.1999.mkv", "/storage/emulated/0/Movies/The.Matrix.1999.mkv"))
+        assertFalse(Formatters.isPersonalVideo("Fight.Club.1999.mkv", "/storage/emulated/0/Movies/Fight.Club.1999.mkv"))
     }
 
     @Test
