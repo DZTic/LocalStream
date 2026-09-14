@@ -308,6 +308,22 @@ class TmdbRepositoryTest {
     }
 
     @Test
+    fun `getCachedEpisodes charge les episodes en un seul lot depuis le dao`() = runTest {
+        val ep1Json = """{"name":"Pilot","episodeNumber":1,"seasonNumber":1,"overview":"Ep 1"}"""
+        val ep2Json = """{"name":"Cat's in the Bag","episodeNumber":2,"seasonNumber":1,"overview":"Ep 2"}"""
+        fakeDao.insertMetadata(TmdbMetadataEntity(queryKey = "Breaking Bad_s1_e1", json = ep1Json, fetchedAt = 1000L))
+        fakeDao.insertMetadata(TmdbMetadataEntity(queryKey = "Breaking Bad_s1_e2", json = ep2Json, fetchedAt = 1000L))
+
+        val ep1 = VideoItem(url = "u1", name = "BB S01E01.mkv", path = "/p1", season = 1, episode = 1)
+        val ep2 = VideoItem(url = "u2", name = "BB S01E02.mkv", path = "/p2", season = 1, episode = 2)
+
+        val result = repository.getCachedEpisodes("Breaking Bad", listOf(ep1, ep2))
+        assertEquals(2, result.size)
+        assertEquals("Pilot", result["BB S01E01.mkv"]?.name)
+        assertEquals("Cat's in the Bag", result["BB S01E02.mkv"]?.name)
+    }
+
+    @Test
     fun testForceRefreshDoesNotFallbackOnFailure() = runTest {
         val expiredTimestamp = System.currentTimeMillis() - (35L * 24 * 3600 * 1000)
         fakeDao.insertMetadata(
@@ -515,6 +531,10 @@ class FakeTmdbMetadataDao : TmdbMetadataDao {
 
     override suspend fun getMetadata(queryKey: String): TmdbMetadataEntity? {
         return map[queryKey]
+    }
+
+    override suspend fun getMetadataList(keys: List<String>): List<TmdbMetadataEntity> {
+        return keys.mapNotNull { map[it] }
     }
 
     override suspend fun insertMetadata(entity: TmdbMetadataEntity) {
