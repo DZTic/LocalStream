@@ -37,6 +37,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -286,6 +287,39 @@ class LibraryViewModelTest {
         assertEquals("/avatar.jpg", homeStateWithMeta.metadata["Avatar.2009.2160p.mkv"]?.posterPath)
         assertEquals(initialAlphabetical.size, homeStateWithMeta.alphabetical.size)
         assertEquals(initialRecent.size, homeStateWithMeta.recentAdditions.size)
+    }
+
+    @Test
+    fun `HomeViewModel conserve les lignes statiques quand seule la progression change`() = runTest(testDispatcher) {
+        val homeVm = com.localstream.app.ui.home.HomeViewModel(
+            libraryUiState = viewModel.uiState,
+            computationDispatcher = testDispatcher,
+        )
+        backgroundScope.launch { homeVm.uiState.collect() }
+        viewModel.refreshLibrary()
+        advanceUntilIdle()
+
+        val initialAlphabetical = homeVm.uiState.value.alphabetical
+        val initialRecent = homeVm.uiState.value.recentAdditions
+        val initialSeries = homeVm.uiState.value.series
+        val initialMovies = homeVm.uiState.value.movies
+
+        // Tick de progression pendant la lecture
+        playbackDao.upsert(
+            PlaybackStateEntity(
+                name = film4k.name,
+                progressPct = 25.0,
+                positionMs = 25_000L,
+                lastPlayedAt = 1000L,
+            ),
+        )
+        advanceUntilIdle()
+
+        val updatedState = homeVm.uiState.value
+        assertSame(initialAlphabetical, updatedState.alphabetical)
+        assertSame(initialRecent, updatedState.recentAdditions)
+        assertSame(initialSeries, updatedState.series)
+        assertSame(initialMovies, updatedState.movies)
     }
 
     @Test
