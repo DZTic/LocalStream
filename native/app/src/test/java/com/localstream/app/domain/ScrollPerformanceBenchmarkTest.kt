@@ -9,15 +9,16 @@ import com.localstream.app.domain.model.VideoItem
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.random.Random
 import kotlin.system.measureTimeMillis
+import kotlin.system.measureNanoTime
 
 class ScrollPerformanceBenchmarkTest {
 
-    private fun generateMockLibrary(count: Int): List<VideoItem> {
+    private fun generateMockLibrary(count: Int, episodeCount: Int = 12): List<VideoItem> {
         return (1..count).map { i ->
             if (i % 3 == 0) {
-                // Series group with 12 episodes
-                val episodes = (1..12).map { ep ->
+                val episodes = (1..episodeCount).map { ep ->
                     VideoItem(
                         url = "content://media/$i/$ep",
                         name = "Super.Series.Name.2023.S01E${ep.toString().padStart(2, '0')}.1080p.mkv",
@@ -49,6 +50,28 @@ class ScrollPerformanceBenchmarkTest {
                     duration = 7200L,
                 )
             }
+        }
+    }
+
+    @Test
+    fun `benchmark sorting mixed library with large series`() {
+        val library = generateMockLibrary(1000, episodeCount = 120).shuffled(Random(227))
+        val names = library.flatMap { video ->
+            if (video.isSeriesGroup) video.episodes.orEmpty().map { it.name } else listOf(video.name)
+        }
+        val opts = FilterSortOptions(
+            videoDurations = names.associateWith { 2700L },
+            watchedVideos = names.filterIndexed { index, _ -> index % 4 == 0 }.associateWith { true },
+        )
+        SortBy.entries.forEach { criterion ->
+            val options = opts.copy(sortBy = criterion)
+            repeat(10) { VideoFilterSorter.filterAndSortVideos(library, options) }
+            var sorted = emptyList<VideoItem>()
+            val samples = List(15) {
+                measureNanoTime { sorted = VideoFilterSorter.filterAndSortVideos(library, options) }
+            }.sorted()
+            assertTrue("Sorting must preserve the library size", sorted.size == library.size)
+            println("BENCHMARK - Sort $criterion, 1000 items / 333 series x 120 episodes: median ${samples[7] / 1_000_000.0}ms")
         }
     }
 
