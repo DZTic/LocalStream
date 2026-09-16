@@ -43,53 +43,43 @@ object VideoFilterSorter {
     }
 
     private fun sortVideos(videos: List<VideoItem>, opts: FilterSortOptions): List<VideoItem> {
-        val watchedCache = videos.associateWith { isItemWatched(it, opts.watchedVideos) }
-        val watchedComparator = Comparator<VideoItem> { a, b ->
-            val aWatched = watchedCache[a] ?: false
-            val bWatched = watchedCache[b] ?: false
-            if (aWatched != bWatched) {
-                if (aWatched) 1 else -1
-            } else {
-                0
+        return when (opts.sortBy) {
+            SortBy.ALPHA -> sortByCriterion(videos, opts, naturalOrder<String>()) {
+                if (it.isSeriesGroup) it.seriesName.orEmpty() else it.name
+            }
+            SortBy.DATE -> sortByCriterion(videos, opts, reverseOrder<String>()) {
+                val lookup = if (it.isSeriesGroup) it.seriesName.orEmpty() else it.name
+                opts.releaseDates[lookup] ?: it.lastModified.toString()
+            }
+            SortBy.SIZE -> sortByCriterion(videos, opts, reverseOrder<Long>()) {
+                if (it.isSeriesGroup) it.episodes.orEmpty().sumOf { ep -> ep.size } else it.size
+            }
+            SortBy.DURATION -> sortByCriterion(videos, opts, reverseOrder<Long>()) {
+                if (it.isSeriesGroup) {
+                    it.episodes.orEmpty().sumOf { ep -> opts.videoDurations[ep.name] ?: 0L }
+                } else {
+                    opts.videoDurations[it.name] ?: 0L
+                }
             }
         }
-        val criteriaComparator = getCriteriaComparator(videos, opts)
-        return videos.sortedWith(watchedComparator.then(criteriaComparator))
     }
 
-    private fun getCriteriaComparator(
+    private class SortEntry<T>(val video: VideoItem, val watched: Boolean, val criterion: T)
+
+    private fun <T> sortByCriterion(
         videos: List<VideoItem>,
         opts: FilterSortOptions,
-    ): Comparator<VideoItem> {
-        return when (opts.sortBy) {
-            SortBy.ALPHA -> {
-                val alphaCache = videos.associateWith { if (it.isSeriesGroup) it.seriesName.orEmpty() else it.name }
-                compareBy { alphaCache[it].orEmpty() }
-            }
-            SortBy.DATE -> {
-                val dateCache = videos.associateWith {
-                    val lookup = if (it.isSeriesGroup) it.seriesName.orEmpty() else it.name
-                    opts.releaseDates[lookup] ?: it.lastModified.toString()
-                }
-                compareByDescending { dateCache[it].orEmpty() }
-            }
-            SortBy.SIZE -> {
-                val sizeCache = videos.associateWith {
-                    if (it.isSeriesGroup) it.episodes.orEmpty().sumOf { ep -> ep.size } else it.size
-                }
-                compareByDescending { sizeCache[it] ?: 0L }
-            }
-            SortBy.DURATION -> {
-                val durationCache = videos.associateWith {
-                    if (it.isSeriesGroup) {
-                        it.episodes.orEmpty().sumOf { ep -> opts.videoDurations[ep.name] ?: 0L }
-                    } else {
-                        opts.videoDurations[it.name] ?: 0L
-                    }
-                }
-                compareByDescending { durationCache[it] ?: 0L }
-            }
+        criterionComparator: Comparator<T>,
+        criterion: (VideoItem) -> T,
+    ): List<VideoItem> {
+        // Decorate once: comparisons must never hash VideoItem (and all its episodes).
+        val entries = videos.map {
+            SortEntry(it, isItemWatched(it, opts.watchedVideos), criterion(it))
         }
+        val comparator = compareBy<SortEntry<T>> { it.watched }
+            .thenComparator { a, b -> criterionComparator.compare(a.criterion, b.criterion) }
+        // The stable sort retains input order for ties, including duplicate videos.
+        return entries.sortedWith(comparator).map { it.video }
     }
 
     private fun isItemWatched(v: VideoItem, watchedVideos: Map<String, Boolean>): Boolean {
