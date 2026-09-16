@@ -96,10 +96,19 @@ object Formatters {
         else -> ""
     }
 
+    private fun mayMatchPersonalPattern(name: String): Boolean {
+        if (name.isEmpty()) return false
+        val c = name[0]
+        return (c in '0'..'9') || c == 'v' || c == 'i' || c == 'm' || c == 'd' ||
+            c == 's' || c == 'c' || c == 'a' || c == 'g' || c == 'w'
+    }
+
     fun isPersonalVideo(name: String, path: String): Boolean {
-        val n = name.lowercase()
         val p = path.lowercase().replace('\\', '/')
-        return suspectPaths.any { p.contains(it) } || personalPatterns.any { it.containsMatchIn(n) }
+        if (suspectPaths.any { p.contains(it) }) return true
+
+        val n = name.lowercase()
+        return mayMatchPersonalPattern(n) && personalPatterns.any { it.containsMatchIn(n) }
     }
 }
 

@@ -16,7 +16,6 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -63,25 +62,17 @@ fun BottomPlayerBar(
 
     val displayPos = if (isSeeking) seekPositionMs else positionMs
 
-    val timeLabel by remember(displayPos, durationMs, showRemainingTime) {
-        derivedStateOf {
-            if (showRemainingTime && durationMs > 0L) {
-                val remaining = (durationMs - displayPos).coerceAtLeast(0L)
-                "${formatTimeMs(displayPos)} (-${formatTimeMs(remaining)})"
-            } else {
-                "${formatTimeMs(displayPos)} / ${formatTimeMs(durationMs)}"
-            }
-        }
+    val timeLabel = if (showRemainingTime && durationMs > 0L) {
+        val remaining = (durationMs - displayPos).coerceAtLeast(0L)
+        "${formatTimeMs(displayPos)} (-${formatTimeMs(remaining)})"
+    } else {
+        "${formatTimeMs(displayPos)} / ${formatTimeMs(durationMs)}"
     }
 
-    val sliderValue by remember(displayPos, durationMs) {
-        derivedStateOf {
-            if (durationMs > 0L) {
-                displayPos.coerceIn(0L, durationMs).toFloat()
-            } else {
-                0f
-            }
-        }
+    val sliderValue = if (durationMs > 0L) {
+        displayPos.coerceIn(0L, durationMs).toFloat()
+    } else {
+        0f
     }
 
     Column(
@@ -148,4 +139,3 @@ fun BottomPlayerBar(
         )
     }
 }
-

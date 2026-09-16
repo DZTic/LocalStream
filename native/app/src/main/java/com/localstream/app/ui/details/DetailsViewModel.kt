@@ -141,16 +141,7 @@ class DetailsViewModel(
     }
 
     private suspend fun loadEpisodesFromCache(lookupName: String, episodes: List<VideoItem>) {
-        val map = mutableMapOf<String, TmdbEpisode>()
-        episodes.forEachIndexed { index, ep ->
-            val s = ep.season ?: 1
-            val e = ep.episode ?: (index + 1)
-            val cachedEp = container.tmdbRepository.getCachedEpisode(lookupName, s, e)
-            if (cachedEp != null) {
-                map[ep.name] = cachedEp
-            }
-        }
-        cachedEpisodesFlow.value = map
+        cachedEpisodesFlow.value = container.tmdbRepository.getCachedEpisodes(lookupName, episodes)
     }
 
     val uiState: StateFlow<DetailsUiState> = combine(

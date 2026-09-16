@@ -102,6 +102,15 @@ class MediaStoreScannerTest {
     }
 
     @Test
+    fun scanSubtitleFiles_withTargetDirectories_returnsSubtitles() {
+        File(tempDir, "Movie.srt").createNewFile()
+        val scanner = MediaStoreScanner(context = null, customDirectories = listOf(tempDir))
+        val subs = scanner.scanSubtitleFiles(setOf(tempDir.absolutePath))
+        assertEquals(1, subs.size)
+        assertEquals("Movie.srt", subs.first().name)
+    }
+
+    @Test
     fun scanAndGroup_withRawVideos_reusesPassedVideos() {
         val preScanned = listOf(
             VideoItem(url = "file://custom/Item1.mkv", name = "Item1.mkv"),

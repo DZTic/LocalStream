@@ -17,8 +17,12 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -56,6 +60,8 @@ open class TmdbRepository(
     private val notFoundMemoryKeys: MutableSet<String> = Collections.newSetFromMap(ConcurrentHashMap())
     @Volatile
     private var isCachePrewarmed = false
+    private val prewarmMutex = Mutex()
+    private val _metadataFlow = MutableStateFlow<Map<String, TmdbMetadata>>(emptyMap())
 
     val currentActiveRequests: Int get() = activeRequests.get()
     val maxObservedConcurrentRequests: Int get() = peakConcurrentRequests.get()
@@ -71,11 +77,15 @@ open class TmdbRepository(
      */
     suspend fun prewarmCache() {
         if (isCachePrewarmed) return
-        val entities = runCatching { tmdbMetadataDao.getAll() }.getOrNull() ?: return
-        for (entity in entities) {
-            populateEntityInMemory(entity)
+        prewarmMutex.withLock {
+            if (isCachePrewarmed) return
+            val entities = runCatching { tmdbMetadataDao.getAll() }.getOrNull() ?: return
+            for (entity in entities) {
+                populateEntityInMemory(entity)
+            }
+            isCachePrewarmed = true
+            _metadataFlow.value = metadataMemoryCache.toMap()
         }
-        isCachePrewarmed = true
     }
 
     private fun populateEntityInMemory(entity: TmdbMetadataEntity) {
@@ -95,6 +105,11 @@ open class TmdbRepository(
         }
     }
 
+    private fun putMetadataInCache(key: String, metadata: TmdbMetadata) {
+        metadataMemoryCache[key] = metadata
+        _metadataFlow.value = metadataMemoryCache.toMap()
+    }
+
     /**
      * Retourne l'ensemble des métadonnées TMDB actuellement en cache mémoire (ou préchauffées).
      */
@@ -103,20 +118,12 @@ open class TmdbRepository(
         return metadataMemoryCache.toMap()
     }
 
-    val observeAllMetadata: Flow<Map<String, TmdbMetadata>> =
-        tmdbMetadataDao.observeAll().map { list ->
-            val result = mutableMapOf<String, TmdbMetadata>()
-            for (entity in list) {
-                if (entity.json != NOT_FOUND_JSON && !entity.queryKey.contains("_s") && !entity.queryKey.contains("_e")) {
-                    try {
-                        val meta = json.decodeFromString<TmdbMetadata>(entity.json)
-                        result[entity.queryKey] = meta
-                    } catch (_: Exception) {
-                    }
-                }
-            }
-            result
+    val observeAllMetadata: Flow<Map<String, TmdbMetadata>> = flow {
+        if (!isCachePrewarmed) {
+            prewarmCache()
         }
+        emitAll(_metadataFlow)
+    }
 
     open suspend fun testApiKey(apiKeyOverride: String? = null): Result<Boolean> {
         val rawCandidate = apiKeyOverride ?: settingsRepository.getTmdbApiKey()
@@ -150,7 +157,7 @@ open class TmdbRepository(
         }
         return try {
             val meta = json.decodeFromString<TmdbMetadata>(entity.json)
-            metadataMemoryCache[queryKey] = meta
+            putMetadataInCache(queryKey, meta)
             meta
         } catch (e: Exception) {
             null
@@ -173,6 +180,45 @@ open class TmdbRepository(
         } catch (e: Exception) {
             null
         }
+    }
+
+    open suspend fun getCachedEpisodes(lookupName: String, episodes: List<VideoItem>): Map<String, TmdbEpisode> {
+        val result = mutableMapOf<String, TmdbEpisode>()
+        val missingKeysWithEp = mutableListOf<Pair<String, VideoItem>>()
+
+        episodes.forEachIndexed { index, ep ->
+            val s = ep.season ?: 1
+            val e = ep.episode ?: (index + 1)
+            val epKey = "${lookupName}_s${s}_e${e}"
+            val cached = episodeMemoryCache[epKey]
+            if (cached != null) {
+                result[ep.name] = cached
+            } else if (!notFoundMemoryKeys.contains(epKey)) {
+                missingKeysWithEp.add(epKey to ep)
+            }
+        }
+
+        if (missingKeysWithEp.isNotEmpty()) {
+            val missingKeys = missingKeysWithEp.map { it.first }
+            val entities = tmdbMetadataDao.getMetadataList(missingKeys)
+            val entityMap = entities.associateBy { it.queryKey }
+
+            for ((epKey, ep) in missingKeysWithEp) {
+                val entity = entityMap[epKey]
+                if (entity == null || entity.json == NOT_FOUND_JSON) {
+                    notFoundMemoryKeys.add(epKey)
+                } else {
+                    try {
+                        val episode = json.decodeFromString<TmdbEpisode>(entity.json)
+                        episodeMemoryCache[epKey] = episode
+                        result[ep.name] = episode
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
+
+        return result
     }
 
     suspend fun fetchMetadataForVideo(
@@ -209,7 +255,7 @@ open class TmdbRepository(
             if (now - cachedEntity.fetchedAt < TTL_MS) {
                 try {
                     val meta = json.decodeFromString<TmdbMetadata>(cachedEntity.json)
-                    metadataMemoryCache[lookupName] = meta
+                    putMetadataInCache(lookupName, meta)
                     return Result.success(meta)
                 } catch (e: Exception) {
                     // Ignorer et re-fetch si JSON invalide
@@ -247,7 +293,7 @@ open class TmdbRepository(
                         collectionId = colDetails.id,
                         collectionName = colDetails.name,
                     )
-                    metadataMemoryCache[lookupName] = sagaMetadata
+                    putMetadataInCache(lookupName, sagaMetadata)
                     val jsonStr = json.encodeToString(sagaMetadata)
                     tmdbMetadataDao.insertMetadata(
                         TmdbMetadataEntity(
@@ -264,7 +310,7 @@ open class TmdbRepository(
 
         return try {
             val metadata = fetchFromRemote(apiKey, lookupName, cleanTitle, video)
-            metadataMemoryCache[lookupName] = metadata
+            putMetadataInCache(lookupName, metadata)
             val jsonStr = json.encodeToString(metadata)
             tmdbMetadataDao.insertMetadata(
                 TmdbMetadataEntity(
@@ -289,7 +335,7 @@ open class TmdbRepository(
             if (!forceRefresh && cachedEntity != null && cachedEntity.json != NOT_FOUND_JSON) {
                 try {
                     val meta = json.decodeFromString<TmdbMetadata>(cachedEntity.json)
-                    metadataMemoryCache[lookupName] = meta
+                    putMetadataInCache(lookupName, meta)
                     return Result.success(meta)
                 } catch (_: Exception) {
                 }
@@ -482,6 +528,7 @@ open class TmdbRepository(
         episodeMemoryCache.clear()
         notFoundMemoryKeys.clear()
         isCachePrewarmed = false
+        _metadataFlow.value = emptyMap()
         tmdbMetadataDao.clearAll()
     }
 

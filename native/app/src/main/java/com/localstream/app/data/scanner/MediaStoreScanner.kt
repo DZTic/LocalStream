@@ -32,10 +32,10 @@ class MediaStoreScanner(
     /**
      * Retourne l\'index des sous-titres en cache ou le construit au premier appel.
      */
-    fun getOrBuildSubtitleIndex(): Map<String, SubtitleEntry> {
+    fun getOrBuildSubtitleIndex(targetDirectories: Set<String> = emptySet()): Map<String, SubtitleEntry> {
         val existing = cachedSubtitleIndex
         if (existing != null) return existing
-        val subtitles = scanSubtitleFiles()
+        val subtitles = scanSubtitleFiles(targetDirectories)
         val index = VideoNameParser.buildSubtitleIndex(subtitles)
         cachedSubtitleIndex = index
         return index
@@ -132,6 +132,7 @@ class MediaStoreScanner(
     ): Cursor? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val queryArgs = Bundle().apply {
+                putString(ContentResolver.QUERY_ARG_SQL_SELECTION, VIDEO_SELECTION)
                 putStringArray(
                     ContentResolver.QUERY_ARG_SORT_COLUMNS,
                     arrayOf(MediaStore.Video.Media.DATE_MODIFIED),
@@ -147,7 +148,7 @@ class MediaStoreScanner(
         } else {
             if (offset > 0) return null
             val sortOrder = "${MediaStore.Video.Media.DATE_MODIFIED} DESC"
-            resolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, null, null, sortOrder)
+            resolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection, VIDEO_SELECTION, null, sortOrder)
         }
     }
 
@@ -185,27 +186,40 @@ class MediaStoreScanner(
         )
     }
 
-    override fun scanSubtitleFiles(): List<SubtitleEntry> {
+    override fun scanSubtitleFiles(): List<SubtitleEntry> = scanSubtitleFiles(emptySet())
+
+    fun scanSubtitleFiles(targetDirectories: Set<String> = emptySet()): List<SubtitleEntry> {
         val resolver = context?.contentResolver ?: return scanSubtitleFilesFromFileSystem()
         val subtitles = mutableListOf<SubtitleEntry>()
 
         val projection = arrayOf(
             MediaStore.Files.FileColumns._ID,
             MediaStore.Files.FileColumns.DATA,
-            MediaStore.Files.FileColumns.DISPLAY_NAME
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
         )
 
-        val selection = "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.srt' OR " +
+        val extCondition = "(${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.srt' OR " +
             "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.vtt' OR " +
             "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.ass' OR " +
-            "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.ssa'"
+            "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.ssa')"
+
+        val baseCondition = "(${MediaStore.Files.FileColumns.MEDIA_TYPE} = 0 OR ${MediaStore.Files.FileColumns.MEDIA_TYPE} IS NULL) AND " +
+            "(${MediaStore.Files.FileColumns.SIZE} > 0) AND $extCondition"
+
+        val (selection, selectionArgs) = if (targetDirectories.isNotEmpty() && targetDirectories.size <= MAX_SQL_DIR_ARGS) {
+            val dirConditions = targetDirectories.joinToString(" OR ") { "${MediaStore.Files.FileColumns.DATA} LIKE ?" }
+            val args = targetDirectories.map { "$it%" }.toTypedArray()
+            "($baseCondition) AND ($dirConditions)" to args
+        } else {
+            baseCondition to null
+        }
 
         val cursor = resolver.query(
             MediaStore.Files.getContentUri("external"),
             projection,
             selection,
+            selectionArgs,
             null,
-            null
         )
 
         cursor?.use { c ->
@@ -235,7 +249,11 @@ class MediaStoreScanner(
         rawVideos: List<VideoItem>?,
     ): List<VideoItem> {
         val videos = rawVideos ?: scanVideoFiles()
-        val subIndex = getOrBuildSubtitleIndex()
+        val targetDirs = videos.mapNotNull {
+            val folder = File(it.path).parent
+            if (!folder.isNullOrBlank()) folder else null
+        }.toSet()
+        val subIndex = getOrBuildSubtitleIndex(targetDirs)
 
         val videosWithSubtitles = videos.map { video ->
             val folder = VideoNameParser.parentFolder(video.path)
@@ -309,6 +327,10 @@ class MediaStoreScanner(
     companion object {
         const val DEFAULT_PAGE_SIZE = 100
         private const val MAX_SCAN_DEPTH = 5
+        private const val MIN_VIDEO_DURATION_MS = 1000L
+        private const val MAX_SQL_DIR_ARGS = 50
+        private const val VIDEO_SELECTION =
+            "${MediaStore.Video.Media.SIZE} > 0 AND (${MediaStore.Video.Media.DURATION} IS NULL OR ${MediaStore.Video.Media.DURATION} > $MIN_VIDEO_DURATION_MS)"
         private val VIDEO_EXTENSIONS = setOf("mp4", "mkv", "webm", "avi", "mov")
         private val SUBTITLE_EXTENSIONS = setOf("srt", "vtt", "ass", "ssa")
     }

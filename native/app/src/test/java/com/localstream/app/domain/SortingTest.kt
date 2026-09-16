@@ -49,6 +49,16 @@ class SortingTest {
     }
 
     @Test
+    fun filterAndSortVideos_filtersByPrecalculatedResolution() {
+        val opts = baseOpts.copy(filterResolution = ResolutionFilter.FOUR_K)
+        val item4k = v("CustomMovie.mkv").copy(resolution = "4K")
+        val item1080 = v("CustomMovie2.mkv").copy(resolution = "1080p")
+        val res = VideoFilterSorter.filterAndSortVideos(listOf(item4k, item1080), opts)
+        assertEquals(1, res.size)
+        assertEquals("CustomMovie.mkv", res[0].name)
+    }
+
+    @Test
     fun filterAndSortVideos_sortsByDateDescending() {
         val opts = baseOpts.copy(
             sortBy = SortBy.DATE,

@@ -12,6 +12,9 @@ interface TmdbMetadataDao {
     @Query("SELECT * FROM tmdb_metadata WHERE query_key = :queryKey")
     suspend fun getMetadata(queryKey: String): TmdbMetadataEntity?
 
+    @Query("SELECT * FROM tmdb_metadata WHERE query_key IN (:keys)")
+    suspend fun getMetadataList(keys: List<String>): List<TmdbMetadataEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMetadata(entity: TmdbMetadataEntity)
 
