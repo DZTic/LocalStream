@@ -18,6 +18,7 @@ import com.localstream.app.data.repository.WatchStateRepository
 import com.localstream.app.data.scanner.MediaStoreScanner
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.Cache
 import okhttp3.MediaType.Companion.toMediaType
@@ -63,7 +64,8 @@ open class AppContainer(
     private val tmdbApi: TmdbApi by lazy {
         if (appContext == null) NoOpTmdbApi() else {
             val client = okHttpClient.newBuilder()
-                .addInterceptor(TmdbAuthInterceptor { settingsRepository.getTmdbApiKey() })
+                // OkHttp invokes interceptors on its worker threads.
+                .addInterceptor(TmdbAuthInterceptor { runBlocking { settingsRepository.getTmdbApiKey() } })
                 .build()
             Retrofit.Builder()
                 .baseUrl(TmdbApi.BASE_URL)
@@ -77,7 +79,7 @@ open class AppContainer(
     private val openSubtitlesApi: OpenSubtitlesApi by lazy {
         if (appContext == null) NoOpOpenSubtitlesApi() else {
             val client = okHttpClient.newBuilder()
-                .addInterceptor(OpenSubtitlesInterceptor { settingsRepository.getOpenSubtitlesApiKey() })
+                .addInterceptor(OpenSubtitlesInterceptor { runBlocking { settingsRepository.getOpenSubtitlesApiKey() } })
                 .build()
             Retrofit.Builder()
                 .baseUrl(OpenSubtitlesApi.BASE_URL)
@@ -90,7 +92,9 @@ open class AppContainer(
 
     open val settingsRepository: SettingsRepository by lazy {
         overrideSettingsRepository ?: SettingsRepository(
-            encryptedPrefs = appContext?.let { ctx -> runCatching { EncryptedPreferencesManager(ctx) }.getOrNull() },
+            encryptedPrefsFactory = appContext?.let { ctx ->
+                { runCatching { EncryptedPreferencesManager(ctx) }.getOrNull() }
+            },
             dataStore = appContext?.let { UserPreferencesDataStore(it) },
         )
     }
