@@ -10,6 +10,12 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -76,6 +82,34 @@ class TmdbRepositoryTest {
 
     private fun jsonResponse(body: String, code: Int = 200): MockResponse =
         MockResponse().setResponseCode(code).setHeader("Content-Type", "application/json").setBody(body)
+
+    @Test
+    fun posterIsPersistedBeforeSlowSeasonCompletes() = runBlocking {
+        mockWebServer.enqueue(jsonResponse(
+            """{"results":[{"id":1399,"name":"Series","poster_path":"/poster.jpg","media_type":"tv"}]}"""
+        ))
+        mockWebServer.enqueue(jsonResponse(
+            """{"episodes":[{"id":1,"name":"Pilot","season_number":1,"episode_number":1}]}"""
+        ).setBodyDelay(2, TimeUnit.SECONDS))
+        val video = VideoItem(
+            name = "Series", seriesName = "Series", isSeriesGroup = true, isTvSeries = true,
+            episodes = listOf(VideoItem(name = "Pilot", season = 1, episode = 1)),
+        )
+        try {
+            val metadata = withTimeout(1500) { repository.fetchMetadataForVideo(video).getOrThrow() }
+            assertEquals("/poster.jpg", metadata.posterPath)
+            assertNotNull(fakeDao.getMetadata("Series"))
+            assertTrue(repository.getCachedEpisodes("Series", video.episodes!!).isEmpty())
+            repository.fetchMetadataForVideo(video)
+            withTimeout(5000) { repository.episodeCacheVersion.first { it > 0 } }
+            assertEquals("Pilot", repository.getCachedEpisodes("Series", video.episodes!!)["Pilot"]?.name)
+            assertNotNull(fakeDao.getMetadata("Series_s1_e1"))
+            assertEquals(2, mockWebServer.requestCount)
+            assertTrue(repository.maxObservedConcurrentRequests <= 2)
+        } finally {
+            repository.clearCache()
+        }
+    }
 
     @Test
     fun testFetchMetadataForMovieSuccess() = runTest {
@@ -303,6 +337,13 @@ class TmdbRepositoryTest {
 
         val result = repository.fetchMetadataForVideo(seriesVideo)
         assertTrue(result.isSuccess)
+
+        // Les épisodes sont chargés en arrière-plan (temps réel) : attendre la persistance.
+        val deadline = System.currentTimeMillis() + 5000
+        while (repository.getCachedEpisode("Game of Thrones", 1, 1) == null) {
+            check(System.currentTimeMillis() < deadline) { "Épisodes non persistés" }
+            withContext(Dispatchers.IO) { delay(10) }
+        }
 
         val episode = repository.getCachedEpisode("Game of Thrones", 1, 1)
         assertNotNull(episode)

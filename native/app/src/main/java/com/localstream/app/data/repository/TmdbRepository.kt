@@ -13,6 +13,12 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -20,6 +26,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -48,6 +56,7 @@ open class TmdbRepository(
     private val settingsRepository: SettingsRepository,
     private val json: Json = Json { ignoreUnknownKeys = true; isLenient = true },
     maxConcurrentRequests: Int = DEFAULT_CONCURRENCY,
+    private val episodeScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
 
     private val semaphore = Semaphore(maxConcurrentRequests)
@@ -62,6 +71,10 @@ open class TmdbRepository(
     private var isCachePrewarmed = false
     private val prewarmMutex = Mutex()
     private val _metadataFlow = MutableStateFlow<Map<String, TmdbMetadata>>(emptyMap())
+    private val episodeJobs = SupervisorJob(episodeScope.coroutineContext[kotlinx.coroutines.Job])
+    private val pendingSeries: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val _episodeCacheVersion = MutableStateFlow(0L)
+    val episodeCacheVersion = _episodeCacheVersion.asStateFlow()
 
     val currentActiveRequests: Int get() = activeRequests.get()
     val maxObservedConcurrentRequests: Int get() = peakConcurrentRequests.get()
@@ -205,9 +218,9 @@ open class TmdbRepository(
 
             for ((epKey, ep) in missingKeysWithEp) {
                 val entity = entityMap[epKey]
-                if (entity == null || entity.json == NOT_FOUND_JSON) {
+                if (entity?.json == NOT_FOUND_JSON) {
                     notFoundMemoryKeys.add(epKey)
-                } else {
+                } else if (entity != null) {
                     try {
                         val episode = json.decodeFromString<TmdbEpisode>(entity.json)
                         episodeMemoryCache[epKey] = episode
@@ -310,7 +323,6 @@ open class TmdbRepository(
 
         return try {
             val metadata = fetchFromRemote(apiKey, lookupName, cleanTitle, video)
-            putMetadataInCache(lookupName, metadata)
             val jsonStr = json.encodeToString(metadata)
             tmdbMetadataDao.insertMetadata(
                 TmdbMetadataEntity(
@@ -319,6 +331,10 @@ open class TmdbRepository(
                     fetchedAt = now,
                 )
             )
+            putMetadataInCache(lookupName, metadata)
+            if (video.isTvSeries && metadata.tmdbId != null) {
+                scheduleEpisodes(apiKey, lookupName, metadata.tmdbId, video)
+            }
             Result.success(metadata)
         } catch (e: NoSuchElementException) {
             notFoundMemoryKeys.add(lookupName)
@@ -396,11 +412,18 @@ open class TmdbRepository(
             collectionName = collectionName,
         )
 
-        if (video.isTvSeries) {
-            fetchEpisodesForSeries(apiKey, lookupName, bestResult.id, video)
-        }
-
         return metadata
+    }
+
+    private fun scheduleEpisodes(apiKey: String, lookupName: String, tvId: Long, video: VideoItem) {
+        if (!pendingSeries.add(lookupName)) return
+        episodeScope.launch(episodeJobs) {
+            try {
+                fetchEpisodesForSeries(apiKey, lookupName, tvId, video)
+            } finally {
+                pendingSeries.remove(lookupName)
+            }
+        }
     }
 
     private suspend fun fetchEpisodesForSeries(
@@ -416,9 +439,9 @@ open class TmdbRepository(
                     tmdbApi.getSeason(tvId, seasonNum, apiKey)
                 }
                 val now = System.currentTimeMillis()
-                val entities = seasonDetails.episodes.map { epDto ->
+                val cachedEpisodes = seasonDetails.episodes.map { epDto ->
                     val epKey = "${lookupName}_s${epDto.seasonNumber}_e${epDto.episodeNumber}"
-                    val episode = TmdbEpisode(
+                    TmdbEpisode(
                         epKey = epKey,
                         name = epDto.name ?: "Épisode ${epDto.episodeNumber}",
                         overview = epDto.overview ?: "(Pas de synopsis disponible)",
@@ -426,16 +449,24 @@ open class TmdbRepository(
                         seasonNumber = epDto.seasonNumber,
                         episodeNumber = epDto.episodeNumber,
                     )
-                    episodeMemoryCache[epKey] = episode
+                }
+                val entities = cachedEpisodes.map { episode ->
                     TmdbMetadataEntity(
-                        queryKey = epKey,
+                        queryKey = episode.epKey,
                         json = json.encodeToString(episode),
                         fetchedAt = now,
                     )
                 }
                 if (entities.isNotEmpty()) {
                     tmdbMetadataDao.insertMetadataList(entities)
+                    cachedEpisodes.forEach { episode ->
+                        episodeMemoryCache[episode.epKey] = episode
+                        notFoundMemoryKeys.remove(episode.epKey)
+                    }
+                    _episodeCacheVersion.update { it + 1 }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
             }
         }
@@ -524,12 +555,17 @@ open class TmdbRepository(
     }
 
     suspend fun clearCache() {
+        val jobs = episodeJobs.children.toList()
+        episodeJobs.cancelChildren()
+        jobs.forEach { it.join() }
+        pendingSeries.clear()
         metadataMemoryCache.clear()
         episodeMemoryCache.clear()
         notFoundMemoryKeys.clear()
         isCachePrewarmed = false
         _metadataFlow.value = emptyMap()
         tmdbMetadataDao.clearAll()
+        _episodeCacheVersion.update { it + 1 }
     }
 
     private suspend fun <T> executeWithRetryAndThrottling(
