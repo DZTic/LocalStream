@@ -45,11 +45,15 @@ class MediaStoreScanner(
         return scanVideoFilesPaged(pageSize = DEFAULT_PAGE_SIZE)
     }
 
+    override fun scanVideoFiles(onBatchScanned: (List<VideoItem>) -> Unit): List<VideoItem> =
+        scanVideoFilesPaged(onBatchScanned = onBatchScanned)
+
     fun scanVideoFilesPaged(
         pageSize: Int = DEFAULT_PAGE_SIZE,
         onBatchScanned: ((List<VideoItem>) -> Unit)? = null,
     ): List<VideoItem> {
-        val resolver = context?.contentResolver ?: return scanVideoFilesFromFileSystem()
+        require(pageSize > 0)
+        val resolver = context?.contentResolver ?: return scanVideoFilesFromFileSystem(pageSize, onBatchScanned)
         val videos = mutableListOf<VideoItem>()
 
         val projection = arrayOf(
@@ -78,7 +82,7 @@ class MediaStoreScanner(
             }
         }
 
-        return if (videos.isNotEmpty()) videos else scanVideoFilesFromFileSystem()
+        return if (videos.isNotEmpty()) videos else scanVideoFilesFromFileSystem(pageSize, onBatchScanned)
     }
 
     private fun fetchVideoBatch(
@@ -273,9 +277,12 @@ class MediaStoreScanner(
         )
     }
 
-    private fun scanVideoFilesFromFileSystem(): List<VideoItem> {
+    private fun scanVideoFilesFromFileSystem(
+        pageSize: Int,
+        onBatchScanned: ((List<VideoItem>) -> Unit)?,
+    ): List<VideoItem> {
         val dirsToScan = customDirectories.ifEmpty { defaultDirsToScan() }
-        return dirsToScan.filter { it.isDirectory }.flatMap { dir ->
+        return dirsToScan.asSequence().filter { it.isDirectory }.flatMap { dir ->
             dir.walkTopDown().maxDepth(MAX_SCAN_DEPTH)
                 .filter { it.isFile && it.extension.lowercase() in VIDEO_EXTENSIONS }
                 .map { file ->
@@ -297,8 +304,8 @@ class MediaStoreScanner(
                         resolution = resolution,
                         year = extractedYear
                     )
-                }.toList()
-        }
+                }
+        }.chunked(pageSize).onEach { onBatchScanned?.invoke(it) }.flatten().toList()
     }
 
     private fun scanSubtitleFilesFromFileSystem(): List<SubtitleEntry> {
