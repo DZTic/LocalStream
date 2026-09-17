@@ -85,14 +85,20 @@ open class TmdbRepository(
     }
 
     /**
-     * Préchauffe le cache mémoire en une seule requête Room globale au démarrage
-     * pour que les affiches et métadonnées soient immédiatement disponibles en RAM.
+     * Préchauffe uniquement les métadonnées principales et leurs marqueurs d’absence.
+     * Les épisodes restent dans Room jusqu’à leur consultation individuelle ou par série.
      */
     suspend fun prewarmCache() {
         if (isCachePrewarmed) return
         prewarmMutex.withLock {
             if (isCachePrewarmed) return
-            val entities = runCatching { tmdbMetadataDao.getAll() }.getOrNull() ?: return
+            val entities = try {
+                tmdbMetadataDao.getMainMetadata()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return
+            }
             for (entity in entities) {
                 populateEntityInMemory(entity)
             }
@@ -107,13 +113,8 @@ open class TmdbRepository(
             return
         }
         try {
-            if (entity.queryKey.contains("_s") && entity.queryKey.contains("_e")) {
-                val episode = json.decodeFromString<TmdbEpisode>(entity.json)
-                episodeMemoryCache[entity.queryKey] = episode
-            } else {
-                val meta = json.decodeFromString<TmdbMetadata>(entity.json)
-                metadataMemoryCache[entity.queryKey] = meta
-            }
+            val meta = json.decodeFromString<TmdbMetadata>(entity.json)
+            metadataMemoryCache[entity.queryKey] = meta
         } catch (_: Exception) {
         }
     }
@@ -455,6 +456,7 @@ open class TmdbRepository(
                         queryKey = episode.epKey,
                         json = json.encodeToString(episode),
                         fetchedAt = now,
+                        isEpisode = true,
                     )
                 }
                 if (entities.isNotEmpty()) {

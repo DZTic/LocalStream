@@ -104,6 +104,7 @@ class TmdbRepositoryTest {
             withTimeout(5000) { repository.episodeCacheVersion.first { it > 0 } }
             assertEquals("Pilot", repository.getCachedEpisodes("Series", video.episodes!!)["Pilot"]?.name)
             assertNotNull(fakeDao.getMetadata("Series_s1_e1"))
+            assertTrue(fakeDao.getMetadata("Series_s1_e1")!!.isEpisode)
             assertEquals(2, mockWebServer.requestCount)
             assertTrue(repository.maxObservedConcurrentRequests <= 2)
         } finally {
@@ -355,8 +356,8 @@ class TmdbRepositoryTest {
     fun `getCachedEpisodes charge les episodes en un seul lot depuis le dao`() = runTest {
         val ep1Json = """{"name":"Pilot","episodeNumber":1,"seasonNumber":1,"overview":"Ep 1"}"""
         val ep2Json = """{"name":"Cat's in the Bag","episodeNumber":2,"seasonNumber":1,"overview":"Ep 2"}"""
-        fakeDao.insertMetadata(TmdbMetadataEntity(queryKey = "Breaking Bad_s1_e1", json = ep1Json, fetchedAt = 1000L))
-        fakeDao.insertMetadata(TmdbMetadataEntity(queryKey = "Breaking Bad_s1_e2", json = ep2Json, fetchedAt = 1000L))
+        fakeDao.insertMetadata(TmdbMetadataEntity(queryKey = "Breaking Bad_s1_e1", json = ep1Json, fetchedAt = 1000L, isEpisode = true))
+        fakeDao.insertMetadata(TmdbMetadataEntity(queryKey = "Breaking Bad_s1_e2", json = ep2Json, fetchedAt = 1000L, isEpisode = true))
 
         val ep1 = VideoItem(url = "u1", name = "BB S01E01.mkv", path = "/p1", season = 1, episode = 1)
         val ep2 = VideoItem(url = "u2", name = "BB S01E02.mkv", path = "/p2", season = 1, episode = 2)
@@ -565,6 +566,56 @@ class TmdbRepositoryTest {
     }
 
     @Test
+    fun prewarmLeavesEpisodesInRoomAndLoadsThemOnDemand() = runTest {
+        val mainKey = "Movie_something_else"
+        fakeDao.insertMetadata(TmdbMetadataEntity(
+            mainKey, """{"queryKey":"$mainKey","title":"Movie","posterPath":"/poster.jpg"}""", 0L,
+        ))
+        val episodeJson = """{"name":"Pilot","overview":"Episode","seasonNumber":1,"episodeNumber":1}"""
+        for (number in 1..2) {
+            fakeDao.insertMetadata(TmdbMetadataEntity("Series_s1_e$number", episodeJson, 0L, isEpisode = true))
+        }
+        fakeDao.insertMetadata(TmdbMetadataEntity("Missing", TmdbRepository.NOT_FOUND_JSON, 0L))
+        fakeDao.insertMetadata(TmdbMetadataEntity("Series_s1_e3", TmdbRepository.NOT_FOUND_JSON, 0L, isEpisode = true))
+
+        repository.prewarmCache()
+        assertEquals(setOf(mainKey), repository.getAllCachedMetadata().keys)
+        assertEquals("/poster.jpg", repository.observeAllMetadata.first()[mainKey]?.posterPath)
+        assertEquals(1, fakeDao.mainReadCount)
+        assertTrue(fakeDao.readKeys.isEmpty())
+        assertTrue(repository.getCachedMetadata("Missing") == null)
+        assertTrue(fakeDao.readKeys.isEmpty())
+
+        assertEquals("Pilot", repository.getCachedEpisode("Series", 1, 1)?.name)
+        val videos = listOf(VideoItem(name = "second", season = 1, episode = 2))
+        assertEquals("Pilot", repository.getCachedEpisodes("Series", videos)["second"]?.name)
+        assertTrue(repository.getCachedEpisode("Series", 1, 3) == null)
+        assertEquals(listOf("Series_s1_e1", "Series_s1_e2", "Series_s1_e3"), fakeDao.readKeys)
+
+        fakeDao.clearAll()
+        assertEquals("Pilot", repository.getCachedEpisode("Series", 1, 1)?.name)
+        assertEquals("Pilot", repository.getCachedEpisodes("Series", videos)["second"]?.name)
+        assertTrue(repository.getCachedEpisode("Series", 1, 3) == null)
+        assertEquals(3, fakeDao.readKeys.size)
+        assertEquals(0, mockWebServer.requestCount)
+    }
+
+    @Test
+    fun prewarmRetriesFailedReadsAndRunsAgainAfterClear() = runTest {
+        fakeDao.failMainRead = true
+        repository.prewarmCache()
+        fakeDao.failMainRead = false
+        val entity = TmdbMetadataEntity("Movie", """{"queryKey":"Movie","title":"Movie"}""", 0L)
+        fakeDao.insertMetadata(entity)
+        assertEquals(setOf("Movie"), repository.getAllCachedMetadata().keys)
+        assertEquals(2, fakeDao.mainReadCount)
+        repository.clearCache()
+        fakeDao.insertMetadata(entity)
+        assertEquals(setOf("Movie"), repository.getAllCachedMetadata().keys)
+        assertEquals(3, fakeDao.mainReadCount)
+    }
+
+    @Test
     fun `observeAllMetadata emet les metadonnees en cache sans re-interroger room ni re-decoder le json`() = runTest {
         val metaJson = """
             {"queryKey":"Inception","tmdbId":1,"title":"Inception","overview":"Dreams","posterPath":"/inception.jpg","genreIds":[]}
@@ -600,12 +651,17 @@ class FakeSettingsRepository(var key: String = "test_api_key") : SettingsReposit
 
 class FakeTmdbMetadataDao : TmdbMetadataDao {
     private val map = mutableMapOf<String, TmdbMetadataEntity>()
+    var mainReadCount = 0
+    var failMainRead = false
+    val readKeys = mutableListOf<String>()
 
     override suspend fun getMetadata(queryKey: String): TmdbMetadataEntity? {
+        readKeys.add(queryKey)
         return map[queryKey]
     }
 
     override suspend fun getMetadataList(keys: List<String>): List<TmdbMetadataEntity> {
+        readKeys.addAll(keys)
         return keys.mapNotNull { map[it] }
     }
 
@@ -627,6 +683,12 @@ class FakeTmdbMetadataDao : TmdbMetadataDao {
 
     override suspend fun getAll(): List<TmdbMetadataEntity> {
         return map.values.toList()
+    }
+
+    override suspend fun getMainMetadata(): List<TmdbMetadataEntity> {
+        mainReadCount++
+        check(!failMainRead) { "Room unavailable" }
+        return map.values.filterNot { it.isEpisode }
     }
 
     override fun observeAll(): kotlinx.coroutines.flow.Flow<List<TmdbMetadataEntity>> {

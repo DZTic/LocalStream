@@ -129,6 +129,7 @@ class DetailsViewModelTest {
                 queryKey = "Breaking Bad_s1_e1",
                 json = kotlinx.serialization.json.Json.encodeToString(com.localstream.app.domain.model.TmdbEpisode.serializer(), tmdbEpisode),
                 fetchedAt = System.currentTimeMillis(),
+                isEpisode = true,
             )
         )
 
@@ -296,6 +297,7 @@ class DetailsViewModelTest {
         override suspend fun deleteMetadata(queryKey: String) { items.remove(queryKey) }
         override suspend fun clearAll() = items.clear()
         override suspend fun getAll(): List<TmdbMetadataEntity> = items.values.toList()
+        override suspend fun getMainMetadata(): List<TmdbMetadataEntity> = items.values.filterNot { it.isEpisode }
         override fun observeAll(): Flow<List<TmdbMetadataEntity>> = MutableStateFlow(items.values.toList())
     }
 

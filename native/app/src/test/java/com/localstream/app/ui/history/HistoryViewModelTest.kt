@@ -299,6 +299,7 @@ class HistoryViewModelTest {
         }
         override suspend fun clearAll() { listFlow.value = emptyList() }
         override suspend fun getAll(): List<com.localstream.app.data.db.entity.TmdbMetadataEntity> = listFlow.value
+        override suspend fun getMainMetadata() = listFlow.value.filterNot { it.isEpisode }
     }
 
     private class FakeWatchedItemDao : WatchedItemDao {

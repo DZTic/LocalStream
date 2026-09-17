@@ -473,6 +473,7 @@ class LibraryViewModelTest {
         }
         override suspend fun clearAll() = items.clear()
         override suspend fun getAll(): List<TmdbMetadataEntity> = items.values.toList()
+        override suspend fun getMainMetadata(): List<TmdbMetadataEntity> = items.values.filterNot { it.isEpisode }
         override fun observeAll(): Flow<List<TmdbMetadataEntity>> = MutableStateFlow(items.values.toList())
     }
 
