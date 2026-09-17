@@ -24,6 +24,9 @@ import com.localstream.app.domain.model.SortBy
 import com.localstream.app.domain.model.SubtitleEntry
 import com.localstream.app.domain.model.VideoItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.test.runCurrent
+import com.localstream.app.data.remote.tmdb.dto.TmdbSearchResultDto
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -93,6 +96,44 @@ class LibraryViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `fast posters are published while another worker is blocked`() = runTest(testDispatcher) {
+        val slowRequest = CompletableDeferred<Unit>()
+        val settings = object : SettingsRepository() {
+            override fun getTmdbApiKey() = "test-key"
+        }
+        val api = object : UnusedTmdbApi() {
+            override suspend fun searchMulti(
+                apiKey: String, query: String, language: String, overrideKey: String?,
+            ): TmdbSearchResponse {
+                if (query.contains("Avatar")) slowRequest.await()
+                return TmdbSearchResponse(results = listOf(
+                    TmdbSearchResultDto(id = 1, title = query, mediaType = "movie", posterPath = "/poster.jpg"),
+                ))
+            }
+            override suspend fun getMovieDetails(
+                movieId: Long, apiKey: String, language: String, overrideKey: String?,
+            ) = TmdbMovieDetailsDto(id = movieId, posterPath = "/poster.jpg")
+        }
+        val vm = LibraryViewModel(
+            VideoRepository(FakeScanner(raw, grouped)),
+            WatchStateRepository(FakeWatchedItemDao(), playbackDao),
+            TmdbRepository(api, FakeTmdbMetadataDao(), settings), settings,
+            ioDispatcher = testDispatcher, computationDispatcher = testDispatcher, metadataChunkSize = 2,
+        )
+        vm.refreshLibrary()
+        runCurrent()
+        assertTrue(vm.uiState.value.metadata.isEmpty())
+        advanceTimeBy(LibraryViewModel.METADATA_EMIT_DEBOUNCE_MS)
+        runCurrent()
+        assertEquals(setOf(filmSd.name, filmHd.name), vm.uiState.value.metadata.keys)
+        assertTrue(vm.uiState.value.isFetchingMetadata)
+        slowRequest.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(3, vm.uiState.value.metadata.size)
+        assertTrue(vm.uiState.value.hasScanned)
     }
 
     @Test
@@ -436,7 +477,7 @@ class LibraryViewModelTest {
     }
 
     /** Sans clé API configurée, aucune méthode distante ne doit être appelée. */
-    private class UnusedTmdbApi : TmdbApi {
+    private open class UnusedTmdbApi : TmdbApi {
         private fun unused(): Nothing = throw UnsupportedOperationException("appel réseau inattendu")
         override suspend fun searchMulti(apiKey: String, query: String, language: String, overrideKey: String?): TmdbSearchResponse = unused()
         override suspend fun searchMovie(

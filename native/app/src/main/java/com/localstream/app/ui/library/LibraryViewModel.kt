@@ -20,12 +20,12 @@ import com.localstream.app.domain.model.SortBy
 import com.localstream.app.domain.model.TmdbMetadata
 import com.localstream.app.domain.model.VideoDisplayData
 import com.localstream.app.domain.model.VideoItem
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * État de la bibliothèque partagé par les écrans Accueil / Recherche / Bibliothèque.
@@ -108,6 +109,7 @@ class LibraryViewModel(
     private var scanJob: Job? = null
 
     init {
+        require(metadataChunkSize > 0)
         observeWatchState()
         observePreferences()
         observeSearchQuery()
@@ -220,32 +222,37 @@ class LibraryViewModel(
         }
         if (missingVideos.isEmpty()) return
 
-        val pendingAdditions = mutableMapOf<String, TmdbMetadata>()
-        var lastEmitTime = System.currentTimeMillis()
-        val chunks = missingVideos.chunked(metadataChunkSize)
-        val totalChunks = chunks.size
-
-        chunks.forEachIndexed { index, chunk ->
-            val results = coroutineScope {
-                chunk.map { video ->
-                    async(ioDispatcher) {
-                        tmdbRepository.fetchMetadataForVideo(video).getOrNull()
+        coroutineScope {
+            val results = Channel<TmdbMetadata>(metadataChunkSize)
+            val remaining = ConcurrentLinkedQueue(missingVideos.distinctBy(VideoUiSelectors::metadataKey))
+            launch {
+                try {
+                    coroutineScope {
+                        repeat(metadataChunkSize) {
+                            launch {
+                                while (true) {
+                                    val video = remaining.poll() ?: break
+                                    val metadata = withContext(ioDispatcher) {
+                                        tmdbRepository.fetchMetadataForVideo(video).getOrNull()
+                                    }
+                                    if (metadata != null) results.send(metadata)
+                                }
+                            }
+                        }
                     }
-                }.awaitAll()
-            }.filterNotNull()
-
-            if (results.isNotEmpty()) {
-                results.associateTo(pendingAdditions) { it.queryKey to it }
+                } finally {
+                    results.close()
+                }
             }
-
-            val isLast = index == totalChunks - 1
-            val now = System.currentTimeMillis()
-            val timeSinceLastEmit = now - lastEmitTime
-
-            if (pendingAdditions.isNotEmpty() && (timeSinceLastEmit >= METADATA_EMIT_DEBOUNCE_MS || isLast)) {
-                val additionsToEmit = pendingAdditions.toMap()
-                pendingAdditions.clear()
-                lastEmitTime = now
+            while (true) {
+                val first = results.receiveCatching().getOrNull() ?: break
+                val additionsToEmit = mutableMapOf(first.queryKey to first)
+                // A fixed window also flushes while another request is stalled.
+                withTimeoutOrNull(METADATA_EMIT_DEBOUNCE_MS) {
+                    for (metadata in results) {
+                        additionsToEmit[metadata.queryKey] = metadata
+                    }
+                }
                 withContext(computationDispatcher) {
                     _uiState.update { it.withMetadataUpdate(additionsToEmit) }
                 }

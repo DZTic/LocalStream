@@ -112,7 +112,10 @@ class DetailsViewModel(
                 cachedMetadataFlow.value = meta
             }
 
-            container.videoRepository.observeVideos.collect { videos ->
+            combine(
+                container.videoRepository.observeVideos,
+                container.tmdbRepository.episodeCacheVersion,
+            ) { videos, _ -> videos }.collect { videos ->
                 val group = findVideoGroup(id, videos)
 
                 val lookupName = if (group.isSeriesGroup && !group.seriesName.isNullOrEmpty()) {
