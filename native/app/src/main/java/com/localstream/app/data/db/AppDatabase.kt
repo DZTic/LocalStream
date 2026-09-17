@@ -15,6 +15,8 @@ import com.localstream.app.data.db.entity.PlaylistEntity
 import com.localstream.app.data.db.entity.PlaylistItemEntity
 import com.localstream.app.data.db.entity.TmdbMetadataEntity
 import com.localstream.app.data.db.entity.WatchedItemEntity
+import com.localstream.app.domain.model.TmdbEpisode
+import kotlinx.serialization.json.Json
 
 /**
  * Base de données Room principale de LocalStream (Phase 4, Phase 5).
@@ -30,7 +32,7 @@ import com.localstream.app.data.db.entity.WatchedItemEntity
         PlaylistItemEntity::class,
         TmdbMetadataEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -78,6 +80,30 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tmdb_metadata ADD COLUMN is_episode INTEGER NOT NULL DEFAULT 0")
+                val decoder = Json { ignoreUnknownKeys = true; isLenient = true }
+                val episodeKey = Regex("_s[0-9]+_e[0-9]+$")
+                db.query("SELECT query_key, json FROM tmdb_metadata").use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val key = cursor.getString(0)
+                        val payload = cursor.getString(1)
+                        // Decode the payload to preserve movie titles containing _s / _e.
+                        // Negative entries have no payload; only those need the key convention.
+                        val isEpisode = if (payload == "{}") {
+                            episodeKey.containsMatchIn(key)
+                        } else {
+                            runCatching { decoder.decodeFromString<TmdbEpisode>(payload) }.isSuccess
+                        }
+                        if (isEpisode) {
+                            db.execSQL("UPDATE tmdb_metadata SET is_episode = 1 WHERE query_key = ?", arrayOf(key))
+                        }
+                    }
+                }
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -88,7 +114,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DB_NAME,
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                     .also { INSTANCE = it }
             }

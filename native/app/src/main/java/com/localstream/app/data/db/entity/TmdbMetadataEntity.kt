@@ -13,4 +13,6 @@ data class TmdbMetadataEntity(
     val json: String,
     @ColumnInfo(name = "fetched_at")
     val fetchedAt: Long,
+    @ColumnInfo(name = "is_episode", defaultValue = "0")
+    val isEpisode: Boolean = false,
 )

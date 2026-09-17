@@ -30,6 +30,9 @@ interface TmdbMetadataDao {
     @Query("SELECT * FROM tmdb_metadata")
     suspend fun getAll(): List<TmdbMetadataEntity>
 
+    @Query("SELECT * FROM tmdb_metadata WHERE is_episode = 0")
+    suspend fun getMainMetadata(): List<TmdbMetadataEntity>
+
     @Query("SELECT * FROM tmdb_metadata")
     fun observeAll(): kotlinx.coroutines.flow.Flow<List<TmdbMetadataEntity>>
 }
