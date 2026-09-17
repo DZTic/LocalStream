@@ -102,7 +102,7 @@ class LibraryViewModelTest {
     fun `fast posters are published while another worker is blocked`() = runTest(testDispatcher) {
         val slowRequest = CompletableDeferred<Unit>()
         val settings = object : SettingsRepository() {
-            override fun getTmdbApiKey() = "test-key"
+            override suspend fun getTmdbApiKey() = "test-key"
         }
         val api = object : UnusedTmdbApi() {
             override suspend fun searchMulti(

@@ -2,10 +2,15 @@ package com.localstream.app.data.repository
 
 import com.localstream.app.data.local.EncryptedPreferencesManager
 import com.localstream.app.data.local.UserPreferencesDataStore
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -17,9 +22,20 @@ import kotlinx.serialization.json.Json
  */
 @Suppress("TooManyFunctions")
 open class SettingsRepository(
-    private val encryptedPrefs: EncryptedPreferencesManager? = null,
+    encryptedPrefsFactory: (() -> EncryptedPreferencesManager?)? = null,
     private val dataStore: UserPreferencesDataStore? = null,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
+    private val encryptedPrefs by lazy { encryptedPrefsFactory?.invoke() }
+    private val credentialsMutex = Mutex()
+
+    // The factory and every encrypted read/write run on IO, including the first access.
+    private suspend fun <T> accessCredentials(block: () -> T): T =
+        credentialsMutex.withLock {
+            if (hasPersistentCredentials) withContext(ioDispatcher) { block() } else block()
+        }
+
+    private val hasPersistentCredentials = encryptedPrefsFactory != null
     private var inMemoryTmdbApiKey: String = ""
     private var inMemoryOsApiKey: String = ""
     private var inMemoryOsUser: String = ""
@@ -28,29 +44,34 @@ open class SettingsRepository(
 
     // -------- Credentials chiffrés --------
 
-    open fun getTmdbApiKey(): String = encryptedPrefs?.tmdbApiKey ?: inMemoryTmdbApiKey
-    open fun saveTmdbApiKey(key: String) {
-        if (encryptedPrefs != null) encryptedPrefs.tmdbApiKey = key else inMemoryTmdbApiKey = key
+    open suspend fun getTmdbApiKey(): String = accessCredentials { encryptedPrefs?.tmdbApiKey ?: inMemoryTmdbApiKey }
+    open suspend fun saveTmdbApiKey(key: String) = accessCredentials {
+        val prefs = encryptedPrefs
+        if (prefs != null) prefs.tmdbApiKey = key else inMemoryTmdbApiKey = key
     }
 
-    open fun getOpenSubtitlesApiKey(): String = encryptedPrefs?.openSubtitlesApiKey ?: inMemoryOsApiKey
-    open fun saveOpenSubtitlesApiKey(key: String) {
-        if (encryptedPrefs != null) encryptedPrefs.openSubtitlesApiKey = key else inMemoryOsApiKey = key
+    open suspend fun getOpenSubtitlesApiKey(): String = accessCredentials { encryptedPrefs?.openSubtitlesApiKey ?: inMemoryOsApiKey }
+    open suspend fun saveOpenSubtitlesApiKey(key: String) = accessCredentials {
+        val prefs = encryptedPrefs
+        if (prefs != null) prefs.openSubtitlesApiKey = key else inMemoryOsApiKey = key
     }
 
-    open fun getOpenSubtitlesUsername(): String = encryptedPrefs?.openSubtitlesUsername ?: inMemoryOsUser
-    open fun saveOpenSubtitlesUsername(username: String) {
-        if (encryptedPrefs != null) encryptedPrefs.openSubtitlesUsername = username else inMemoryOsUser = username
+    open suspend fun getOpenSubtitlesUsername(): String = accessCredentials { encryptedPrefs?.openSubtitlesUsername ?: inMemoryOsUser }
+    open suspend fun saveOpenSubtitlesUsername(username: String) = accessCredentials {
+        val prefs = encryptedPrefs
+        if (prefs != null) prefs.openSubtitlesUsername = username else inMemoryOsUser = username
     }
 
-    open fun getOpenSubtitlesPassword(): String = encryptedPrefs?.openSubtitlesPassword ?: inMemoryOsPass
-    open fun saveOpenSubtitlesPassword(password: String) {
-        if (encryptedPrefs != null) encryptedPrefs.openSubtitlesPassword = password else inMemoryOsPass = password
+    open suspend fun getOpenSubtitlesPassword(): String = accessCredentials { encryptedPrefs?.openSubtitlesPassword ?: inMemoryOsPass }
+    open suspend fun saveOpenSubtitlesPassword(password: String) = accessCredentials {
+        val prefs = encryptedPrefs
+        if (prefs != null) prefs.openSubtitlesPassword = password else inMemoryOsPass = password
     }
 
-    open fun getOpenSubtitlesToken(): String = encryptedPrefs?.openSubtitlesToken ?: inMemoryOsToken
-    open fun saveOpenSubtitlesToken(token: String) {
-        if (encryptedPrefs != null) encryptedPrefs.openSubtitlesToken = token else inMemoryOsToken = token
+    open suspend fun getOpenSubtitlesToken(): String = accessCredentials { encryptedPrefs?.openSubtitlesToken ?: inMemoryOsToken }
+    open suspend fun saveOpenSubtitlesToken(token: String) = accessCredentials {
+        val prefs = encryptedPrefs
+        if (prefs != null) prefs.openSubtitlesToken = token else inMemoryOsToken = token
     }
 
     // -------- Préférences DataStore --------

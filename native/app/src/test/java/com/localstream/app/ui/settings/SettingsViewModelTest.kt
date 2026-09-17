@@ -16,6 +16,7 @@ import com.localstream.app.di.NoOpTmdbApi
 import com.localstream.app.di.NoOpTmdbMetadataDao
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -23,6 +24,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -42,6 +44,23 @@ class SettingsViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `credentials remain loading until the stored key is available`() = runTest(testDispatcher) {
+        val key = CompletableDeferred<String>()
+        val settingsRepo = object : SettingsRepository() {
+            override suspend fun getTmdbApiKey(): String = key.await()
+        }
+        val viewModel = SettingsViewModel(AppContainer(overrideSettingsRepository = settingsRepo))
+        val collectJob = launch { viewModel.uiState.collect() }
+        runCurrent()
+        assertEquals(true, viewModel.uiState.value.isLoadingCredentials)
+        key.complete("stored-key")
+        runCurrent()
+        assertEquals(false, viewModel.uiState.value.isLoadingCredentials)
+        assertEquals("stored-key", viewModel.uiState.value.tmdbApiKey)
+        collectJob.cancel()
     }
 
     @Test

@@ -24,6 +24,7 @@ data class ExternalPlayerInfo(
 )
 
 data class SettingsUiState(
+    val isLoadingCredentials: Boolean = true,
     val tmdbApiKey: String = "",
     val isTestingTmdbKey: Boolean = false,
     val tmdbTestResult: String? = null,
@@ -80,6 +81,7 @@ class SettingsViewModel(
         val currentOsStatus = if (osToken.isNotBlank()) "Connecté" else osStatus
 
         SettingsUiState(
+            isLoadingCredentials = false,
             tmdbApiKey = tmdbKey,
             isTestingTmdbKey = testingTmdb,
             tmdbTestResult = tmdbRes,

@@ -222,12 +222,12 @@ class FakeOsSettingsRepository : SettingsRepository() {
     var password = "pass"
     var token = ""
 
-    override fun getOpenSubtitlesApiKey(): String = apiKey
-    override fun saveOpenSubtitlesApiKey(key: String) { apiKey = key }
-    override fun getOpenSubtitlesUsername(): String = username
-    override fun saveOpenSubtitlesUsername(username: String) { this.username = username }
-    override fun getOpenSubtitlesPassword(): String = password
-    override fun saveOpenSubtitlesPassword(password: String) { this.password = password }
-    override fun getOpenSubtitlesToken(): String = token
-    override fun saveOpenSubtitlesToken(token: String) { this.token = token }
+    override suspend fun getOpenSubtitlesApiKey(): String = apiKey
+    override suspend fun saveOpenSubtitlesApiKey(key: String) { apiKey = key }
+    override suspend fun getOpenSubtitlesUsername(): String = username
+    override suspend fun saveOpenSubtitlesUsername(username: String) { this.username = username }
+    override suspend fun getOpenSubtitlesPassword(): String = password
+    override suspend fun saveOpenSubtitlesPassword(password: String) { this.password = password }
+    override suspend fun getOpenSubtitlesToken(): String = token
+    override suspend fun saveOpenSubtitlesToken(token: String) { this.token = token }
 }

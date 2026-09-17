@@ -53,7 +53,7 @@ class TmdbRepositoryTest {
 
         settingsRepository = FakeSettingsRepository("test_api_key")
         val okHttpClient = OkHttpClient.Builder()
-            .addInterceptor(TmdbAuthInterceptor { settingsRepository.getTmdbApiKey() })
+            .addInterceptor(TmdbAuthInterceptor { kotlinx.coroutines.runBlocking { settingsRepository.getTmdbApiKey() } })
             .build()
 
         val contentType = "application/json".toMediaType()
@@ -594,8 +594,8 @@ class TmdbRepositoryTest {
 }
 
 class FakeSettingsRepository(var key: String = "test_api_key") : SettingsRepository() {
-    override fun getTmdbApiKey(): String = key
-    override fun saveTmdbApiKey(key: String) { this.key = key }
+    override suspend fun getTmdbApiKey(): String = key
+    override suspend fun saveTmdbApiKey(key: String) { this.key = key }
 }
 
 class FakeTmdbMetadataDao : TmdbMetadataDao {

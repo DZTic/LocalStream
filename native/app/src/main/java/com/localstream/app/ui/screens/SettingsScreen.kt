@@ -108,6 +108,11 @@ fun SettingsScreen(
                 fontWeight = FontWeight.Bold,
             )
 
+            if (uiState.isLoadingCredentials) {
+                CircularProgressIndicator(color = Red600)
+                return@Column
+            }
+
             // Section TMDB
             Card(colors = CardDefaults.cardColors(containerColor = Zinc900), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
