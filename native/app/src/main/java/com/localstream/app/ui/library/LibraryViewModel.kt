@@ -134,6 +134,7 @@ class LibraryViewModel(
                     videoRepository.scanAndLoad(
                         whitelistedVideos = whitelist,
                         forceRefresh = forceRefresh,
+                        onInitialContent = ::publishScanPreview,
                     )
                 }
                 publishVideos(grouped)
@@ -164,6 +165,14 @@ class LibraryViewModel(
             _uiState.update {
                 it.copy(videos = grouped, videoDurations = durations).withDerived()
             }
+        }
+    }
+
+    /** Called on the scan's IO worker; never sorts or groups on the main thread. */
+    private fun publishScanPreview(grouped: List<VideoItem>, raw: List<VideoItem>) {
+        val durations = raw.associate { it.name to it.duration }
+        _uiState.update {
+            it.copy(videos = grouped, videoDurations = durations).withDerived()
         }
     }
 

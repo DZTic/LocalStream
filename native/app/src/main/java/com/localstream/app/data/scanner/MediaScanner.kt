@@ -9,6 +9,11 @@ import com.localstream.app.domain.model.VideoItem
  */
 interface MediaScanner {
     fun scanVideoFiles(): List<VideoItem>
+
+    /** Emits immutable batches on the calling thread as files become available. */
+    fun scanVideoFiles(onBatchScanned: (List<VideoItem>) -> Unit): List<VideoItem> =
+        scanVideoFiles().also { if (it.isNotEmpty()) onBatchScanned(it) }
+
     fun scanSubtitleFiles(): List<SubtitleEntry>
     fun scanAndGroup(
         whitelistedVideos: Set<String> = emptySet(),

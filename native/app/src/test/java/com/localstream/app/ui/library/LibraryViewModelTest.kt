@@ -151,6 +151,36 @@ class LibraryViewModelTest {
     }
 
     @Test
+    fun `first content is visible with durations and filters before scanning finishes`() = runTest(testDispatcher) {
+        lateinit var vm: LibraryViewModel
+        val scanner = object : MediaScanner by FakeScanner(raw, grouped) {
+            override fun scanVideoFiles(onBatchScanned: (List<VideoItem>) -> Unit): List<VideoItem> {
+                onBatchScanned(listOf(filmSd, film4k))
+                val preview = vm.uiState.value
+                assertTrue(preview.isScanning)
+                assertTrue(!preview.hasScanned)
+                assertEquals(listOf(film4k.name), preview.filteredSorted.map { it.name })
+                assertEquals(mapOf(filmSd.name to filmSd.duration, film4k.name to film4k.duration), preview.videoDurations)
+                return raw
+            }
+        }
+        val settings = SettingsRepository()
+        vm = LibraryViewModel(
+            VideoRepository(scanner), WatchStateRepository(FakeWatchedItemDao(), playbackDao),
+            TmdbRepository(UnusedTmdbApi(), FakeTmdbMetadataDao(), settings), settings,
+            ioDispatcher = testDispatcher, computationDispatcher = testDispatcher,
+        )
+        vm.setFilterResolution(ResolutionFilter.FOUR_K)
+        runCurrent()
+        vm.refreshLibrary()
+        advanceUntilIdle()
+        assertTrue(!vm.uiState.value.isScanning)
+        assertTrue(vm.uiState.value.hasScanned)
+        assertEquals(grouped, vm.uiState.value.videos)
+        assertEquals(raw.associate { it.name to it.duration }, vm.uiState.value.videoDurations)
+    }
+
+    @Test
     fun `le tri par taille ordonne par taille décroissante comme le web`() = runTest(testDispatcher) {
         viewModel.refreshLibrary()
         advanceUntilIdle()
@@ -267,6 +297,7 @@ class LibraryViewModelTest {
             tmdbRepository = TmdbRepository(UnusedTmdbApi(), FakeTmdbMetadataDao(), SettingsRepository()),
             settingsRepository = SettingsRepository(),
             ioDispatcher = testDispatcher,
+            computationDispatcher = testDispatcher,
         )
         customVm.refreshLibrary()
         advanceUntilIdle()

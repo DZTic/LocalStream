@@ -77,6 +77,76 @@ class VideoRepositoryTest {
         repo.scanAndLoad()
         assertEquals(1, scanCount)
     }
+
+    @Test
+    fun scanAndLoad_previewsFirstVisibleBatchThenCommitsCompleteGroupsAndSubtitles() {
+        val hidden = VideoItem(url = "hidden", name = "VID_20240315_143022.mp4")
+        val allowed = hidden.copy(url = "allowed", name = "VID_20240316_143022.mp4")
+        val first = VideoItem(url = "ep1", name = "Beta.S01E01.mkv")
+        val second = VideoItem(url = "ep2", name = "Beta.S01E02.mkv")
+        val files = listOf(hidden, allowed, first, second)
+        val whitelist = setOf(allowed.name)
+        var previewCount = 0
+        val scanner = object : MediaScanner by FakeMediaScanner(files) {
+            override fun scanVideoFiles(onBatchScanned: (List<VideoItem>) -> Unit): List<VideoItem> {
+                onBatchScanned(listOf(hidden))
+                assertEquals(0, previewCount)
+                onBatchScanned(listOf(allowed, first))
+                assertEquals(1, previewCount) // Before the final page or subtitle scan.
+                onBatchScanned(listOf(second))
+                assertEquals(1, previewCount)
+                return files
+            }
+
+            override fun scanAndGroup(
+                whitelistedVideos: Set<String>,
+                movieCollections: Map<String, MovieCollection>,
+                releaseDates: Map<String, String>,
+                rawVideos: List<VideoItem>?,
+            ): List<VideoItem> = com.localstream.app.domain.VideoGrouper.groupVideos(
+                rawVideos.orEmpty().map { it.copy(subtitleNativePath = "subtitle") },
+                movieCollections, releaseDates, whitelistedVideos,
+            )
+        }
+        val repository = VideoRepository(scanner)
+        val result = repository.scanAndLoad(whitelistedVideos = whitelist, onInitialContent = { preview, batch ->
+            previewCount++
+            assertEquals(listOf(allowed, first), batch)
+            assertEquals(setOf(allowed.name, "Beta"), preview.map { it.name }.toSet())
+            assertEquals(1, preview.single { it.isSeriesGroup }.episodes.orEmpty().size)
+            assertTrue(repository.getRawVideos().isEmpty())
+            assertTrue(repository.getGroupedVideos().isEmpty())
+        })
+        assertEquals(files, repository.getRawVideos())
+        assertEquals(2, result.size)
+        val episodes = result.single { it.isSeriesGroup }.episodes.orEmpty()
+        assertEquals(listOf(first.name, second.name), episodes.map { it.name })
+        assertTrue(episodes.all { it.subtitleNativePath == "subtitle" })
+    }
+
+    @Test
+    fun scanAndLoad_refreshKeepsCatalogueUntilCompletionAndRemovesDeletedFiles() {
+        var files = listOf(VideoItem(url = "old", name = "Old.mkv"))
+        var subtitleCacheCleared = false
+        val scanner = object : MediaScanner by FakeMediaScanner(emptyList()) {
+            override fun scanVideoFiles() = files
+            override fun scanVideoFiles(onBatchScanned: (List<VideoItem>) -> Unit): List<VideoItem> =
+                files.also { if (it.isNotEmpty()) onBatchScanned(it) }
+            override fun clearSubtitleCache() { subtitleCacheCleared = true }
+        }
+        val repository = VideoRepository(scanner)
+        val original = repository.scanAndLoad()
+        files = listOf(VideoItem(url = "new", name = "New.mkv"))
+        assertEquals(original, repository.scanAndLoad())
+        val refreshed = repository.scanAndLoad(forceRefresh = true, onInitialContent = { _, _ ->
+            error("An existing catalogue must not be replaced by a partial scan")
+        })
+        assertTrue(subtitleCacheCleared)
+        assertEquals(listOf("New.mkv"), refreshed.map { it.name })
+        files = emptyList()
+        assertTrue(repository.scanAndLoad(forceRefresh = true).isEmpty())
+        assertTrue(repository.getRawVideos().isEmpty())
+    }
 }
 
 private class FakeMediaScanner(private val videos: List<VideoItem>) : MediaScanner {

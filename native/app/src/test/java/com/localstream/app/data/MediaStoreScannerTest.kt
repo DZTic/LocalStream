@@ -47,6 +47,21 @@ class MediaStoreScannerTest {
     }
 
     @Test
+    fun scanVideoFilesPaged_fileSystemEmitsImmutableBatches() {
+        repeat(5) { File(tempDir, "Film$it.mkv").createNewFile() }
+        val scanner = MediaStoreScanner(customDirectories = listOf(tempDir))
+        val batches = mutableListOf<List<VideoItem>>()
+        val result = scanner.scanVideoFilesPaged(pageSize = 2, onBatchScanned = { batches.add(it) })
+        assertEquals(listOf(2, 2, 1), batches.map { it.size })
+        assertEquals(result, batches.flatten())
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun scanVideoFilesPaged_rejectsZeroPageSize() {
+        MediaStoreScanner(customDirectories = listOf(tempDir)).scanVideoFilesPaged(pageSize = 0)
+    }
+
+    @Test
     fun scanSubtitleFiles_findsSrtAndVtt() {
         File(tempDir, "Film.srt").createNewFile()
         File(tempDir, "Film.vtt").createNewFile()

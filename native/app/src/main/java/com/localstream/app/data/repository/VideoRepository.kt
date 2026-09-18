@@ -28,6 +28,7 @@ class VideoRepository(
         releaseDates: Map<String, String> = emptyMap(),
         whitelistedVideos: Set<String> = emptySet(),
         forceRefresh: Boolean = false,
+        onInitialContent: ((List<VideoItem>, List<VideoItem>) -> Unit)? = null,
     ): List<VideoItem> {
         if (!forceRefresh && groupedVideos.isNotEmpty()) {
             return groupedVideos
@@ -35,13 +36,26 @@ class VideoRepository(
         if (forceRefresh) {
             mediaScanner.clearSubtitleCache()
         }
-        rawVideos = mediaScanner.scanVideoFiles()
-        groupedVideos = mediaScanner.scanAndGroup(
+        // Keep the committed catalogue intact until the scan succeeds. Only the
+        // first visible batch is previewed, avoiding repeated grouping of all pages.
+        var previewPublished = groupedVideos.isNotEmpty() || onInitialContent == null
+        val scanned = mediaScanner.scanVideoFiles { batch ->
+            if (!previewPublished) {
+                val preview = VideoGrouper.groupVideos(batch, movieCollections, releaseDates, whitelistedVideos)
+                if (preview.isNotEmpty()) {
+                    previewPublished = true
+                    onInitialContent?.invoke(preview, batch)
+                }
+            }
+        }
+        val grouped = mediaScanner.scanAndGroup(
             whitelistedVideos = whitelistedVideos,
             movieCollections = movieCollections,
             releaseDates = releaseDates,
-            rawVideos = rawVideos,
+            rawVideos = scanned,
         )
+        rawVideos = scanned
+        groupedVideos = grouped
         _videosFlow.value = groupedVideos
         return groupedVideos
     }
