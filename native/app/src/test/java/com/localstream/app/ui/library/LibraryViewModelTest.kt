@@ -297,6 +297,7 @@ class LibraryViewModelTest {
             tmdbRepository = TmdbRepository(UnusedTmdbApi(), FakeTmdbMetadataDao(), SettingsRepository()),
             settingsRepository = SettingsRepository(),
             ioDispatcher = testDispatcher,
+            computationDispatcher = testDispatcher,
         )
         customVm.refreshLibrary()
         advanceUntilIdle()
