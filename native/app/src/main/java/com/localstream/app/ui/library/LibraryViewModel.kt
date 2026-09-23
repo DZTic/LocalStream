@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,7 +59,8 @@ data class LibraryUiState(
     val filterGenre: Int? = null,
     val filterResolution: ResolutionFilter = ResolutionFilter.ALL,
     val searchResults: List<VideoItem> = emptyList(),
-    val hasTmdbKey: Boolean = false,
+    /** null tant que la clé n'a pas été lue (évite d'afficher la bannière TMDB à tort). */
+    val hasTmdbKey: Boolean? = null,
     val tmdbBannerDismissed: Boolean = false,
 ) {
     val metadata: Map<String, TmdbMetadata> get() = displayData.metadata
@@ -127,8 +129,9 @@ class LibraryViewModel(
             _uiState.update { it.copy(isScanning = true) }
             try {
                 val whitelist = settingsRepository.whitelistedVideos.firstOrNull() ?: emptySet()
-                val hasKey = settingsRepository.getTmdbApiKey().isNotBlank()
-                _uiState.update { it.copy(hasTmdbKey = hasKey) }
+                // Lecture chiffrée (Keystore, ~65 ms au premier accès) en parallèle du scan :
+                // la clé ne sert qu'après la publication du catalogue.
+                val hasKeyDeferred = async(ioDispatcher) { settingsRepository.getTmdbApiKey().isNotBlank() }
 
                 val grouped = withContext(ioDispatcher) {
                     videoRepository.scanAndLoad(
@@ -138,6 +141,9 @@ class LibraryViewModel(
                     )
                 }
                 publishVideos(grouped)
+
+                val hasKey = hasKeyDeferred.await()
+                _uiState.update { it.copy(hasTmdbKey = hasKey) }
 
                 // Cache Room / Mémoire en un seul appel global : affichage immédiat en RAM
                 val cached = loadCachedMetadata()
@@ -151,6 +157,9 @@ class LibraryViewModel(
                     _uiState.update { it.copy(isFetchingMetadata = true) }
                     enrichAndRegroup(grouped, whitelist)
                 }
+
+                // Sous-titres locaux en dernier : requête MediaStore.Files hors du chemin critique.
+                withContext(ioDispatcher) { videoRepository.attachSubtitles() }?.let { publishVideos(it) }
             } finally {
                 _uiState.update {
                     it.copy(isScanning = false, hasScanned = true, isFetchingMetadata = false)

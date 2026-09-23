@@ -5,9 +5,11 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import com.localstream.app.data.legacy.LegacyYoutubeCleaner
 import com.localstream.app.di.AppContainer
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Application de l'app native : héberge le [AppContainer] (injection manuelle)
@@ -21,11 +23,14 @@ class LocalStreamApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        container.applicationScope.launch {
+            runCatching { LegacyYoutubeCleaner.cleanup(this@LocalStreamApplication) }
+        }
     }
 
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
-            .okHttpClient { container.okHttpClient }
+            .okHttpClient { container.imageOkHttpClient }
             .memoryCache {
                 MemoryCache.Builder(this)
                     .maxSizePercent(0.35)

@@ -140,24 +140,34 @@ class MediaStoreScannerTest {
     }
 
     @Test
-    fun scanAndGroup_cachesSubtitleIndexAcrossCalls() {
+    fun scanAndGroup_doesNotMatchSubtitles() {
         File(tempDir, "Movie.mkv").createNewFile()
         File(tempDir, "Movie.srt").createNewFile()
 
         val scanner = MediaStoreScanner(context = null, customDirectories = listOf(tempDir))
-        val firstResult = scanner.scanAndGroup()
+
+        assertTrue(scanner.scanAndGroup().single().subtitleNativePath == null)
+    }
+
+    @Test
+    fun matchSubtitles_cachesSubtitleIndexAcrossCalls() {
+        File(tempDir, "Movie.mkv").createNewFile()
+        File(tempDir, "Movie.srt").createNewFile()
+
+        val scanner = MediaStoreScanner(context = null, customDirectories = listOf(tempDir))
+        val firstResult = scanner.matchSubtitles(scanner.scanVideoFiles())
         val movieWithSub = firstResult.first { it.name == "Movie.mkv" }
         assertTrue(movieWithSub.subtitleNativePath != null)
 
         File(tempDir, "Movie2.mkv").createNewFile()
         File(tempDir, "Movie2.srt").createNewFile()
 
-        val secondResult = scanner.scanAndGroup()
+        val secondResult = scanner.matchSubtitles(scanner.scanVideoFiles())
         val movie2 = secondResult.firstOrNull { it.name == "Movie2.mkv" }
         assertTrue(movie2?.subtitleNativePath == null)
 
         scanner.clearSubtitleCache()
-        val thirdResult = scanner.scanAndGroup()
+        val thirdResult = scanner.matchSubtitles(scanner.scanVideoFiles())
         val movie2AfterInvalidate = thirdResult.firstOrNull { it.name == "Movie2.mkv" }
         assertTrue(movie2AfterInvalidate?.subtitleNativePath != null)
     }

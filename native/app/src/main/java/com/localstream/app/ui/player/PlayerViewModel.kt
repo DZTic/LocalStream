@@ -8,15 +8,12 @@ import androidx.lifecycle.viewModelScope
 import com.localstream.app.data.db.entity.PlaybackStateEntity
 import com.localstream.app.di.AppContainer
 import com.localstream.app.domain.model.VideoItem
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -129,17 +126,18 @@ class PlayerViewModel(
     private var hasMarkedWatchedThisSession = false
 
     init {
-        @OptIn(FlowPreview::class)
         viewModelScope.launch {
-            savePositionChannel.receiveAsFlow()
-                .debounce(2000L)
-                .collect { req ->
-                    container.watchStateRepository.savePlaybackState(
-                        videoName = req.videoName,
-                        positionMs = req.positionMs,
-                        durationMs = req.durationMs,
-                    )
-                }
+            // Throttle, pas debounce : pendant une lecture continue la position arrive toutes
+            // les 250 ms, un debounce ne se déclencherait donc jamais. Le canal CONFLATED ne
+            // garde que la dernière position reçue pendant l'intervalle.
+            for (req in savePositionChannel) {
+                container.watchStateRepository.savePlaybackState(
+                    videoName = req.videoName,
+                    positionMs = req.positionMs,
+                    durationMs = req.durationMs,
+                )
+                delay(SAVE_POSITION_INTERVAL_MS)
+            }
         }
         viewModelScope.launch {
             container.settingsRepository.observePlayerMode.collect { mode ->
@@ -805,10 +803,23 @@ class PlayerViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        saveCurrentPosition()
+        // viewModelScope est déjà annulé ici : la dernière écriture passe par la portée applicative.
+        val video = _uiState.value.currentVideo ?: return
+        val pos = _positionMs.value
+        if (pos <= 0L) return
+        val dur = _uiState.value.durationMs
+        container.applicationScope.launch {
+            container.watchStateRepository.savePlaybackState(
+                videoName = video.name,
+                positionMs = pos,
+                durationMs = dur,
+            )
+        }
     }
 
     companion object {
+        /** Intervalle max entre deux sauvegardes de position pendant la lecture. */
+        const val SAVE_POSITION_INTERVAL_MS = 10_000L
         private const val WATCHED_THRESHOLD_RATIO = 0.90
         const val MAX_VOLUME_PERCENT: Float = 100f
         const val MIN_BRIGHTNESS: Float = 0.05f

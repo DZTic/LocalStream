@@ -147,6 +147,30 @@ class VideoRepositoryTest {
         assertTrue(repository.scanAndLoad(forceRefresh = true).isEmpty())
         assertTrue(repository.getRawVideos().isEmpty())
     }
+
+    @Test
+    fun attachSubtitles_regroupsOnlyWhenASubtitleMatches() {
+        val movie = VideoItem(url = "a", name = "Alpha.mkv")
+        val episode = VideoItem(url = "b", name = "Beta.S01E01.mkv")
+        var matches = emptyMap<String, String>()
+        val scanner = object : MediaScanner by FakeMediaScanner(listOf(movie, episode)) {
+            override fun matchSubtitles(videos: List<VideoItem>): List<VideoItem> =
+                videos.map { video -> matches[video.name]?.let { video.copy(subtitleNativePath = it) } ?: video }
+        }
+        val repository = VideoRepository(scanner)
+        val published = repository.scanAndLoad()
+
+        assertTrue(repository.attachSubtitles() == null)
+        assertEquals(published, repository.getGroupedVideos())
+
+        matches = mapOf(episode.name to "content://sub")
+        val regrouped = repository.attachSubtitles()
+
+        val matchedEpisode = regrouped.orEmpty().single { it.isSeriesGroup }.episodes.orEmpty().single()
+        assertEquals("content://sub", matchedEpisode.subtitleNativePath)
+        assertEquals(regrouped, repository.getGroupedVideos())
+        assertEquals("content://sub", repository.getRawVideos().single { it.name == episode.name }.subtitleNativePath)
+    }
 }
 
 private class FakeMediaScanner(private val videos: List<VideoItem>) : MediaScanner {

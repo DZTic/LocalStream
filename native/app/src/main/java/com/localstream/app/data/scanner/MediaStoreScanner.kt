@@ -108,7 +108,7 @@ class MediaStoreScanner(
             )
             while (c.moveToNext()) {
                 rowsInBatch++
-                parseVideoFromCursor(c, indices)?.let { batch.add(it) }
+                parseVideoFromCursor(c, indices)?.let { batch.add(withParsedName(it)) }
             }
         }
 
@@ -167,26 +167,31 @@ class MediaStoreScanner(
 
         if (name.isEmpty() || !VideoNameParser.VIDEO_EXT_REGEX.containsMatchIn(name)) return null
 
-        val contentUri = "content://media/external/video/media/$id"
-        val seriesInfo = VideoNameParser.parseSeriesInfo(name, path)
-        val extractedYear = TitleCleaner.extractYear(name)
-        val cleanTitle = TitleCleaner.getCleanTitle(name)
-        val resolution = Formatters.getResolution(name)
-
         return VideoItem(
-            url = contentUri,
+            url = "content://media/external/video/media/$id",
             name = name,
             type = mimeType,
             size = size,
             path = path,
             lastModified = if (lastModifiedSec > 0) lastModifiedSec * 1000L else System.currentTimeMillis(),
             duration = durationMs / 1000L,
+        )
+    }
+
+    /**
+     * Analyse regex du nom (série, titre, résolution, année). Ignorée pour les vidéos perso
+     * (caméra, messageries…) : VideoGrouper les écarte, sauf whitelist où il complète ces champs.
+     */
+    private fun withParsedName(video: VideoItem): VideoItem {
+        if (Formatters.isInPersonalFolder(video.path)) return video
+        val seriesInfo = VideoNameParser.parseSeriesInfo(video.name, video.path)
+        return video.copy(
             seriesName = seriesInfo.seriesName,
             season = seriesInfo.season,
             episode = seriesInfo.episode,
-            cleanTitle = cleanTitle,
-            resolution = resolution,
-            year = extractedYear
+            cleanTitle = TitleCleaner.getCleanTitle(video.name),
+            resolution = Formatters.getResolution(video.name),
+            year = TitleCleaner.extractYear(video.name),
         )
     }
 
@@ -207,7 +212,11 @@ class MediaStoreScanner(
             "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.ass' OR " +
             "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE '%.ssa')"
 
-        val baseCondition = "(${MediaStore.Files.FileColumns.MEDIA_TYPE} = 0 OR ${MediaStore.Files.FileColumns.MEDIA_TYPE} IS NULL) AND " +
+        // Depuis l'API 30, MediaStore indexe les .srt/.vtt en MEDIA_TYPE_SUBTITLE (5), plus en NONE (0).
+        // Un IN reste indexable (un NOT IN mesuré ~5x plus lent sur appareil).
+        val baseCondition = "(${MediaStore.Files.FileColumns.MEDIA_TYPE} IN " +
+            "(${MediaStore.Files.FileColumns.MEDIA_TYPE_NONE}, $MEDIA_TYPE_SUBTITLE) " +
+            "OR ${MediaStore.Files.FileColumns.MEDIA_TYPE} IS NULL) AND " +
             "(${MediaStore.Files.FileColumns.SIZE} > 0) AND $extCondition"
 
         val (selection, selectionArgs) = if (targetDirectories.isNotEmpty() && targetDirectories.size <= MAX_SQL_DIR_ARGS) {
@@ -243,7 +252,8 @@ class MediaStoreScanner(
             }
         }
 
-        return if (subtitles.isNotEmpty()) subtitles else scanSubtitleFilesFromFileSystem()
+        // Pas de repli sur `user.home` côté Android : cette propriété ne désigne pas le stockage partagé.
+        return if (subtitles.isNotEmpty() || customDirectories.isEmpty()) subtitles else scanSubtitleFilesFromFileSystem()
     }
 
     override fun scanAndGroup(
@@ -252,14 +262,25 @@ class MediaStoreScanner(
         releaseDates: Map<String, String>,
         rawVideos: List<VideoItem>?,
     ): List<VideoItem> {
-        val videos = rawVideos ?: scanVideoFiles()
+        // Les sous-titres sont associés à part (matchSubtitles) : la requête MediaStore.Files
+        // ne doit pas retarder la publication du catalogue.
+        return VideoGrouper.groupVideos(
+            videos = rawVideos ?: scanVideoFiles(),
+            movieCollections = movieCollections,
+            releaseDates = releaseDates,
+            whitelistedVideos = whitelistedVideos
+        )
+    }
+
+    override fun matchSubtitles(videos: List<VideoItem>): List<VideoItem> {
         val targetDirs = videos.mapNotNull {
             val folder = File(it.path).parent
             if (!folder.isNullOrBlank()) folder else null
         }.toSet()
         val subIndex = getOrBuildSubtitleIndex(targetDirs)
+        if (subIndex.isEmpty()) return videos
 
-        val videosWithSubtitles = videos.map { video ->
+        return videos.map { video ->
             val folder = VideoNameParser.parentFolder(video.path)
             val matchedSub = VideoNameParser.matchSubtitle(subIndex, video.name, folder)
             if (matchedSub != null) {
@@ -268,13 +289,6 @@ class MediaStoreScanner(
                 video
             }
         }
-
-        return VideoGrouper.groupVideos(
-            videos = videosWithSubtitles,
-            movieCollections = movieCollections,
-            releaseDates = releaseDates,
-            whitelistedVideos = whitelistedVideos
-        )
     }
 
     private fun scanVideoFilesFromFileSystem(
@@ -336,6 +350,9 @@ class MediaStoreScanner(
         private const val MAX_SCAN_DEPTH = 5
         private const val MIN_VIDEO_DURATION_MS = 1000L
         private const val MAX_SQL_DIR_ARGS = 50
+
+        /** `MediaStore.Files.FileColumns.MEDIA_TYPE_SUBTITLE`, défini à partir de l'API 30. */
+        private const val MEDIA_TYPE_SUBTITLE = 5
         private const val VIDEO_SELECTION =
             "${MediaStore.Video.Media.SIZE} > 0 AND (${MediaStore.Video.Media.DURATION} IS NULL OR ${MediaStore.Video.Media.DURATION} > $MIN_VIDEO_DURATION_MS)"
         private val VIDEO_EXTENSIONS = setOf("mp4", "mkv", "webm", "avi", "mov")

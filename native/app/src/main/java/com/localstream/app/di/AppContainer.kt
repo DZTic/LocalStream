@@ -18,6 +18,9 @@ import com.localstream.app.data.repository.WatchStateRepository
 import com.localstream.app.data.scanner.MediaStoreScanner
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.Cache
@@ -40,9 +43,17 @@ open class AppContainer(
     overrideTmdbRepository: TmdbRepository? = null,
     overridePlaylistRepository: PlaylistRepository? = null,
     overrideOpenSubtitlesRepository: OpenSubtitlesRepository? = null,
+    overrideApplicationScope: CoroutineScope? = null,
 ) {
 
     private val appContext: Context? = context?.applicationContext
+
+    /**
+     * Portée liée au processus pour les écritures qui doivent survivre à un écran
+     * (ex. dernière position de lecture quand le ViewModel du lecteur est détruit).
+     */
+    val applicationScope: CoroutineScope =
+        overrideApplicationScope ?: CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -60,6 +71,12 @@ open class AppContainer(
         }
         builder.build()
     }
+
+    /**
+     * Client de Coil : même pool de connexions et dispatcher que [okHttpClient], mais sans
+     * le cache HTTP (Coil a son propre cache disque ; sinon chaque image est écrite deux fois).
+     */
+    val imageOkHttpClient: OkHttpClient by lazy { okHttpClient.newBuilder().cache(null).build() }
 
     private val tmdbApi: TmdbApi by lazy {
         if (appContext == null) NoOpTmdbApi() else {

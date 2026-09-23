@@ -68,6 +68,19 @@ fun HomeScreen(
     val moviesListState = rememberLazyListState()
     val alphabeticalListState = rememberLazyListState()
 
+    val rowStates = androidx.compose.runtime.remember(
+        continueWatchingListState, recentAdditionsListState, recommendationsListState,
+        seriesListState, moviesListState, alphabeticalListState,
+    ) {
+        listOf(
+            continueWatchingListState, recentAdditionsListState, recommendationsListState,
+            seriesListState, moviesListState, alphabeticalListState,
+        )
+    }
+    val isScrolling = androidx.compose.runtime.remember(listState, rowStates) {
+        { listState.isScrollInProgress || rowStates.any { it.isScrollInProgress } }
+    }
+
     val alphaProvider = androidx.compose.runtime.remember(listState, uiState.hasContent) {
         {
             if (!uiState.hasContent || listState.firstVisibleItemIndex > 0) {
@@ -94,6 +107,7 @@ fun HomeScreen(
                         metadata = uiState.metadata,
                         onPlay = onPlay,
                         onOpenDetails = onOpenDetails,
+                        isScrolling = isScrolling,
                     )
                 }
                 if (uiState.showTmdbBanner) {

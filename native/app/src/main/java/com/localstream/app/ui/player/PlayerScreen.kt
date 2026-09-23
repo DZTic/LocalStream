@@ -138,7 +138,12 @@ fun PlayerScreen(
 
     DisposableEffect(activity) {
         val window = activity?.window
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        // setRequestedOrientation est un IPC synchrone (~80 ms mesurés) : posté pour que la
+        // première image du lecteur soit dessinée avant l'aller-retour avec le window manager.
+        val requestLandscape = Runnable {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+        window?.decorView?.post(requestLandscape) ?: requestLandscape.run()
         if (window != null) {
             val insetsController = WindowCompat.getInsetsController(window, window.decorView)
             insetsController.systemBarsBehavior =
@@ -146,6 +151,8 @@ fun PlayerScreen(
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
         }
         onDispose {
+            // Sortie avant l'exécution du Runnable : ne pas repasser en paysage après coup.
+            window?.decorView?.removeCallbacks(requestLandscape)
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             if (window != null) {
                 val insetsController = WindowCompat.getInsetsController(window, window.decorView)
