@@ -103,9 +103,14 @@ object Formatters {
             c == 's' || c == 'c' || c == 'a' || c == 'g' || c == 'w'
     }
 
-    fun isPersonalVideo(name: String, path: String): Boolean {
+    /** Test bon marché (sans regex) : dossier caméra, messagerie, enregistrement d'écran… */
+    fun isInPersonalFolder(path: String): Boolean {
         val p = path.lowercase().replace('\\', '/')
-        if (suspectPaths.any { p.contains(it) }) return true
+        return suspectPaths.any { p.contains(it) }
+    }
+
+    fun isPersonalVideo(name: String, path: String): Boolean {
+        if (isInPersonalFolder(path)) return true
 
         val n = name.lowercase()
         return mayMatchPersonalPattern(n) && personalPatterns.any { it.containsMatchIn(n) }

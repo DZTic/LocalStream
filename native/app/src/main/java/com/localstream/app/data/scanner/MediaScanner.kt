@@ -22,6 +22,12 @@ interface MediaScanner {
         rawVideos: List<VideoItem>? = null,
     ): List<VideoItem>
 
+    /**
+     * Associe les sous-titres locaux aux vidéos. Séparé de [scanAndGroup] car coûteux
+     * (requête MediaStore.Files) : exécuté après la publication du catalogue.
+     */
+    fun matchSubtitles(videos: List<VideoItem>): List<VideoItem> = videos
+
     /** Invalide le cache des sous-titres (appelé lors d'un refresh forcé). */
     fun clearSubtitleCache() {}
 }

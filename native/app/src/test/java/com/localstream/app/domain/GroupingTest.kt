@@ -46,6 +46,19 @@ class GroupingTest {
     }
 
     @Test
+    fun groupVideos_completesUnparsedWhitelistedPersonalVideo() {
+        // Le scanner ne fait plus d'analyse regex des vidéos de dossiers perso :
+        // le regroupement complète titre, résolution et année d'une vidéo whitelistée.
+        val name = "Vacances.2023.1080p.mp4"
+        val unparsed = VideoItem(url = "u", name = name, path = "/storage/emulated/0/DCIM/Camera/$name")
+        val res = VideoGrouper.groupVideos(listOf(unparsed), emptyMap(), emptyMap(), setOf(name))
+        assertEquals(1, res.size)
+        assertEquals(TitleCleaner.getCleanTitle(name), res[0].cleanTitle)
+        assertEquals(Formatters.getResolution(name), res[0].resolution)
+        assertEquals(TitleCleaner.extractYear(name), res[0].year)
+    }
+
+    @Test
     fun groupVideos_groupsMultipleCollectionMoviesIntoSaga() {
         val col = MovieCollection("1", "Saga X")
         val collections = mapOf("FilmA.mkv" to col, "FilmB.mkv" to col)

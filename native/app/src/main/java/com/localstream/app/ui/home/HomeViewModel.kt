@@ -94,7 +94,7 @@ class HomeViewModel(
             alphabetical = rows.alphabetical,
             displayData = state.displayData,
             showTmdbBanner = state.videos.isNotEmpty() &&
-                !state.hasTmdbKey &&
+                state.hasTmdbKey == false &&
                 !state.tmdbBannerDismissed,
         )
     }
@@ -159,7 +159,7 @@ class HomeViewModel(
                 alphabetical = rows.alphabetical,
                 displayData = state.displayData,
                 showTmdbBanner = state.videos.isNotEmpty() &&
-                    !state.hasTmdbKey &&
+                    state.hasTmdbKey == false &&
                     !state.tmdbBannerDismissed,
             )
         }

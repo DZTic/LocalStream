@@ -117,7 +117,26 @@ class HistoryViewModel(
             result.addAll(orphanItems)
         }
 
-        return result.sortedByDescending { it.watchedAt }
+        return mergeDuplicateNames(result).sortedByDescending { it.watchedAt }
+    }
+
+    /**
+     * Un orphelin peut être regroupé sous le même nom qu'une série présente sur le disque
+     * (ex. `Foo S01 E01.mp4` supprimé, `Foo - S01 E01.mp4` présent) : deux cartes « Foo »
+     * feraient planter la grille (clé dupliquée). On garde la première (disque en tête)
+     * avec la date de visionnage la plus récente.
+     */
+    private fun mergeDuplicateNames(items: List<HistoryItemUiState>): List<HistoryItemUiState> {
+        val merged = LinkedHashMap<String, HistoryItemUiState>(items.size)
+        for (item in items) {
+            val existing = merged[item.videoName]
+            merged[item.videoName] = if (existing == null) {
+                item
+            } else {
+                existing.copy(watchedAt = maxOf(existing.watchedAt, item.watchedAt))
+            }
+        }
+        return merged.values.toList()
     }
 
     private fun processDiskGroup(

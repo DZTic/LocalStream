@@ -39,7 +39,10 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import com.localstream.app.ui.home.HomeViewModel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -134,6 +137,34 @@ class LibraryViewModelTest {
         advanceUntilIdle()
         assertEquals(3, vm.uiState.value.metadata.size)
         assertTrue(vm.uiState.value.hasScanned)
+    }
+
+    @Test
+    fun `le scan est publié sans attendre la lecture chiffrée de la clé TMDB`() = runTest(testDispatcher) {
+        val keyRead = CompletableDeferred<String>()
+        val settings = object : SettingsRepository() {
+            override suspend fun getTmdbApiKey() = keyRead.await()
+        }
+        val vm = LibraryViewModel(
+            VideoRepository(FakeScanner(raw, grouped)),
+            WatchStateRepository(FakeWatchedItemDao(), playbackDao),
+            TmdbRepository(UnusedTmdbApi(), FakeTmdbMetadataDao(), settings), settings,
+            ioDispatcher = testDispatcher, computationDispatcher = testDispatcher,
+        )
+
+        vm.refreshLibrary()
+        runCurrent()
+
+        assertEquals(3, vm.uiState.value.videos.size)
+        assertNull(vm.uiState.value.hasTmdbKey)
+        // Clé encore inconnue : pas de bannière « configurer TMDB » affichée à tort.
+        assertFalse(HomeViewModel.deriveHomeUiState(vm.uiState.value).showTmdbBanner)
+
+        keyRead.complete("")
+        advanceUntilIdle()
+
+        assertEquals(false, vm.uiState.value.hasTmdbKey)
+        assertTrue(HomeViewModel.deriveHomeUiState(vm.uiState.value).showTmdbBanner)
     }
 
     @Test

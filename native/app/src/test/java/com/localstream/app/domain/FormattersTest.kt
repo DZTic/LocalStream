@@ -25,6 +25,19 @@ class FormattersTest {
     }
 
     @Test
+    fun isInPersonalFolder_checksOnlyThePath() {
+        assertTrue(Formatters.isInPersonalFolder("/storage/emulated/0/DCIM/Camera/clip.mp4"))
+        assertTrue(
+            Formatters.isInPersonalFolder(
+                "/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video/VID-1.mp4",
+            ),
+        )
+        // Nom typique de caméra mais dossier de films : seul isPersonalVideo le détecte.
+        assertFalse(Formatters.isInPersonalFolder("/storage/emulated/0/Movies/VID_20240315_143022.mp4"))
+        assertFalse(Formatters.isInPersonalFolder("/storage/emulated/0/Download/Show/Saison 1/Show.S01E01.mkv"))
+    }
+
+    @Test
     fun isPersonalVideo_detectsCameraAndAppMedia() {
         assertTrue(Formatters.isPersonalVideo("VID_20240315_143022.mp4", "/Movies/VID_20240315_143022.mp4"))
         assertTrue(Formatters.isPersonalVideo("clip.mp4", "/storage/emulated/0/DCIM/Camera/clip.mp4"))

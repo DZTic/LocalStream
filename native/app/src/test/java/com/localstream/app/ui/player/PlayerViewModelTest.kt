@@ -1,5 +1,7 @@
 package com.localstream.app.ui.player
 
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
 import com.localstream.app.data.db.dao.PlaybackStateDao
 import com.localstream.app.data.db.dao.WatchedItemDao
 import com.localstream.app.data.db.entity.PlaybackStateEntity
@@ -19,8 +21,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -662,6 +666,45 @@ class PlayerViewModelTest {
         advanceUntilIdle()
 
         assertEquals(95000L, viewModel.uiState.value.positionMs)
+    }
+
+    @Test
+    fun `continuous playback persists the position at least once per save interval`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        // 25 s of uninterrupted playback: one position every 250 ms, like the player loop.
+        var position = 0L
+        repeat(100) {
+            position += 250L
+            viewModel.onPositionChanged(positionMs = position, durationMs = 8_800_000L)
+            advanceTimeBy(250L)
+        }
+
+        val saved = playbackDao.findByName(video1.name)?.positionMs ?: 0L
+        assertTrue("saved=$saved", saved >= position - PlayerViewModel.SAVE_POSITION_INTERVAL_MS)
+    }
+
+    @Test
+    fun `clearing the view model persists the last position`() = runTest {
+        val appContainer = AppContainer(
+            overrideVideoRepository = videoRepo,
+            overrideWatchStateRepository = watchStateRepo,
+            // Portée de premier plan : advanceUntilIdle() n'attend pas les tâches de backgroundScope.
+            overrideApplicationScope = this,
+        )
+        val store = ViewModelStore()
+        val viewModel = ViewModelProvider(store, PlayerViewModel.factory(video1.name, appContainer))[PlayerViewModel::class.java]
+        advanceUntilIdle()
+
+        viewModel.onPositionChanged(positionMs = 1_000L, durationMs = 8_800_000L)
+        runCurrent() // first position saved, the next one waits for the save interval
+        viewModel.onPositionChanged(positionMs = 4_000L, durationMs = 8_800_000L)
+        store.clear()
+        advanceUntilIdle()
+
+        assertEquals(4_000L, playbackDao.findByName(video1.name)?.positionMs)
     }
 
     @Test

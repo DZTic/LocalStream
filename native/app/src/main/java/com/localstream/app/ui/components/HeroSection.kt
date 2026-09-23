@@ -26,8 +26,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -38,6 +40,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.localstream.app.domain.TitleCleaner
@@ -49,6 +54,7 @@ import com.localstream.app.ui.theme.Zinc300
 import com.localstream.app.ui.theme.Zinc500
 import com.localstream.app.ui.theme.Zinc800
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 /** Rotation du hero toutes les 10 s (comme le web). */
 private const val HERO_ROTATION_MS = 10_000L
@@ -61,7 +67,9 @@ private const val HERO_FADE_MS = 700
  * "Lecture" et "Plus d'infos".
  *
  * La rotation automatique est interne au composable : son état est local, donc
- * le tick des 10 s ne recompose ni les rows ni le reste de l'écran.
+ * le tick des 10 s ne recompose ni les rows ni le reste de l'écran. Elle ne tourne
+ * que lorsque l'écran est au premier plan (RESUMED) et attend la fin d'un éventuel
+ * défilement ([isScrolling]).
  */
 @Composable
 fun HeroSection(
@@ -70,16 +78,24 @@ fun HeroSection(
     onPlay: (VideoItem) -> Unit,
     onOpenDetails: (VideoItem) -> Unit,
     modifier: Modifier = Modifier,
-    @Suppress("UnusedParameter") isScrolling: Boolean = false,
+    isScrolling: () -> Boolean = { false },
 ) {
     if (candidates.isEmpty()) return
 
     var heroIndex by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(candidates.size) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val currentIsScrolling by rememberUpdatedState(isScrolling)
+    LaunchedEffect(candidates.size, lifecycleOwner) {
         if (candidates.size <= 1) return@LaunchedEffect
-        while (true) {
-            delay(HERO_ROTATION_MS)
-            heroIndex += 1
+        // La composition reste active quand l'app passe en arrière-plan : sans ce garde-fou,
+        // chaque tick recomposait et décodait un backdrop pour un écran invisible.
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                delay(HERO_ROTATION_MS)
+                // Le changement de hero coûte une image longue (~25 ms) : jamais pendant un scroll.
+                snapshotFlow { currentIsScrolling() }.first { !it }
+                heroIndex += 1
+            }
         }
     }
 
@@ -163,8 +179,9 @@ private fun HeroContent(
                 .padding(start = 16.dp, end = 16.dp, bottom = 48.dp)
                 .widthIn(max = 560.dp),
         ) {
+            val title = remember(hero.name) { TitleCleaner.getCleanTitle(hero.name) }
             Text(
-                text = TitleCleaner.getCleanTitle(hero.name),
+                text = title,
                 color = White,
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,

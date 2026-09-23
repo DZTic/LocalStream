@@ -214,6 +214,55 @@ class HistoryViewModelTest {
     }
 
     @Test
+    fun `uiState fusionne un orphelin regroupe sous le nom d'une serie presente sur le disque`() = runTest(testDispatcher) {
+        val watchRepo = WatchStateRepository(watchedDao, playbackDao)
+        val settingsRepo = SettingsRepository(dataStore = null)
+        val osRepo = OpenSubtitlesRepository(UnusedOsApi(), settingsRepo, SubtitleCache(File("/tmp")))
+
+        // Seul "Foo - S01 E01.mp4" est encore sur le disque ; "Foo S01 E01.mp4" (autre nommage)
+        // a été supprimé mais reste dans l'historique et se regroupe aussi sous "Foo".
+        val onDisk = VideoItem(
+            name = "Foo - S01 E01.mp4",
+            path = "/storage/Foo/Foo - S01 E01.mp4",
+            seriesName = "Foo",
+            season = 1,
+            episode = 1,
+        )
+        val series = VideoItem(
+            name = "Foo",
+            seriesName = "Foo",
+            isSeriesGroup = true,
+            isTvSeries = true,
+            episodes = listOf(onDisk),
+        )
+        val scanner = object : MediaScanner {
+            override fun scanVideoFiles(): List<VideoItem> = listOf(onDisk)
+            override fun scanSubtitleFiles(): List<SubtitleEntry> = emptyList()
+            override fun scanAndGroup(
+                whitelistedVideos: Set<String>,
+                movieCollections: Map<String, MovieCollection>,
+                releaseDates: Map<String, String>,
+                rawVideos: List<VideoItem>?,
+            ): List<VideoItem> = listOf(series)
+        }
+        val videoRepo = VideoRepository(scanner)
+        videoRepo.scanAndLoad()
+
+        watchedDao.upsert(WatchedItemEntity(name = "Foo", watched = true, watchedAt = 1000L))
+        watchedDao.upsert(WatchedItemEntity(name = "Foo - S01 E01.mp4", watched = true, watchedAt = 2000L))
+        watchedDao.upsert(WatchedItemEntity(name = "Foo S01 E01.mp4", watched = true, watchedAt = 3000L))
+
+        val viewModel = HistoryViewModel(DummyContainer(watchRepo, osRepo, settingsRepo, videoRepo))
+        backgroundScope.launch { viewModel.uiState.collect() }
+        advanceUntilIdle()
+
+        val items = viewModel.uiState.value.items
+        org.junit.Assert.assertEquals(listOf("Foo"), items.map { it.videoName })
+        assertTrue(items.single().isAvailableOnDisk)
+        org.junit.Assert.assertEquals(3000L, items.single().watchedAt)
+    }
+
+    @Test
     fun `removeFromHistory nettoie l'etat vu et la progression de lecture pour un groupe`() = runTest(testDispatcher) {
         val watchRepo = WatchStateRepository(watchedDao, playbackDao)
         val settingsRepo = SettingsRepository(dataStore = null)

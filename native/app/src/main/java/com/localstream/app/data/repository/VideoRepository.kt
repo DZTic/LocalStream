@@ -20,6 +20,11 @@ class VideoRepository(
     private var rawVideos: List<VideoItem> = emptyList()
     private var groupedVideos: List<VideoItem> = emptyList()
 
+    /** Paramètres du dernier regroupement, réutilisés quand les sous-titres sont associés. */
+    private var lastCollections: Map<String, MovieCollection> = emptyMap()
+    private var lastReleaseDates: Map<String, String> = emptyMap()
+    private var lastWhitelist: Set<String> = emptySet()
+
     private val _videosFlow = MutableStateFlow<List<VideoItem>>(emptyList())
     val observeVideos: Flow<List<VideoItem>> = _videosFlow.asStateFlow()
 
@@ -56,8 +61,39 @@ class VideoRepository(
         )
         rawVideos = scanned
         groupedVideos = grouped
+        rememberGrouping(movieCollections, releaseDates, whitelistedVideos)
         _videosFlow.value = groupedVideos
         return groupedVideos
+    }
+
+    /**
+     * Associe les sous-titres locaux au catalogue déjà publié. La requête MediaStore.Files
+     * coûte ~40 ms : elle est faite après la publication, hors du chemin critique du démarrage.
+     * Retourne le catalogue regroupé mis à jour, ou null si aucun sous-titre n'a été associé.
+     */
+    fun attachSubtitles(): List<VideoItem>? {
+        val scanned = rawVideos
+        val matched = mediaScanner.matchSubtitles(scanned)
+        if (matched == scanned) return null
+        rawVideos = matched
+        groupedVideos = VideoGrouper.groupVideos(
+            videos = matched,
+            movieCollections = lastCollections,
+            releaseDates = lastReleaseDates,
+            whitelistedVideos = lastWhitelist,
+        )
+        _videosFlow.value = groupedVideos
+        return groupedVideos
+    }
+
+    private fun rememberGrouping(
+        movieCollections: Map<String, MovieCollection>,
+        releaseDates: Map<String, String>,
+        whitelistedVideos: Set<String>,
+    ) {
+        lastCollections = movieCollections
+        lastReleaseDates = releaseDates
+        lastWhitelist = whitelistedVideos
     }
 
     fun getGroupedVideos(): List<VideoItem> = groupedVideos
@@ -78,6 +114,7 @@ class VideoRepository(
             releaseDates = releaseDates,
             whitelistedVideos = whitelistedVideos,
         )
+        rememberGrouping(movieCollections, releaseDates, whitelistedVideos)
         _videosFlow.value = groupedVideos
         return groupedVideos
     }
