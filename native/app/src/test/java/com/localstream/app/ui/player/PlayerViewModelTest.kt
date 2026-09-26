@@ -597,6 +597,53 @@ class PlayerViewModelTest {
     }
 
     @Test
+    fun `resume banner disappears after 10s of playback`() = runTest {
+        playbackDao.upsert(PlaybackStateEntity(name = video1.name, progressPct = 50.0, positionMs = 4400000L))
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.showResumeBanner)
+
+        viewModel.onPlayingStateChanged(true)
+        advanceTimeBy(PlayerViewModel.RESUME_BANNER_TIMEOUT_MS - 500L)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.showResumeBanner)
+
+        advanceTimeBy(1_000L)
+        runCurrent()
+        assertFalse(viewModel.uiState.value.showResumeBanner)
+    }
+
+    @Test
+    fun `resume banner countdown is suspended while paused`() = runTest {
+        playbackDao.upsert(PlaybackStateEntity(name = video1.name, progressPct = 50.0, positionMs = 4400000L))
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        // Ouvert en pause : le compte ne démarre pas.
+        advanceTimeBy(60_000L)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.showResumeBanner)
+
+        viewModel.onPlayingStateChanged(true)
+        advanceTimeBy(6_000L)
+        viewModel.onPlayingStateChanged(false)
+        advanceTimeBy(60_000L)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.showResumeBanner)
+
+        // La reprise repart des ~6 s déjà jouées, pas de zéro.
+        viewModel.onPlayingStateChanged(true)
+        advanceTimeBy(3_000L)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.showResumeBanner)
+        advanceTimeBy(1_500L)
+        runCurrent()
+        assertFalse(viewModel.uiState.value.showResumeBanner)
+    }
+
+    @Test
     fun `selectEpisode loads new episode and hides sheet`() = runTest {
         val viewModel = PlayerViewModel(ep1.name, container)
         backgroundScope.launch { viewModel.uiState.collect {} }
@@ -666,6 +713,24 @@ class PlayerViewModelTest {
         advanceUntilIdle()
 
         assertEquals(95000L, viewModel.uiState.value.positionMs)
+        assertEquals("+85s", viewModel.uiState.value.gestureFeedback?.text)
+    }
+
+    @Test
+    fun `seekBy backwards emits rewind feedback`() = runTest {
+        val viewModel = PlayerViewModel(video1.name, container)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        viewModel.onPositionChanged(30000L, 200000L)
+        advanceUntilIdle()
+        viewModel.seekBy(-10000L)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(20000L, state.positionMs)
+        assertEquals(FeedbackType.SEEK_REWIND, state.gestureFeedback?.type)
+        assertEquals("-10s", state.gestureFeedback?.text)
     }
 
     @Test

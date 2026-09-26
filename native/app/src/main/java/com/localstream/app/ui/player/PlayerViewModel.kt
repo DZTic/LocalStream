@@ -125,6 +125,9 @@ class PlayerViewModel(
 
     private var hasMarkedWatchedThisSession = false
 
+    private var resumeBannerJob: Job? = null
+    private var resumeBannerPlayedMs = 0L
+
     init {
         viewModelScope.launch {
             // Throttle, pas debounce : pendant une lecture continue la position arrive toutes
@@ -207,6 +210,7 @@ class PlayerViewModel(
                     resumePositionMs = pos,
                 )
             }
+            restartResumeBannerCountdown()
 
             resolveNextVideo(targetVideo, allGrouped, allRaw)
         }
@@ -278,6 +282,7 @@ class PlayerViewModel(
 
     fun onPlayingStateChanged(isPlaying: Boolean) {
         _uiState.update { it.copy(isPlaying = isPlaying) }
+        updateResumeBannerCountdown()
         if (!isPlaying) {
             saveCurrentPosition()
         }
@@ -449,7 +454,8 @@ class PlayerViewModel(
         val newPos = (curPos + deltaMs).coerceIn(0L, dur.coerceAtLeast(1L))
         _positionMs.value = newPos
         val type = if (deltaMs >= 0) FeedbackType.SEEK_FORWARD else FeedbackType.SEEK_REWIND
-        val text = if (deltaMs >= 0) "+10s" else "-10s"
+        val seconds = deltaMs / ONE_SECOND_MS
+        val text = if (deltaMs >= 0) "+${seconds}s" else "${seconds}s"
         _uiState.update {
             it.copy(
                 positionMs = newPos,
@@ -660,6 +666,7 @@ class PlayerViewModel(
                     selectedSubtitleTrackId = null,
                 )
             }
+            restartResumeBannerCountdown()
 
             resolveNextVideo(video, allGrouped, allRaw)
         }
@@ -745,6 +752,29 @@ class PlayerViewModel(
 
     fun dismissResumeBanner() {
         _uiState.update { it.copy(showResumeBanner = false) }
+        updateResumeBannerCountdown()
+    }
+
+    private fun restartResumeBannerCountdown() {
+        resumeBannerPlayedMs = 0L
+        updateResumeBannerCountdown()
+    }
+
+    /**
+     * Sans « Recommencer », la bannière de reprise s'efface après [RESUME_BANNER_TIMEOUT_MS] de
+     * lecture effective : la pause (et le chargement) suspendent le compte sans le remettre à zéro.
+     */
+    private fun updateResumeBannerCountdown() {
+        resumeBannerJob?.cancel()
+        val state = _uiState.value
+        if (!state.showResumeBanner || !state.isPlaying) return
+        resumeBannerJob = viewModelScope.launch {
+            while (resumeBannerPlayedMs < RESUME_BANNER_TIMEOUT_MS) {
+                delay(RESUME_BANNER_TICK_MS)
+                resumeBannerPlayedMs += RESUME_BANNER_TICK_MS
+            }
+            _uiState.update { it.copy(showResumeBanner = false) }
+        }
     }
 
     fun restartFromBeginning() {
@@ -756,6 +786,7 @@ class PlayerViewModel(
                 initialPositionMs = 0L,
             )
         }
+        updateResumeBannerCountdown()
         val video = _uiState.value.currentVideo ?: return
         viewModelScope.launch {
             container.watchStateRepository.savePlaybackState(
@@ -798,7 +829,7 @@ class PlayerViewModel(
     }
 
     fun skipIntro() {
-        seekBy(DEFAULT_INTRO_SKIP_MS)
+        seekBy(INTRO_SKIP_MS)
     }
 
     override fun onCleared() {
@@ -828,7 +859,12 @@ class PlayerViewModel(
         private const val MAX_OFFSET_MS: Long = 10000L
         private const val SECONDS_PER_MINUTE: Int = 60
         private const val ONE_SECOND_MS: Long = 1000L
-        private const val DEFAULT_INTRO_SKIP_MS: Long = 85000L
+        /** Saut du bouton « +85s Intro » : partagé avec le seek du lecteur dans PlayerScreen. */
+        const val INTRO_SKIP_MS: Long = 85000L
+
+        /** Durée de lecture après laquelle la bannière « Reprise à … » s'efface d'elle-même. */
+        const val RESUME_BANNER_TIMEOUT_MS: Long = 10_000L
+        private const val RESUME_BANNER_TICK_MS: Long = 100L
 
         fun factory(videoName: String, container: AppContainer): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
