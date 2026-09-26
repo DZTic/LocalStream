@@ -450,8 +450,14 @@ fun PlayerScreen(
                 viewModel.updateTracks(audioList, subList)
             }
         }
+        val keyframeAligner = KeyframeSeekAligner(exoPlayer)
         exoPlayer.addListener(listener)
+        exoPlayer.addListener(keyframeAligner)
+        exoPlayer.setVideoFrameMetadataListener(keyframeAligner)
         onDispose {
+            keyframeAligner.release()
+            exoPlayer.clearVideoFrameMetadataListener(keyframeAligner)
+            exoPlayer.removeListener(keyframeAligner)
             exoPlayer.removeListener(listener)
             exoPlayer.stop()
             exoPlayer.clearMediaItems()
@@ -800,7 +806,12 @@ fun PlayerScreen(
             onOpenTracks = { showTracksSheet = true },
             onOpenEpisodes = { viewModel.setEpisodesSheetVisible(true) },
             onOpenSleepTimer = { viewModel.setSleepTimerDialogVisible(true) },
-            onSkipIntro = viewModel::skipIntro,
+            onSkipIntro = {
+                viewModel.skipIntro()
+                exoPlayer.seekTo(
+                    (exoPlayer.currentPosition + PlayerViewModel.INTRO_SKIP_MS).coerceAtMost(exoPlayer.duration),
+                )
+            },
             onCycleAspect = viewModel::cycleAspectRatio,
             onCycleSpeed = viewModel::cyclePlaybackSpeed,
             onTogglePlay = {
