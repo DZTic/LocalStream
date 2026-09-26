@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +7,46 @@ plugins {
     alias(libs.plugins.detekt)
     alias(libs.plugins.ksp) // Phase 4 : génération Room
     alias(libs.plugins.kotlin.serialization) // Phase 5 : kotlinx.serialization
+}
+
+/** Clé de signature des APK release publiés. */
+data class ReleaseKey(
+    val storeFile: File,
+    val storePassword: String,
+    val keyAlias: String,
+    val keyPassword: String,
+)
+
+/**
+ * CI : variables RELEASE_* (keystore décodé depuis les secrets GitHub).
+ * En local : ~/.android-keys/localstream-release.properties, ou le fichier désigné par
+ * RELEASE_SIGNING_PROPERTIES. Sans clé, le release est signé avec la clé debug.
+ */
+val releaseKey: ReleaseKey? = run {
+    val env = System.getenv()
+    val envStoreFile = env["RELEASE_KEYSTORE_PATH"]?.let { rootProject.file(it) }
+    if (envStoreFile != null) {
+        return@run envStoreFile.takeIf { it.exists() }?.let {
+            ReleaseKey(
+                storeFile = it,
+                storePassword = env.getValue("RELEASE_STORE_PASSWORD"),
+                keyAlias = env.getValue("RELEASE_KEY_ALIAS"),
+                keyPassword = env.getValue("RELEASE_KEY_PASSWORD"),
+            )
+        }
+    }
+    val propsFile = file(
+        env["RELEASE_SIGNING_PROPERTIES"]
+            ?: "${System.getProperty("user.home")}/.android-keys/localstream-release.properties",
+    )
+    if (!propsFile.exists()) return@run null
+    val props = Properties().apply { propsFile.inputStream().use { load(it) } }
+    ReleaseKey(
+        storeFile = file(props.getProperty("storeFile")),
+        storePassword = props.getProperty("storePassword"),
+        keyAlias = props.getProperty("keyAlias"),
+        keyPassword = props.getProperty("keyPassword"),
+    )
 }
 
 android {
@@ -19,16 +61,12 @@ android {
             keyPassword = "android"
         }
         create("release") {
-            val releaseStoreFilePath = System.getenv("RELEASE_KEYSTORE_PATH")
-                ?: System.getenv("KEYSTORE_PATH")
-                ?: "${rootDir}/release.keystore"
-            val releaseStoreFile = file(releaseStoreFilePath)
-
-            if (releaseStoreFile.exists()) {
-                storeFile = releaseStoreFile
-                storePassword = System.getenv("RELEASE_STORE_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: System.getenv("KEY_PASSWORD")
+            val key = releaseKey
+            if (key != null) {
+                storeFile = key.storeFile
+                storePassword = key.storePassword
+                keyAlias = key.keyAlias
+                keyPassword = key.keyPassword
             } else {
                 // Fallback vers le debug keystore si aucune clé release n'est fournie (permet le build local)
                 storeFile = file("${rootDir}/debug.keystore")
@@ -78,6 +116,40 @@ android {
 
     buildFeatures {
         compose = true
+    }
+}
+
+
+// Rotation de clé (APK Signature Scheme v3) : les versions ≤ 1.2.1 étaient signées avec la clé
+// debug. L'APK release porte la preuve, signée par cette clé debug, que la clé release lui
+// succède : Android 9+ l'installe en mise à jour, sans désinstaller ni perdre les données.
+// v1/v2 (Android < 9) restent signés par la clé debug, seule clé que ces versions connaissent.
+releaseKey?.let { key ->
+    val signReleaseApkWithRotation = tasks.register<Exec>("signReleaseApkWithRotation") {
+        val sdkDir = androidComponents.sdkComponents.sdkDirectory.get().asFile
+        val isWindows = System.getProperty("os.name").startsWith("Windows")
+        val apksigner = sdkDir.resolve("build-tools/${android.buildToolsVersion}/apksigner${if (isWindows) ".bat" else ""}")
+        environment("LS_RELEASE_STORE_PASSWORD", key.storePassword)
+        environment("LS_RELEASE_KEY_PASSWORD", key.keyPassword)
+        commandLine(
+            apksigner.absolutePath, "sign",
+            "--ks", rootProject.file("debug.keystore").absolutePath,
+            "--ks-key-alias", "androiddebugkey",
+            "--ks-pass", "pass:android",
+            "--key-pass", "pass:android",
+            "--next-signer",
+            "--ks", key.storeFile.absolutePath,
+            "--ks-key-alias", key.keyAlias,
+            "--ks-pass", "env:LS_RELEASE_STORE_PASSWORD",
+            "--key-pass", "env:LS_RELEASE_KEY_PASSWORD",
+            "--lineage", rootProject.file("signing/release-rotation.lineage").absolutePath,
+            "--rotation-min-sdk-version", "28",
+            "--v4-signing-enabled", "false",
+            layout.buildDirectory.file("outputs/apk/release/app-release.apk").get().asFile.absolutePath,
+        )
+    }
+    tasks.matching { it.name == "assembleRelease" }.configureEach {
+        finalizedBy(signReleaseApkWithRotation)
     }
 }
 
