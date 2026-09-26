@@ -82,8 +82,8 @@ android {
         applicationId = "com.localstream.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 10201
-        versionName = "1.2.1"
+        versionCode = 10202
+        versionName = "1.2.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
