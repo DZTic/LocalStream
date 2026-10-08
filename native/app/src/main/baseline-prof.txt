@@ -12,6 +12,7 @@ Lcom/localstream/app/ui/screens/SearchScreenKt;
 Lcom/localstream/app/ui/screens/SettingsScreenKt;
 Lcom/localstream/app/ui/screens/PermissionScreenKt;
 Lcom/localstream/app/ui/screens/PlaceholderScreenKt;
+Lcom/localstream/app/ui/player/PlayerActivity;
 Lcom/localstream/app/ui/player/PlayerScreenKt;
 Lcom/localstream/app/ui/player/BottomPlayerBarKt;
 Lcom/localstream/app/ui/player/CenterPlayerControlsKt;

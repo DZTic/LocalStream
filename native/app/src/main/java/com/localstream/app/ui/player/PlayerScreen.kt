@@ -138,12 +138,19 @@ fun PlayerScreen(
 
     DisposableEffect(activity) {
         val window = activity?.window
-        // setRequestedOrientation est un IPC synchrone (~80 ms mesurés) : posté pour que la
-        // première image du lecteur soit dessinée avant l'aller-retour avec le window manager.
-        val requestLandscape = Runnable {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        val isDedicatedPlayer = activity is PlayerActivity
+        val requestLandscape = if (!isDedicatedPlayer) {
+            // Dans MainActivity (fallback) : setRequestedOrientation est un IPC synchrone
+            // posté pour que la première image soit dessinée avant l'aller-retour window manager.
+            Runnable {
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            }
+        } else {
+            null
         }
-        window?.decorView?.post(requestLandscape) ?: requestLandscape.run()
+        if (requestLandscape != null) {
+            window?.decorView?.post(requestLandscape) ?: requestLandscape.run()
+        }
         if (window != null) {
             val insetsController = WindowCompat.getInsetsController(window, window.decorView)
             insetsController.systemBarsBehavior =
@@ -151,14 +158,16 @@ fun PlayerScreen(
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
         }
         onDispose {
-            // Sortie avant l'exécution du Runnable : ne pas repasser en paysage après coup.
-            window?.decorView?.removeCallbacks(requestLandscape)
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            if (requestLandscape != null) {
+                // Sortie avant l'exécution du Runnable : ne pas repasser en paysage après coup.
+                window?.decorView?.removeCallbacks(requestLandscape)
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
             if (window != null) {
                 val insetsController = WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && activity != null) {
+            if (!isDedicatedPlayer && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && activity != null) {
                 runCatching {
                     activity.setPictureInPictureParams(
                         PictureInPictureParams.Builder().setAutoEnterEnabled(false).build(),

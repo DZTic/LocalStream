@@ -38,6 +38,7 @@ import com.localstream.app.ui.screens.HistoryScreen
 import com.localstream.app.ui.screens.HomeScreen
 import com.localstream.app.ui.screens.LibraryScreen
 import com.localstream.app.ui.screens.PermissionScreen
+import com.localstream.app.ui.player.PlayerActivity
 import com.localstream.app.ui.player.PlayerScreen
 import com.localstream.app.ui.screens.PlaylistsScreen
 import com.localstream.app.ui.screens.SearchScreen
@@ -99,10 +100,10 @@ fun LocalStreamApp(navController: NavHostController = rememberNavController()) {
         navController.navigate(Routes.details(name))
     }
     val openPlayer: (VideoItem) -> Unit = { video ->
-        navController.navigate(Routes.player(video.name))
+        context.startActivity(PlayerActivity.createIntent(context, video.name))
     }
     val openPlayerByName: (String) -> Unit = { name ->
-        navController.navigate(Routes.player(name))
+        context.startActivity(PlayerActivity.createIntent(context, name))
     }
 
     Scaffold(
