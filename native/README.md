@@ -56,4 +56,4 @@ Le routage est géré par `NavHost` (`ui/navigation/`) avec une barre de navigat
 | `search`         | `com.localstream.app.ui.screens.SearchScreen`   | Recherche locale et filtres       |
 | `settings`       | `com.localstream.app.ui.screens.SettingsScreen` | Paramètres & clés API             |
 | `details/{id}`   | `com.localstream.app.ui.screens.DetailsScreen`  | Fiche détaillée film / série      |
-| `player/{id}`    | `com.localstream.app.ui.player.PlayerScreen`    | Lecteur vidéo ExoPlayer plein écran |
+| `player/{id}`    | `com.localstream.app.ui.player.PlayerActivity` (hébergeant `PlayerScreen`) | Lecteur vidéo ExoPlayer plein écran dédié (paysage natif) |

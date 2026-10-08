@@ -34,6 +34,7 @@ class BaselineProfileTest {
             "Lcom/localstream/app/ui/components/VideoRowKt;",
             "Lcom/localstream/app/ui/components/HeroSectionKt;",
             "Lcom/localstream/app/ui/components/LocalStreamBottomBarKt;",
+            "Lcom/localstream/app/ui/player/PlayerActivity;",
             "Lcom/localstream/app/ui/player/PlayerScreenKt;",
             "Lcom/localstream/app/ui/player/EpisodesSelectionSheetKt;",
             "Lcom/localstream/app/ui/home/HomeViewModel;",

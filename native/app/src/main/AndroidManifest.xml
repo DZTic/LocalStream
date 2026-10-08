@@ -41,6 +41,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.player.PlayerActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode|fontScale"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:screenOrientation="sensorLandscape"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/Theme.LocalStream" />
     </application>
 
 </manifest>
