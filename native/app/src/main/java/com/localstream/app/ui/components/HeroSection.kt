@@ -44,6 +44,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import coil.compose.AsyncImage
+import coil.imageLoader
 import coil.request.ImageRequest
 import com.localstream.app.domain.TitleCleaner
 import com.localstream.app.domain.VideoUiSelectors
@@ -61,6 +62,13 @@ private const val HERO_ROTATION_MS = 10_000L
 private const val HERO_HEIGHT_FRACTION = 0.62f
 private const val HERO_FADE_MS = 700
 
+private val HeroVerticalGradient = Brush.verticalGradient(
+    colors = listOf(Color.Transparent, Color.Black),
+)
+private val HeroHorizontalGradient = Brush.horizontalGradient(
+    colors = listOf(Color.Black, Color.Black.copy(alpha = 0.6f), Color.Transparent),
+)
+
 /**
  * Hero plein écran de l'accueil (réf. `HomeScreen.tsx` + `hero.ts`) : backdrop
  * TMDB, dégradés noirs (bas + gauche), titre nettoyé, synopsis, boutons
@@ -70,6 +78,11 @@ private const val HERO_FADE_MS = 700
  * le tick des 10 s ne recompose ni les rows ni le reste de l'écran. Elle ne tourne
  * que lorsque l'écran est au premier plan (RESUMED) et attend la fin d'un éventuel
  * défilement ([isScrolling]).
+ *
+ * Optimisation rotation (#240, #246) :
+ * - Préchargement anticipé du prochain backdrop en mémoire cache (Coil) pour éliminer le décodage bloquant.
+ * - Sortie des calques statiques (dégradés, boutons d'action) du Crossfade pour alléger l'arbre de composition
+ *   et diviser par deux le coût de mesure/layout par rotation.
  */
 @Composable
 fun HeroSection(
@@ -85,6 +98,9 @@ fun HeroSection(
     var heroIndex by rememberSaveable { mutableIntStateOf(0) }
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentIsScrolling by rememberUpdatedState(isScrolling)
+    val currentOnPlay by rememberUpdatedState(onPlay)
+    val currentOnOpenDetails by rememberUpdatedState(onOpenDetails)
+
     LaunchedEffect(candidates.size, lifecycleOwner) {
         if (candidates.size <= 1) return@LaunchedEffect
         // La composition reste active quand l'app passe en arrière-plan : sans ce garde-fou,
@@ -105,63 +121,63 @@ fun HeroSection(
         configuration.screenHeightDp.dp * HERO_HEIGHT_FRACTION
     }
 
-    Crossfade(
-        targetState = hero,
-        animationSpec = tween(durationMillis = HERO_FADE_MS),
+    // Préchargement anticipé du prochain backdrop en cache mémoire Coil (#240, #246)
+    val nextImageUrl = resolveNextBackdropUrl(candidates, metadata, heroIndex)
+    val context = LocalContext.current
+    LaunchedEffect(nextImageUrl) {
+        if (nextImageUrl != null) {
+            val prefetchRequest = ImageRequest.Builder(context)
+                .data(nextImageUrl)
+                .memoryCacheKey(nextImageUrl)
+                .diskCacheKey(nextImageUrl)
+                .allowHardware(true)
+                .crossfade(false)
+                .build()
+            context.imageLoader.enqueue(prefetchRequest)
+        }
+    }
+
+    val currentImageUrl = resolveCurrentBackdropUrl(hero, metadata)
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(heroHeight),
-        label = "hero-crossfade",
-    ) { current ->
-        HeroContent(
-            hero = current,
-            metadata = metadata[VideoUiSelectors.metadataKey(current)],
-            onPlay = { onPlay(current) },
-            onOpenDetails = { onOpenDetails(current) },
-        )
-    }
-}
-
-private val HeroVerticalGradient = Brush.verticalGradient(
-    colors = listOf(Color.Transparent, Color.Black),
-)
-private val HeroHorizontalGradient = Brush.horizontalGradient(
-    colors = listOf(Color.Black, Color.Black.copy(alpha = 0.6f), Color.Transparent),
-)
-
-@Composable
-private fun HeroContent(
-    hero: VideoItem,
-    metadata: TmdbMetadata?,
-    onPlay: () -> Unit,
-    onOpenDetails: () -> Unit,
-) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        val imageUrl = metadata?.backdropUrl() ?: metadata?.posterUrl()
-        if (imageUrl != null) {
-            val context = LocalContext.current
-            val imageRequest = remember(imageUrl) {
-                ImageRequest.Builder(context)
-                    .data(imageUrl)
-                    .allowHardware(true)
-                    .crossfade(false)
-                    .build()
+    ) {
+        // 1. Image de fond avec transition fluide
+        Crossfade(
+            targetState = currentImageUrl,
+            animationSpec = tween(durationMillis = HERO_FADE_MS),
+            modifier = Modifier.fillMaxSize(),
+            label = "hero-backdrop-crossfade",
+        ) { imageUrl ->
+            if (imageUrl != null) {
+                val imageRequest = remember(imageUrl) {
+                    ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        .memoryCacheKey(imageUrl)
+                        .diskCacheKey(imageUrl)
+                        .allowHardware(true)
+                        .crossfade(false)
+                        .build()
+                }
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = hero.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Zinc800),
+                )
             }
-            AsyncImage(
-                model = imageRequest,
-                contentDescription = hero.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Zinc800),
-            )
         }
 
-        // Dégradés noirs : bas (vertical) + gauche (horizontal), comme le web.
+        // 2. Dégradés noirs : bas (vertical) + gauche (horizontal), comme le web.
+        // Statiques et partagés : évite d'instancier et mesurer deux fois ces calques pendant le Crossfade.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -173,39 +189,50 @@ private fun HeroContent(
                 .background(HeroHorizontalGradient),
         )
 
+        // 3. Titre, synopsis et boutons d'actions
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 16.dp, end = 16.dp, bottom = 48.dp)
                 .widthIn(max = 560.dp),
         ) {
-            val title = remember(hero.name) { TitleCleaner.getCleanTitle(hero.name) }
-            Text(
-                text = title,
-                color = White,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Crossfade(
+                targetState = hero,
+                animationSpec = tween(durationMillis = HERO_FADE_MS),
+                label = "hero-text-crossfade",
+            ) { currentHero ->
+                val currentMeta = metadata[VideoUiSelectors.metadataKey(currentHero)]
+                val title = remember(currentHero.name) { TitleCleaner.getCleanTitle(currentHero.name) }
+                Column {
+                    Text(
+                        text = title,
+                        color = White,
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
 
-            metadata?.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                Text(
-                    text = overview,
-                    color = Zinc300,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+                    currentMeta?.overview?.takeIf { it.isNotBlank() }?.let { overview ->
+                        Text(
+                            text = overview,
+                            color = Zinc300,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
             }
 
+            // Boutons d'action : statiques et hors du Crossfade pour ne pas instancier ni mesurer 4 boutons Material3 à chaque rotation.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(top = 16.dp),
             ) {
                 Button(
-                    onClick = onPlay,
+                    onClick = { currentOnPlay(hero) },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = White,
                         contentColor = Color.Black,
@@ -220,7 +247,7 @@ private fun HeroContent(
                     )
                 }
                 Button(
-                    onClick = onOpenDetails,
+                    onClick = { currentOnOpenDetails(hero) },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Zinc500.copy(alpha = 0.7f),
                         contentColor = White,
@@ -237,4 +264,22 @@ private fun HeroContent(
             }
         }
     }
+}
+
+internal fun resolveNextBackdropUrl(
+    candidates: List<VideoItem>,
+    metadata: Map<String, TmdbMetadata>,
+    currentIndex: Int,
+): String? {
+    if (candidates.size <= 1) return null
+    val nextHero = candidates[(currentIndex + 1) % candidates.size]
+    return resolveCurrentBackdropUrl(nextHero, metadata)
+}
+
+internal fun resolveCurrentBackdropUrl(
+    hero: VideoItem,
+    metadata: Map<String, TmdbMetadata>,
+): String? {
+    val meta = metadata[VideoUiSelectors.metadataKey(hero)]
+    return meta?.backdropUrl() ?: meta?.posterUrl()
 }
