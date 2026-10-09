@@ -162,4 +162,30 @@ class AppDatabaseMigrationTest {
         assertEquals(1, executedQueries.size)
         assertTrue(executedQueries.first().contains("CREATE INDEX IF NOT EXISTS `index_watched_items_watched` ON `watched_items` (`watched`)"))
     }
+
+    @Test
+    fun migration7To6_hasCorrectVersions() {
+        assertEquals(7, AppDatabase.MIGRATION_7_6.startVersion)
+        assertEquals(6, AppDatabase.MIGRATION_7_6.endVersion)
+    }
+
+    @Test
+    fun migration7To6_executesDropTableCustomSubtitles() {
+        val executedQueries = mutableListOf<String>()
+
+        val dbProxy = Proxy.newProxyInstance(
+            SupportSQLiteDatabase::class.java.classLoader,
+            arrayOf(SupportSQLiteDatabase::class.java),
+        ) { _, method, args ->
+            if (method.name == "execSQL" && args != null && args.isNotEmpty()) {
+                executedQueries.add(args[0].toString())
+            }
+            null
+        } as SupportSQLiteDatabase
+
+        AppDatabase.MIGRATION_7_6.migrate(dbProxy)
+
+        assertEquals(1, executedQueries.size)
+        assertTrue(executedQueries.first().contains("DROP TABLE IF EXISTS `custom_subtitles`"))
+    }
 }
