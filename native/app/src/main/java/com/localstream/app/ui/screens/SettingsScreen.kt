@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -28,6 +29,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -43,7 +45,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -75,6 +79,7 @@ fun SettingsScreen(
     }
 
     var tmdbKeyInput by remember(uiState.tmdbApiKey) { mutableStateOf(uiState.tmdbApiKey) }
+    var tmdbKeyVisible by remember { mutableStateOf(false) }
     var osKeyInput by remember(uiState.osApiKey) { mutableStateOf(uiState.osApiKey) }
     var osUserInput by remember(uiState.osUsername) { mutableStateOf(uiState.osUsername) }
     var osPassInput by remember(uiState.osPassword) { mutableStateOf(uiState.osPassword) }
@@ -135,6 +140,20 @@ fun SettingsScreen(
                             viewModel.saveTmdbApiKey(it)
                         },
                         label = { Text(stringResource(R.string.settings_tmdb_api_key_label), color = White.copy(alpha = 0.6f)) },
+                        singleLine = true,
+                        visualTransformation = if (tmdbKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                        trailingIcon = {
+                            IconButton(onClick = { tmdbKeyVisible = !tmdbKeyVisible }) {
+                                Icon(
+                                    imageVector = if (tmdbKeyVisible) AppIcons.VisibilityOff else AppIcons.Visibility,
+                                    contentDescription = stringResource(
+                                        if (tmdbKeyVisible) R.string.settings_tmdb_hide_key else R.string.settings_tmdb_show_key,
+                                    ),
+                                    tint = White.copy(alpha = 0.6f),
+                                )
+                            }
+                        },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = White,
                             unfocusedTextColor = White,

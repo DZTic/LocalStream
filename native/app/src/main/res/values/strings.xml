@@ -13,6 +13,8 @@
     <string name="settings_tmdb_title">TMDB (The Movie Database)</string>
     <string name="settings_tmdb_api_key_label">Clé API TMDB</string>
     <string name="settings_tmdb_test_key_button">Tester la clé</string>
+    <string name="settings_tmdb_show_key">Afficher la clé</string>
+    <string name="settings_tmdb_hide_key">Masquer la clé</string>
     <string name="settings_opensubtitles_title">OpenSubtitles</string>
     <string name="settings_opensubtitles_api_key_label">Clé API OpenSubtitles</string>
     <string name="settings_opensubtitles_username_label">"Nom d'utilisateur"</string>
