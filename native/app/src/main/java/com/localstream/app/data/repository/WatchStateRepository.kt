@@ -6,6 +6,7 @@ import com.localstream.app.data.db.entity.PlaybackStateEntity
 import com.localstream.app.data.db.entity.WatchedItemEntity
 import com.localstream.app.domain.model.VideoItem
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 private const val RECENTLY_WATCHED_LIMIT = 30
@@ -82,15 +83,25 @@ class WatchStateRepository(
 
     // -------- Progression --------
 
-    /** Flow des progressions en cours (pct > 0). */
+    /**
+     * Flow des progressions en cours (pct > 0), hors éléments marqués vus :
+     * un épisode terminé garde une position résiduelle (générique) qui ne doit
+     * ni afficher de barre ni bloquer "Continuer la lecture".
+     */
     val activePlaybackStates: Flow<Map<String, Double>> =
-        playbackStateDao.observeActivePlaybackStates().map { list ->
-            list.associate { it.name to it.progressPct }
+        combine(playbackStateDao.observeActivePlaybackStates(), observeWatched) { list, watched ->
+            list.filter { it.name !in watched }.associate { it.name to it.progressPct }
         }
 
     val observePlaybackStates: Flow<Map<String, PlaybackStateEntity>> =
         playbackStateDao.observeActivePlaybackStates().map { list ->
             list.associateBy { it.name }
+        }
+
+    /** Comme [observePlaybackStates], sans les éléments marqués vus. */
+    val observeUnwatchedPlaybackStates: Flow<Map<String, PlaybackStateEntity>> =
+        combine(playbackStateDao.observeActivePlaybackStates(), observeWatched) { list, watched ->
+            list.filter { it.name !in watched }.associateBy { it.name }
         }
 
     suspend fun getProgressMap(): Map<String, Double> =
