@@ -151,7 +151,7 @@ class DetailsViewModel(
         listOf<Flow<*>>(
             container.videoRepository.observeVideos,
             container.watchStateRepository.observeWatched,
-            container.watchStateRepository.observePlaybackStates,
+            container.watchStateRepository.observeUnwatchedPlaybackStates,
             container.playlistRepository.observePlaylists,
             selectedSeasonFlow,
             expandedEpisodesFlow,
